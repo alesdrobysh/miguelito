@@ -119,6 +119,7 @@ export interface DueVocabItem {
   repetitions: number;
   interval_days: number;
   ease_factor: number;
+  next_review_at: string | null;
 }
 
 export interface ErrorItem {
