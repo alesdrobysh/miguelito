@@ -43,7 +43,7 @@ function readLink(ctx: ToolContext) {
         const titleCapped = title.slice(0, 200);
 
         if (ctx.apiKey) {
-          const profile = ctx.db.getProfile();
+          const profile = await ctx.db.getProfile();
           const level = profile?.level ?? "A2";
           const nativeLang = profile?.native_language ?? "inglés";
           try {
@@ -111,7 +111,7 @@ function readingSuggest(ctx: ToolContext) {
       },
     },
     execute: async (args: Record<string, string>) => {
-      const profile = ctx.db.getProfile();
+      const profile = await ctx.db.getProfile();
       const interests = args.interests || profile?.interests || "cultura viajes tecnología";
       const level = args.level || profile?.level || "B1";
       const nativeLang = args.native_language || profile?.native_language || "inglés";

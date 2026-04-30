@@ -20,7 +20,7 @@ export async function runAgentLoop(
 ): Promise<AgentResult> {
   const soulContent = fs.readFileSync(systemPromptPath, "utf-8");
 
-  const { learnerProfile, userInterests } = buildProfileInjection(db);
+  const { learnerProfile, userInterests } = await buildProfileInjection(db);
 
   let fullSystem = soulContent;
   if (learnerProfile) {

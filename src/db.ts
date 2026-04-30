@@ -1,4 +1,4 @@
-import Database from "better-sqlite3";
+import initSqlJs, { Database } from "sql.js";
 import fs from "fs";
 import path from "path";
 import { sm2Review, statusOf } from "./sm2.js";
@@ -207,63 +207,100 @@ function normalizeCategory(category: string): string {
 }
 
 export class BuddyDb {
-  db: Database.Database;
+  readonly db: Database;
+  private dbPath: string;
 
-  constructor(dbPath: string) {
+  private constructor(db: Database, dbPath: string) {
+    this.db = db;
+    this.dbPath = dbPath;
+  }
+
+  static async open(dbPath: string): Promise<BuddyDb> {
+    const SQL = await initSqlJs();
     const dir = path.dirname(dbPath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    this.db = new Database(dbPath);
-    this.db.pragma("journal_mode = WAL");
-    this.db.pragma("foreign_keys = ON");
-    this.db.exec(SCHEMA);
-  }
-
-  addVocab(word: string, translation: string, context: string): number | null {
-    const now = nowIso();
-    const stmt = this.db.prepare(
-      `INSERT OR IGNORE INTO vocabulary_items (word, translation, context_first_seen, first_seen_at) VALUES (?, ?, ?, ?)`
-    );
-    const info = stmt.run(word, translation, context, now);
-    if (info.changes === 0) return null;
-    return info.lastInsertRowid as number;
-  }
-
-  listVocab(bucket: string, limit: number): VocabItem[] {
-    if (bucket === "all") {
-      const rows = this.db
-        .prepare(`SELECT * FROM vocabulary_items ORDER BY id DESC LIMIT ?`)
-        .all(limit) as VocabItem[];
-      return rows;
+    let buf: Uint8Array | undefined;
+    if (fs.existsSync(dbPath)) {
+      buf = new Uint8Array(fs.readFileSync(dbPath));
     }
-    const rows = this.db
-      .prepare(`SELECT * FROM vocabulary_items`)
-      .all() as VocabItem[];
-    const filtered = rows.filter((r) => statusOf(r.repetitions, r.interval_days) === bucket);
+    const db = new SQL.Database(buf);
+    db.run(SCHEMA);
+    return new BuddyDb(db, dbPath);
+  }
+
+  private save(): void {
+    const data = this.db.export();
+    fs.writeFileSync(this.dbPath, Buffer.from(data));
+  }
+
+  private queryRow(sql: string, params?: any[]): any {
+    const stmt = this.db.prepare(sql);
+    if (params) stmt.bind(params);
+    try {
+      if (stmt.step()) {
+        return stmt.getAsObject();
+      }
+      return undefined;
+    } finally {
+      stmt.free();
+    }
+  }
+
+  private queryAll(sql: string, params?: any[]): any[] {
+    const stmt = this.db.prepare(sql);
+    if (params) stmt.bind(params);
+    const results: any[] = [];
+    try {
+      while (stmt.step()) {
+        results.push(stmt.getAsObject());
+      }
+    } finally {
+      stmt.free();
+    }
+    return results;
+  }
+
+  async addVocab(word: string, translation: string, context: string): Promise<number | null> {
+    const now = nowIso();
+    this.db.run(
+      `INSERT OR IGNORE INTO vocabulary_items (word, translation, context_first_seen, first_seen_at) VALUES (?, ?, ?, ?)`,
+      [word, translation, context, now]
+    );
+    if (this.db.getRowsModified() === 0) return null;
+    const rowidResult = this.db.exec("SELECT last_insert_rowid()");
+    const id = rowidResult[0].values[0][0] as number;
+    this.save();
+    return id;
+  }
+
+  async listVocab(bucket: string, limit: number): Promise<VocabItem[]> {
+    if (bucket === "all") {
+      return this.queryAll(`SELECT * FROM vocabulary_items ORDER BY id DESC LIMIT ?`, [limit]) as VocabItem[];
+    }
+    const rows = this.queryAll(`SELECT * FROM vocabulary_items`) as VocabItem[];
+    const filtered = rows.filter((r: VocabItem) => statusOf(r.repetitions, r.interval_days) === bucket);
     return filtered.slice(0, limit);
   }
 
-  dueVocab(limit: number): DueVocabItem[] {
+  async dueVocab(limit: number): Promise<DueVocabItem[]> {
     const now = nowIso();
-    const rows = this.db
-      .prepare(
-        `SELECT id, word, translation, status, repetitions, interval_days, ease_factor
-         FROM vocabulary_items
-         WHERE next_review_at IS NULL OR next_review_at <= ?
-         ORDER BY next_review_at ASC
-         LIMIT ?`
-      )
-      .all(now, limit) as DueVocabItem[];
-    return rows;
+    return this.queryAll(
+      `SELECT id, word, translation, status, repetitions, interval_days, ease_factor
+       FROM vocabulary_items
+       WHERE next_review_at IS NULL OR next_review_at <= ?
+       ORDER BY next_review_at ASC
+       LIMIT ?`,
+      [now, limit]
+    ) as DueVocabItem[];
   }
 
-  scoreVocab(word: string, quality: number): Sm2Result {
-    const row = this.db
-      .prepare(
-        `SELECT id, ease_factor, repetitions, interval_days FROM vocabulary_items WHERE word = ?`
-      )
-      .get(word) as { id: number; ease_factor: number; repetitions: number; interval_days: number } | undefined;
+  async scoreVocab(word: string, quality: number): Promise<Sm2Result> {
+    const row = this.queryRow(
+      `SELECT id, ease_factor, repetitions, interval_days FROM vocabulary_items WHERE word = ?`,
+      [word]
+    ) as { id: number; ease_factor: number; repetitions: number; interval_days: number } | undefined;
 
     if (!row) {
       throw new Error(`Vocabulary item not found: ${word}`);
@@ -273,12 +310,14 @@ export class BuddyDb {
     const now = nowIso();
     const nextReview = computeNextReview(result.interval_days);
 
-    this.db.prepare(
+    this.db.run(
       `UPDATE vocabulary_items
        SET repetitions = ?, interval_days = ?, ease_factor = ?, status = ?,
            last_reviewed_at = ?, next_review_at = ?
-       WHERE id = ?`
-    ).run(result.repetitions, result.interval_days, result.ease_factor, result.status, now, nextReview, row.id);
+       WHERE id = ?`,
+      [result.repetitions, result.interval_days, result.ease_factor, result.status, now, nextReview, row.id]
+    );
+    this.save();
 
     return {
       repetitions: result.repetitions,
@@ -289,36 +328,34 @@ export class BuddyDb {
     };
   }
 
-  logError(userText: string, correct: string, category: string, note: string): number {
+  async logError(userText: string, correct: string, category: string, note: string): Promise<number> {
     const cat = normalizeCategory(category);
-    const stmt = this.db.prepare(
-      `INSERT INTO error_log (user_text, correct_form, category, note) VALUES (?, ?, ?, ?)`
+    this.db.run(
+      `INSERT INTO error_log (user_text, correct_form, category, note) VALUES (?, ?, ?, ?)`,
+      [userText, correct, cat, note]
     );
-    const info = stmt.run(userText, correct, cat, note);
-    return info.lastInsertRowid as number;
+    const rowidResult = this.db.exec("SELECT last_insert_rowid()");
+    const id = rowidResult[0].values[0][0] as number;
+    this.save();
+    return id;
   }
 
-  listErrors(category: string, limit: number): ErrorItem[] {
+  async listErrors(category: string, limit: number): Promise<ErrorItem[]> {
     if (category === "all") {
-      return this.db
-        .prepare(`SELECT * FROM error_log ORDER BY created_at DESC LIMIT ?`)
-        .all(limit) as ErrorItem[];
+      return this.queryAll(`SELECT * FROM error_log ORDER BY created_at DESC LIMIT ?`, [limit]) as ErrorItem[];
     }
-    return this.db
-      .prepare(
-        `SELECT * FROM error_log WHERE category = ? ORDER BY created_at DESC LIMIT ?`
-      )
-      .all(category, limit) as ErrorItem[];
+    return this.queryAll(
+      `SELECT * FROM error_log WHERE category = ? ORDER BY created_at DESC LIMIT ?`,
+      [category, limit]
+    ) as ErrorItem[];
   }
 
-  getProfile(): UserProfile | null {
-    const row = this.db
-      .prepare(`SELECT * FROM user_profile WHERE id = 1`)
-      .get();
+  async getProfile(): Promise<UserProfile | null> {
+    const row = this.queryRow(`SELECT * FROM user_profile WHERE id = 1`);
     return (row ?? null) as UserProfile | null;
   }
 
-  setProfile(fields: Record<string, string>): string[] {
+  async setProfile(fields: Record<string, string>): Promise<string[]> {
     const validKeys = new Set([
       "name",
       "native_language",
@@ -333,29 +370,30 @@ export class BuddyDb {
       if (validKeys.has(k)) filtered[k] = v;
     }
 
-    this.db.prepare(
-      `INSERT OR IGNORE INTO user_profile (id, started_at, updated_at) VALUES (1, ?, ?)`
-    ).run(nowIso(), nowIso());
+    this.db.run(
+      `INSERT OR IGNORE INTO user_profile (id, started_at, updated_at) VALUES (1, ?, ?)`,
+      [nowIso(), nowIso()]
+    );
+    this.save();
 
     if (Object.keys(filtered).length === 0) return [];
 
-    const setClauses = Object.keys(filtered)
-      .map((k) => `${k} = @${k}`)
-      .join(", ");
-    const updateStmt = this.db.prepare(
-      `UPDATE user_profile SET ${setClauses}, updated_at = ? WHERE id = 1`
+    const keys = Object.keys(filtered);
+    const setClauses = keys.map((k) => `${k} = ?`).join(", ");
+    const values = [...Object.values(filtered), nowIso()];
+    this.db.run(
+      `UPDATE user_profile SET ${setClauses}, updated_at = ? WHERE id = 1`,
+      values
     );
-    updateStmt.run({ ...filtered }, nowIso());
+    this.save();
 
-    return Object.keys(filtered);
+    return keys;
   }
 
-  getConversationState(): ConversationStateResult {
-    const row = this.db
-      .prepare(
-        `SELECT * FROM conversation_state ORDER BY id DESC LIMIT 1`
-      )
-      .get() as ConversationStateData | undefined;
+  async getConversationState(): Promise<ConversationStateResult> {
+    const row = this.queryRow(
+      `SELECT * FROM conversation_state ORDER BY id DESC LIMIT 1`
+    ) as ConversationStateData | undefined;
 
     if (row) {
       const updatedAt = new Date(row.updated_at.replace(" ", "T"));
@@ -367,23 +405,28 @@ export class BuddyDb {
 
     const sessionId = crypto.randomUUID();
     const now = nowIso();
-    const stmt = this.db.prepare(
+    this.db.run(
       `INSERT INTO conversation_state (session_id, turn_count, corrections_this_session, last_two_modes, topics_touched, started_at, updated_at)
-       VALUES (?, 0, 0, '[]', '[]', ?, ?)`
+       VALUES (?, 0, 0, '[]', '[]', ?, ?)`,
+      [sessionId, now, now]
     );
-    const info = stmt.run(sessionId, now, now);
-    const newSession = this.db
-      .prepare(`SELECT * FROM conversation_state WHERE id = ?`)
-      .get(info.lastInsertRowid) as ConversationStateData;
+    const rowidResult = this.db.exec("SELECT last_insert_rowid()");
+    const newId = rowidResult[0].values[0][0];
+    this.save();
+
+    const newSession = this.queryRow(
+      `SELECT * FROM conversation_state WHERE id = ?`,
+      [newId]
+    ) as ConversationStateData;
     return { session: newSession, isNew: true };
   }
 
-  updateConversationState(
+  async updateConversationState(
     mode: string,
     topic?: string,
     mood?: string
-  ): UpdateResult {
-    const { session } = this.getConversationState();
+  ): Promise<UpdateResult> {
+    const { session } = await this.getConversationState();
 
     let lastTwo: string[] = JSON.parse(session.last_two_modes);
     lastTwo.push(mode);
@@ -395,7 +438,7 @@ export class BuddyDb {
     }
 
     const now = nowIso();
-    this.db.prepare(
+    this.db.run(
       `UPDATE conversation_state
        SET turn_count = turn_count + 1,
            last_mode = ?,
@@ -403,12 +446,15 @@ export class BuddyDb {
            topics_touched = ?,
            mood_hint = COALESCE(?, mood_hint),
            updated_at = ?
-       WHERE id = ?`
-    ).run(mode, JSON.stringify(lastTwo), JSON.stringify(topics), mood ?? null, now, session.id);
+       WHERE id = ?`,
+      [mode, JSON.stringify(lastTwo), JSON.stringify(topics), mood ?? null, now, session.id]
+    );
+    this.save();
 
-    const updated = this.db
-      .prepare(`SELECT * FROM conversation_state WHERE id = ?`)
-      .get(session.id) as ConversationStateData;
+    const updated = this.queryRow(
+      `SELECT * FROM conversation_state WHERE id = ?`,
+      [session.id]
+    ) as ConversationStateData;
 
     return {
       turn_count: updated.turn_count,
@@ -418,33 +464,39 @@ export class BuddyDb {
     };
   }
 
-  addInterest(interest: string, source: string, confidence: number): boolean {
-    const existing = this.db
-      .prepare(`SELECT id, confidence FROM user_interests WHERE interest = ? COLLATE NOCASE`)
-      .get(interest) as { id: number; confidence: number } | undefined;
+  async addInterest(interest: string, source: string, confidence: number): Promise<boolean> {
+    const existing = this.queryRow(
+      `SELECT id, confidence FROM user_interests WHERE interest = ? COLLATE NOCASE`,
+      [interest]
+    ) as { id: number; confidence: number } | undefined;
 
     if (existing) {
       const newConfidence = Math.max(existing.confidence, confidence);
-      this.db.prepare(
-        `UPDATE user_interests SET confidence = ?, source = ?, last_seen_at = ? WHERE id = ?`
-      ).run(newConfidence, source, nowIso(), existing.id);
+      this.db.run(
+        `UPDATE user_interests SET confidence = ?, source = ?, last_seen_at = ? WHERE id = ?`,
+        [newConfidence, source, nowIso(), existing.id]
+      );
+      this.save();
       return false;
     }
 
-    this.db.prepare(
-      `INSERT INTO user_interests (interest, source, confidence) VALUES (?, ?, ?)`
-    ).run(interest, source, confidence);
+    this.db.run(
+      `INSERT INTO user_interests (interest, source, confidence) VALUES (?, ?, ?)`,
+      [interest, source, confidence]
+    );
+    this.save();
     return true;
   }
 
-  listInterests(limit: number): string[] {
-    const rows = this.db
-      .prepare(`SELECT interest FROM user_interests ORDER BY last_seen_at DESC LIMIT ?`)
-      .all(limit) as { interest: string }[];
+  async listInterests(limit: number): Promise<string[]> {
+    const rows = this.queryAll(
+      `SELECT interest FROM user_interests ORDER BY last_seen_at DESC LIMIT ?`,
+      [limit]
+    ) as { interest: string }[];
     return rows.map((r) => r.interest);
   }
 
-  insertAssessment(
+  async insertAssessment(
     cefrLevel: string,
     confidence: number | null,
     weakAreas: string | null,
@@ -452,34 +504,25 @@ export class BuddyDb {
     errorToReinforce: string | null,
     strengths: string | null,
     sampleCount: number | null
-  ): number {
-    const stmt = this.db.prepare(
+  ): Promise<number> {
+    this.db.run(
       `INSERT INTO learner_assessments (cefr_level, confidence, weak_areas, words_to_weave, error_to_reinforce, strengths, sample_count)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [cefrLevel, confidence, weakAreas, wordsToWeave, errorToReinforce, strengths, sampleCount]
     );
-    const info = stmt.run(
-      cefrLevel,
-      confidence,
-      weakAreas,
-      wordsToWeave,
-      errorToReinforce,
-      strengths,
-      sampleCount
-    );
-    return info.lastInsertRowid as number;
+    const rowidResult = this.db.exec("SELECT last_insert_rowid()");
+    const id = rowidResult[0].values[0][0] as number;
+    this.save();
+    return id;
   }
 
-  getLatestAssessment(): Record<string, unknown> | null {
-    const row = this.db
-      .prepare(`SELECT * FROM learner_assessments ORDER BY id DESC LIMIT 1`)
-      .get();
+  async getLatestAssessment(): Promise<Record<string, unknown> | null> {
+    const row = this.queryRow(`SELECT * FROM learner_assessments ORDER BY id DESC LIMIT 1`);
     return (row ?? null) as Record<string, unknown> | null;
   }
 
-  exportVocab(format: string): { count: number; data: string } {
-    const rows = this.db
-      .prepare(`SELECT * FROM vocabulary_items ORDER BY id ASC`)
-      .all() as VocabItem[];
+  async exportVocab(format: string): Promise<{ count: number; data: string }> {
+    const rows = this.queryAll(`SELECT * FROM vocabulary_items ORDER BY id ASC`) as VocabItem[];
 
     if (format === "csv") {
       const header = "word,translation,status,repetitions,interval_days,ease_factor,next_review_at";
@@ -504,27 +547,22 @@ export class BuddyDb {
     return { count: rows.length, data: lines.join("\n") };
   }
 
-  progressSummary(): ProgressData {
-    const rows = this.db
-      .prepare(`SELECT * FROM vocabulary_items`)
-      .all() as VocabItem[];
+  async progressSummary(): Promise<ProgressData> {
+    const rows = this.queryAll(`SELECT * FROM vocabulary_items`) as VocabItem[];
 
     const now = nowIso();
-    const dueCount = this.db
-      .prepare(
-        `SELECT COUNT(*) AS c FROM vocabulary_items WHERE next_review_at IS NULL OR next_review_at <= ?`
-      )
-      .get(now) as { c: number };
+    const dueRow = this.queryRow(
+      `SELECT COUNT(*) AS c FROM vocabulary_items WHERE next_review_at IS NULL OR next_review_at <= ?`,
+      [now]
+    ) as { c: number };
 
-    const recentRows = this.db
-      .prepare(
-        `SELECT word FROM vocabulary_items ORDER BY first_seen_at DESC LIMIT 5`
-      )
-      .all() as { word: string }[];
+    const recentRows = this.queryAll(
+      `SELECT word FROM vocabulary_items ORDER BY first_seen_at DESC LIMIT 5`
+    ) as { word: string }[];
 
-    const errorRows = this.db
-      .prepare(`SELECT category, COUNT(*) AS c FROM error_log GROUP BY category`)
-      .all() as { category: string; c: number }[];
+    const errorRows = this.queryAll(
+      `SELECT category, COUNT(*) AS c FROM error_log GROUP BY category`
+    ) as { category: string; c: number }[];
 
     const errorCategories: Record<string, number> = {};
     for (const e of errorRows) {
@@ -550,13 +588,13 @@ export class BuddyDb {
       reviewCount,
       masteredCount,
       totalCount: rows.length,
-      dueCount: dueCount.c,
+      dueCount: dueRow?.c ?? 0,
       recentWords: recentRows.map((r) => r.word),
       errorCategories,
     };
   }
 
   close(): void {
-    this.db.close();
+    this.save();
   }
 }

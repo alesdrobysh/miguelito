@@ -57,7 +57,7 @@ ${messages}`,
         const strengthsJson = JSON.stringify(assessment.strengths ?? []);
         const sampleCount = messages.split("\n").length;
 
-        const id = ctx.db.insertAssessment(
+        const id = await ctx.db.insertAssessment(
           assessment.cefr_level,
           assessment.confidence,
           weakJson,
@@ -69,9 +69,9 @@ ${messages}`,
 
         let levelUpdated = false;
         if (assessment.confidence > 0.7) {
-          const profile = ctx.db.getProfile();
+          const profile = await ctx.db.getProfile();
           if (!profile || profile.level !== assessment.cefr_level) {
-            ctx.db.setProfile({ level: assessment.cefr_level });
+            await ctx.db.setProfile({ level: assessment.cefr_level });
             levelUpdated = true;
           }
         }

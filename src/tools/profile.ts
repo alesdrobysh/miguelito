@@ -15,7 +15,7 @@ function profileGet(ctx: ToolContext) {
       properties: {},
     },
     execute: async (_args: Record<string, string>) => {
-      const profile = ctx.db.getProfile();
+      const profile = await ctx.db.getProfile();
       if (!profile) {
         return { ok: true, exists: false, profile: null };
       }
@@ -63,7 +63,7 @@ function profileSet(ctx: ToolContext) {
       if (Object.keys(fields).length === 0) {
         return { success: false, output: "", error: "no_fields_provided" };
       }
-      const updatedFields = ctx.db.setProfile(fields);
+      const updatedFields = await ctx.db.setProfile(fields);
       return { ok: true, updated_fields: updatedFields };
     },
   };

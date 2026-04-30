@@ -9,13 +9,13 @@ let db: BuddyDb;
 let dbPath: string;
 let tmpDir: string;
 
-beforeEach(() => {
+beforeEach(async () => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "miguelito-test-"));
   dbPath = path.join(tmpDir, "test.db");
-  db = new BuddyDb(dbPath);
+  db = await BuddyDb.open(dbPath);
 });
 
-afterEach(() => {
+afterEach(async () => {
   db.close();
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
@@ -174,7 +174,7 @@ describe("integration: interest add + list", () => {
     expect((result3 as any).added).toBe(false);
     expect((result3 as any).reason).toBe("invalid_or_duplicate");
 
-    const interests = db.listInterests(10);
+    const interests = await db.listInterests(10);
     expect(interests).toHaveLength(2);
   });
 });

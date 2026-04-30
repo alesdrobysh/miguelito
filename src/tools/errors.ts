@@ -44,7 +44,7 @@ function errorLog(ctx: ToolContext) {
       ]);
       if (!validCategories.has(category)) category = "other";
 
-      const id = ctx.db.logError(userText, correct, category, note);
+      const id = await ctx.db.logError(userText, correct, category, note);
       return { ok: true, id, category };
     },
   };
@@ -70,7 +70,7 @@ function errorList(ctx: ToolContext) {
     execute: async (args: Record<string, string>) => {
       const category = (args.category ?? "all").toLowerCase();
       const limit = parseInt(args.limit ?? "20", 10) || 20;
-      const items = ctx.db.listErrors(category, limit);
+      const items = await ctx.db.listErrors(category, limit);
       const out = items.map((e) => ({
         id: e.id,
         user_text: e.user_text,

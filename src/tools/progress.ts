@@ -14,7 +14,7 @@ function progressSummary(ctx: ToolContext) {
       properties: {},
     },
     execute: async () => {
-      const data = ctx.db.progressSummary();
+      const data = await ctx.db.progressSummary();
       return {
         ok: true,
         vocab: {

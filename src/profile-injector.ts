@@ -5,11 +5,11 @@ interface ProfileInjection {
   userInterests: string | null;
 }
 
-export function buildProfileInjection(db: BuddyDb): ProfileInjection {
-  const assessment = db.getLatestAssessment();
-  const words = getDueWords(db, 3);
-  const weakAreas = getWeakAreas(db, 3);
-  const errorInfo = weakAreas.length > 0 ? getRecentErrorForCategory(db, weakAreas[0]) : null;
+export async function buildProfileInjection(db: BuddyDb): Promise<ProfileInjection> {
+  const assessment = await db.getLatestAssessment();
+  const words = await getDueWords(db, 3);
+  const weakAreas = await getWeakAreas(db, 3);
+  const errorInfo = weakAreas.length > 0 ? await getRecentErrorForCategory(db, weakAreas[0]) : null;
   const strengths = parseJsonOrEmpty<string>(assessment?.strengths as string | null);
 
   const hasData =
@@ -22,7 +22,7 @@ export function buildProfileInjection(db: BuddyDb): ProfileInjection {
     ? formatProfile(assessment, words, errorInfo, weakAreas, strengths)
     : null;
 
-  const interests = db.listInterests(10);
+  const interests = await db.listInterests(10);
   const userInterests = interests.length > 0
     ? `\n\n## User Interests\n${interests.join(", ")}`
     : null;
@@ -65,18 +65,18 @@ function formatProfile(
   return lines.join("\n");
 }
 
-function getDueWords(db: BuddyDb, limit: number): string[] {
+async function getDueWords(db: BuddyDb, limit: number): Promise<string[]> {
   try {
-    const rows = db.dueVocab(limit);
+    const rows = await db.dueVocab(limit);
     return rows.map((r) => r.word);
   } catch {
     return [];
   }
 }
 
-function getWeakAreas(db: BuddyDb, limit: number): string[] {
+async function getWeakAreas(db: BuddyDb, limit: number): Promise<string[]> {
   try {
-    const allErrors = db.listErrors("all", 1000);
+    const allErrors = await db.listErrors("all", 1000);
     const counts = new Map<string, number>();
     for (const e of allErrors) {
       counts.set(e.category, (counts.get(e.category) ?? 0) + 1);
@@ -90,12 +90,12 @@ function getWeakAreas(db: BuddyDb, limit: number): string[] {
   }
 }
 
-function getRecentErrorForCategory(
+async function getRecentErrorForCategory(
   db: BuddyDb,
   category: string,
-): { user_text: string; correct: string; category: string } | null {
+): Promise<{ user_text: string; correct: string; category: string } | null> {
   try {
-    const errors = db.listErrors(category, 1);
+    const errors = await db.listErrors(category, 1);
     if (errors.length === 0) return null;
     const e = errors[0];
     return { user_text: e.user_text, correct: e.correct_form, category: e.category };

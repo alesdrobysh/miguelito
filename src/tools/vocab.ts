@@ -35,7 +35,7 @@ function vocabAdd(ctx: ToolContext) {
       }
       const translation = (args.translation ?? "").trim();
       const context = (args.context ?? "").trim();
-      const id = ctx.db.addVocab(word, translation, context);
+      const id = await ctx.db.addVocab(word, translation, context);
       if (id === null) {
         return { added: false, reason: "already_exists", word };
       }
@@ -67,7 +67,7 @@ function vocabList(ctx: ToolContext) {
     execute: async (args: Record<string, string>) => {
       const bucket = (args.bucket ?? "all").toLowerCase();
       const limit = parseInt(args.limit ?? "50", 10) || 50;
-      const items = ctx.db.listVocab(bucket, limit);
+      const items = await ctx.db.listVocab(bucket, limit);
       const out = items.map((r) => ({
         id: r.id,
         word: r.word,
@@ -100,7 +100,7 @@ function vocabDue(ctx: ToolContext) {
     },
     execute: async (args: Record<string, string>) => {
       const limit = parseInt(args.limit ?? "10", 10) || 10;
-      const items = ctx.db.dueVocab(limit);
+      const items = await ctx.db.dueVocab(limit);
       const now = new Date()
         .toISOString()
         .replace("T", " ")
@@ -141,7 +141,7 @@ function vocabScore(ctx: ToolContext) {
       const word = (args.word ?? "").trim().toLowerCase();
       const quality = Math.max(0, Math.min(5, parseInt(args.quality ?? "0", 10) || 0));
       try {
-        const result = ctx.db.scoreVocab(word, quality);
+        const result = await ctx.db.scoreVocab(word, quality);
         return {
           ok: true,
           word,
@@ -176,7 +176,7 @@ function vocabExport(ctx: ToolContext) {
     },
     execute: async (args: Record<string, string>) => {
       const format = args.format ?? "csv";
-      const result = ctx.db.exportVocab(format);
+      const result = await ctx.db.exportVocab(format);
       return { ok: true, format, count: result.count, data: result.data };
     },
   };

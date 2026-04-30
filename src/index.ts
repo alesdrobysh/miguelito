@@ -3,9 +3,9 @@ import { BuddyDb } from "./db.js";
 import { createBot } from "./bot.js";
 import { startScheduler } from "./scheduler.js";
 
-function main() {
+async function main() {
   const config = loadConfig();
-  const db = new BuddyDb(config.dbPath);
+  const db = await BuddyDb.open(config.dbPath);
   const bot = createBot(config, db);
 
   startScheduler(config, db, bot);

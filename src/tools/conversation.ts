@@ -14,7 +14,7 @@ function conversationState(ctx: ToolContext) {
       properties: {},
     },
     execute: async (_args: Record<string, string>) => {
-      const result = ctx.db.getConversationState();
+      const result = await ctx.db.getConversationState();
       const session = result.session;
       const state = {
         session_id: session.session_id,
@@ -73,7 +73,7 @@ function conversationStateUpdate(ctx: ToolContext) {
       const topic = (args.topic ?? "").trim() || undefined;
       const mood = (args.mood ?? "").trim() || undefined;
 
-      const result = ctx.db.updateConversationState(mode, topic, mood);
+      const result = await ctx.db.updateConversationState(mode, topic, mood);
       return {
         ok: true,
         turn_count: result.turn_count,
