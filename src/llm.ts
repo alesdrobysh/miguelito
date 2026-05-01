@@ -32,7 +32,7 @@ export interface ChatResult {
 export async function llmChat(
   config: LLMConfig,
   messages: ChatMessage[],
-  tools?: ToolDefinition[],
+  tools?: object[],
   temperature: number = 0.7,
   maxTokens: number = 1024,
 ): Promise<ChatResult> {
@@ -53,14 +53,7 @@ export async function llmChat(
   };
 
   if (tools && tools.length > 0) {
-    body.tools = tools.map((t) => ({
-      type: "function",
-      function: {
-        name: t.name,
-        description: t.description,
-        parameters: t.parameters,
-      },
-    }));
+    body.tools = tools;
   }
 
   const resp = await fetch(`${baseUrl}/chat/completions`, {
@@ -137,8 +130,3 @@ export async function llmCompleteJson<T>(
   return JSON.parse(clean) as T;
 }
 
-export interface ToolDefinition {
-  name: string;
-  description: string;
-  parameters: Record<string, unknown>;
-}

@@ -18,10 +18,11 @@ export interface ToolDefinition {
 export interface ToolContext {
   db: BuddyDb;
   apiKey: string | null;
+  nativeLanguage: string;
 }
 
-export function createTools(db: BuddyDb, openrouterApiKey: string): Map<string, ToolDefinition> {
-  const ctx: ToolContext = { db, apiKey: openrouterApiKey };
+export function createTools(db: BuddyDb, openrouterApiKey: string, nativeLanguage: string): Map<string, ToolDefinition> {
+  const ctx: ToolContext = { db, apiKey: openrouterApiKey, nativeLanguage };
   const tools = new Map<string, ToolDefinition>();
 
   for (const t of [

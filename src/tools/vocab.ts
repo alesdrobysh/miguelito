@@ -3,6 +3,7 @@ import { BuddyDb } from "../db.js";
 export interface ToolContext {
   db: BuddyDb;
   apiKey: string | null;
+  nativeLanguage: string;
 }
 
 function vocabAdd(ctx: ToolContext) {
@@ -19,7 +20,7 @@ function vocabAdd(ctx: ToolContext) {
         },
         translation: {
           type: "string",
-          description: "Translation in the user's native language.",
+          description: `Translation in the user's native language (${ctx.nativeLanguage}). Never use English unless that is the native language.`,
         },
         context: {
           type: "string",

@@ -22,7 +22,7 @@ afterEach(async () => {
 
 describe("integration: vocab add + score + due cycle", () => {
   it("adds a word, scores it, and verifies it is no longer due", async () => {
-    const tools = createTools(db, "fake-key");
+    const tools = createTools(db, "fake-key", "bielorruso");
     const addTool = tools.get("miguelito_vocab_add")!;
     const scoreTool = tools.get("miguelito_vocab_score")!;
     const dueTool = tools.get("miguelito_vocab_due")!;
@@ -45,7 +45,7 @@ describe("integration: vocab add + score + due cycle", () => {
 
 describe("integration: vocab list with buckets", () => {
   it("filters by bucket after scoring some words", async () => {
-    const tools = createTools(db, "fake-key");
+    const tools = createTools(db, "fake-key", "bielorruso");
     const addTool = tools.get("miguelito_vocab_add")!;
     const scoreTool = tools.get("miguelito_vocab_score")!;
     const listTool = tools.get("miguelito_vocab_list")!;
@@ -74,7 +74,7 @@ describe("integration: vocab list with buckets", () => {
 
 describe("integration: error log + list cycle", () => {
   it("logs errors in different categories and filters correctly", async () => {
-    const tools = createTools(db, "fake-key");
+    const tools = createTools(db, "fake-key", "bielorruso");
     const logTool = tools.get("miguelito_error_log")!;
     const listTool = tools.get("miguelito_error_list")!;
 
@@ -96,7 +96,7 @@ describe("integration: error log + list cycle", () => {
 
 describe("integration: profile set + get cycle", () => {
   it("sets profile fields and retrieves them", async () => {
-    const tools = createTools(db, "fake-key");
+    const tools = createTools(db, "fake-key", "bielorruso");
     const getTool = tools.get("miguelito_profile_get")!;
     const setTool = tools.get("miguelito_profile_set")!;
 
@@ -117,7 +117,7 @@ describe("integration: profile set + get cycle", () => {
   });
 
   it("partial updates preserve existing fields", async () => {
-    const tools = createTools(db, "fake-key");
+    const tools = createTools(db, "fake-key", "bielorruso");
     const getTool = tools.get("miguelito_profile_get")!;
     const setTool = tools.get("miguelito_profile_set")!;
 
@@ -133,7 +133,7 @@ describe("integration: profile set + get cycle", () => {
 
 describe("integration: conversation state session management", () => {
   it("creates new session and tracks turns", async () => {
-    const tools = createTools(db, "fake-key");
+    const tools = createTools(db, "fake-key", "bielorruso");
     const getTool = tools.get("miguelito_conversation_state")!;
     const updateTool = tools.get("miguelito_conversation_state_update")!;
 
@@ -159,7 +159,7 @@ describe("integration: conversation state session management", () => {
 
 describe("integration: interest add + list", () => {
   it("adds interests and deduplicates", async () => {
-    const tools = createTools(db, "fake-key");
+    const tools = createTools(db, "fake-key", "bielorruso");
     const addTool = tools.get("miguelito_interest_add")!;
 
     const result1 = await addTool.execute({ interest: "cooking", source: "conversation", confidence: "0.8" });
@@ -181,7 +181,7 @@ describe("integration: interest add + list", () => {
 
 describe("integration: progress summary aggregates", () => {
   it("returns correct counts after adding vocab and errors", async () => {
-    const tools = createTools(db, "fake-key");
+    const tools = createTools(db, "fake-key", "bielorruso");
     const addTool = tools.get("miguelito_vocab_add")!;
     const scoreTool = tools.get("miguelito_vocab_score")!;
     const errorTool = tools.get("miguelito_error_log")!;
@@ -209,7 +209,7 @@ describe("integration: progress summary aggregates", () => {
 
 describe("integration: vocab export produces valid CSV", () => {
   it("exports words as CSV with correct content", async () => {
-    const tools = createTools(db, "fake-key");
+    const tools = createTools(db, "fake-key", "bielorruso");
     const addTool = tools.get("miguelito_vocab_add")!;
     const exportTool = tools.get("miguelito_vocab_export")!;
 
@@ -227,7 +227,7 @@ describe("integration: vocab export produces valid CSV", () => {
 
 describe("integration: tool registry creates all expected tools", () => {
   it("createTools returns all 16 tool names", () => {
-    const tools = createTools(db, "fake-key");
+    const tools = createTools(db, "fake-key", "bielorruso");
 
     const expectedNames = [
       "miguelito_conversation_state",
@@ -257,7 +257,7 @@ describe("integration: tool registry creates all expected tools", () => {
 
 describe("integration: toolsToOpenAI produces valid format", () => {
   it("output has type/function/name structure for each tool", () => {
-    const tools = createTools(db, "fake-key");
+    const tools = createTools(db, "fake-key", "bielorruso");
     const openai = toolsToOpenAI(tools);
 
     expect(Array.isArray(openai)).toBe(true);

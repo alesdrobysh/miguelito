@@ -83,6 +83,15 @@ CREATE TABLE IF NOT EXISTS conversation_state (
     started_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS chat_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id INTEGER NOT NULL,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_chat_history_chat_id ON chat_history(chat_id, id);
 `;
 
 const VALID_CATEGORIES = new Set([
@@ -592,6 +601,24 @@ export class BuddyDb {
       recentWords: recentRows.map((r) => r.word),
       errorCategories,
     };
+  }
+
+  async addChatMessage(chatId: number, role: string, content: string): Promise<void> {
+    this.db.run(
+      `INSERT INTO chat_history (chat_id, role, content) VALUES (?, ?, ?)`,
+      [chatId, role, content]
+    );
+    this.save();
+  }
+
+  async getChatHistory(chatId: number, limit: number): Promise<{ role: string; content: string }[]> {
+    const rows = this.queryAll(
+      `SELECT role, content FROM (
+         SELECT id, role, content FROM chat_history WHERE chat_id = ? ORDER BY id DESC LIMIT ?
+       ) ORDER BY id ASC`,
+      [chatId, limit]
+    ) as { role: string; content: string }[];
+    return rows;
   }
 
   close(): void {

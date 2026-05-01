@@ -21,6 +21,8 @@ export async function runAgentLoop(
   const soulContent = fs.readFileSync(systemPromptPath, "utf-8");
 
   const { learnerProfile, userInterests } = await buildProfileInjection(db);
+  const profile = await db.getProfile();
+  const nativeLanguage = profile?.native_language ?? "the user's native language";
 
   let fullSystem = soulContent;
   if (learnerProfile) {
@@ -36,14 +38,14 @@ export async function runAgentLoop(
     { role: "user", content: userMessage },
   ];
 
-  const tools = createTools(db, config.apiKey);
+  const tools = createTools(db, config.apiKey, nativeLanguage);
   const openaiTools = toolsToOpenAI(tools);
 
   let totalText = "";
   let toolCallsMade = 0;
 
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
-    const result = await llmChat(config, messages, openaiTools as never, 0.7, 4096);
+    const result = await llmChat(config, messages, openaiTools, 0.7, 4096);
 
     if (result.content) {
       totalText += result.content;

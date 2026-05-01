@@ -3,6 +3,15 @@ import { BuddyDb } from "./db.js";
 import { createBot } from "./bot.js";
 import { startScheduler } from "./scheduler.js";
 
+process.on("uncaughtException", (e) => {
+  console.error("[uncaughtException]", e);
+  process.exit(1);
+});
+process.on("unhandledRejection", (e) => {
+  console.error("[unhandledRejection]", e);
+  process.exit(1);
+});
+
 async function main() {
   const config = loadConfig();
   const db = await BuddyDb.open(config.dbPath);

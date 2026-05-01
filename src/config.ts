@@ -22,7 +22,7 @@ export interface Config {
 export function loadConfig(): Config {
   const telegramToken = process.env.TELEGRAM_BOT_TOKEN ?? "";
   const openrouterApiKey = process.env.OPENROUTER_API_KEY ?? "";
-  const openrouterModel = process.env.OPENROUTER_MODEL ?? "minimax/minimax-m2.5:free";
+  const openrouterModel = process.env.OPENROUTER_MODEL ?? "google/gemini-2.0-flash-lite";
   const openrouterBaseUrl = process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1";
   const dbPath = process.env.DB_PATH ?? "./data/buddy.db";
   const allowedUsers = new Set(

@@ -14,22 +14,6 @@ function isAllowed(ctx: Context, config: Config): boolean {
   return config.allowedUsers.has(userId);
 }
 
-function trackHistory(
-  map: Map<number, ChatMessage[]>,
-  chatId: number,
-  msg: ChatMessage,
-): void {
-  const history = map.get(chatId) ?? [];
-  history.push(msg);
-  if (history.length > MAX_HISTORY) {
-    history.splice(0, history.length - MAX_HISTORY);
-  }
-  map.set(chatId, history);
-}
-
-function getHistory(map: Map<number, ChatMessage[]>, chatId: number): ChatMessage[] {
-  return map.get(chatId) ?? [];
-}
 
 export function createBot(config: Config, db: BuddyDb): Bot {
   const bot = new Bot(config.telegramToken);
@@ -38,8 +22,6 @@ export function createBot(config: Config, db: BuddyDb): Bot {
     model: config.openrouterModel,
     baseUrl: config.openrouterBaseUrl,
   };
-
-  const chatHistories = new Map<number, ChatMessage[]>();
 
   async function runCommand(ctx: Context, commandText: string): Promise<void> {
     if (!isAllowed(ctx, config)) return;
@@ -75,7 +57,10 @@ export function createBot(config: Config, db: BuddyDb): Bot {
 
   bot.on("message:text", async (ctx) => {
     if (!isAllowed(ctx, config)) return;
-    await handleMessage(ctx, config, db, llmConfig, chatHistories).catch((e) => logAndIgnore(ctx, e));
+    await handleMessage(ctx, config, db, llmConfig).catch(async (e) => {
+      logAndIgnore(ctx, e);
+      try { await ctx.reply("⚠️ " + (e?.message ?? String(e)).slice(0, 200)); } catch {}
+    });
   });
 
   bot.catch((err) => {
@@ -93,7 +78,6 @@ async function handleMessage(
   config: Config,
   db: BuddyDb,
   llmConfig: LLMConfig,
-  chatHistories: Map<number, ChatMessage[]>,
 ): Promise<void> {
   const text = ctx.message?.text;
   if (!text) return;
@@ -101,7 +85,10 @@ async function handleMessage(
 
   await ctx.api.sendChatAction(chatId, "typing");
 
-  const history = getHistory(chatHistories, chatId);
+  const history = (await db.getChatHistory(chatId, MAX_HISTORY)).map((m) => ({
+    role: m.role as ChatMessage["role"],
+    content: m.content,
+  }));
 
   const result = await runAgentLoop(
     llmConfig,
@@ -111,9 +98,9 @@ async function handleMessage(
     config.soulPath,
   );
 
-  trackHistory(chatHistories, chatId, { role: "user", content: text });
+  await db.addChatMessage(chatId, "user", text);
   if (result.text) {
-    trackHistory(chatHistories, chatId, { role: "assistant", content: result.text });
+    await db.addChatMessage(chatId, "assistant", result.text);
   }
 
   try {
