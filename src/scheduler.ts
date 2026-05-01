@@ -4,6 +4,7 @@ import { runAgentLoop } from "./agent.js";
 import { Config } from "./config.js";
 import { ChatMessage, LLMConfig } from "./llm.js";
 import { Bot } from "grammy";
+import { mdToTelegramHtml } from "./format.js";
 
 export function startScheduler(config: Config, db: BuddyDb, bot: Bot): void {
   const llmConfig: LLMConfig = {
@@ -23,7 +24,7 @@ export function startScheduler(config: Config, db: BuddyDb, bot: Bot): void {
 
     if (result.text && config.telegramChatId) {
       try {
-        await bot.api.sendMessage(config.telegramChatId, result.text, {
+        await bot.api.sendMessage(config.telegramChatId, mdToTelegramHtml(result.text), {
           parse_mode: "HTML",
         });
       } catch {
