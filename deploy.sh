@@ -5,13 +5,22 @@ set -euo pipefail
 # Build, rsync files, install deps, restart daemon.
 
 HOST="192.168.1.29"
-REMOTE_DIR="$HOME/miguelito-ts"
+REMOTE_DIR="/data/data/com.termux/files/home/miguelito-ts"
 
 echo "==> Building TypeScript..."
 npm run build
 
 echo "==> Syncing files to $HOST..."
-rsync -avz --exclude='node_modules' --exclude='.git' --exclude='data' --exclude='dist' ./ "$HOST:$REMOTE_DIR/"
+tar czf /tmp/miguelito-ts.tar.gz \
+  --exclude='node_modules' \
+  --exclude='.git' \
+  --exclude='data' \
+  --exclude='.env' \
+  --exclude='*.tar.gz' \
+  .
+ssh "$HOST" "mkdir -p $REMOTE_DIR"
+cat /tmp/miguelito-ts.tar.gz | ssh "$HOST" "tar xzf - -C $REMOTE_DIR"
+rm /tmp/miguelito-ts.tar.gz
 
 echo "==> Installing dependencies on remote..."
 ssh "$HOST" "cd $REMOTE_DIR && npm install --production"
