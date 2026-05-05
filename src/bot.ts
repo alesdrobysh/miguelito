@@ -48,17 +48,17 @@ export function createBot(config: Config, db: BuddyDb): Bot {
     }
   }
 
-  bot.command("start", (ctx) => runCommand(ctx, "/start").catch((e) => logAndIgnore(ctx, e)));
-  bot.command("progress", (ctx) => runCommand(ctx, "/progress").catch((e) => logAndIgnore(ctx, e)));
-  bot.command("progreso", (ctx) => runCommand(ctx, "/progreso").catch((e) => logAndIgnore(ctx, e)));
-  bot.command("vocabulary", (ctx) => runCommand(ctx, "/vocabulary").catch((e) => logAndIgnore(ctx, e)));
-  bot.command("export", (ctx) => runCommand(ctx, "/export").catch((e) => logAndIgnore(ctx, e)));
-  bot.command("reading", (ctx) => runCommand(ctx, "/reading").catch((e) => logAndIgnore(ctx, e)));
+  bot.command("start", (ctx) => runCommand(ctx, "/start").catch(logAndIgnore(ctx)));
+  bot.command("progress", (ctx) => runCommand(ctx, "/progress").catch(logAndIgnore(ctx)));
+  bot.command("progreso", (ctx) => runCommand(ctx, "/progreso").catch(logAndIgnore(ctx)));
+  bot.command("vocabulary", (ctx) => runCommand(ctx, "/vocabulary").catch(logAndIgnore(ctx)));
+  bot.command("export", (ctx) => runCommand(ctx, "/export").catch(logAndIgnore(ctx)));
+  bot.command("reading", (ctx) => runCommand(ctx, "/reading").catch(logAndIgnore(ctx)));
 
   bot.on("message:text", async (ctx) => {
     if (!isAllowed(ctx, config)) return;
     await handleMessage(ctx, config, db, llmConfig).catch(async (e) => {
-      logAndIgnore(ctx, e);
+      logAndIgnore(ctx)(e);
       try { await ctx.reply("⚠️ " + (e?.message ?? String(e)).slice(0, 200)); } catch {}
     });
   });
@@ -110,7 +110,7 @@ async function handleMessage(
   }
 }
 
-function logAndIgnore(ctx: Context, e: any): void {
+const logAndIgnore = (ctx: Context) => (e: any): void => {
   const msg = e?.message ?? String(e);
   console.error(`Error handling update ${ctx.update?.update_id}: ${msg.slice(0, 200)}`);
 }
