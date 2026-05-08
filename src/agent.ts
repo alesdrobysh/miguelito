@@ -1,7 +1,7 @@
 import fs from "fs";
-import { ChatMessage, LLMConfig, llmChat } from "./llm.js";
+import { ChatMessage, LLMConfig, ToolCall, llmChat } from "./llm.js";
 import { BuddyDb } from "./db.js";
-import { createTools, toolsToOpenAI } from "./tools/index.js";
+import { createTools, ToolDefinition, toolsToOpenAI } from "./tools/index.js";
 import { buildProfileInjection } from "./profile-injector.js";
 
 const MAX_TOOL_ITERATIONS = 10;
@@ -60,42 +60,47 @@ export async function runAgentLoop(
       content: result.content ?? "",
       tool_calls: result.toolCalls,
     };
-    messages.push(assistantMsg);
+      messages.push(assistantMsg);
 
-    for (const tc of result.toolCalls) {
-      const tool = tools.get(tc.function.name);
-      if (!tool) {
-        messages.push({
-          role: "tool",
-          content: `Error: tool "${tc.function.name}" not found`,
-          tool_call_id: tc.id,
-          name: tc.function.name,
-        });
-        continue;
+      const toolCalls = result.toolCalls.map((tc) => callTool(tc, tools));
+      const toolResults = await Promise.all(toolCalls);
+      messages.push(...toolResults);
+      toolCallsMade += toolResults.filter((tr) => tr.toolCalled).length;
+  }
+
+  return { text: totalText, toolCallsMade };
+}
+
+const callTool = async (tc: ToolCall, tools: Map<string, ToolDefinition>) => {
+    const tool = tools.get(tc.function.name)
+    if (!tool) {
+        return {
+            role: "tool",
+            content: `Error: tool "${tc.function.name}" not found`,
+            tool_call_id: tc.id,
+            name: tc.function.name,
+            toolCalled: false,
+        } as const;
+    }
+
+    let args: Record<string, string>;
+    try {
+      const parsed = JSON.parse(tc.function.arguments) as Record<string, unknown>;
+      args = {};
+      for (const [k, v] of Object.entries(parsed)) {
+        args[k] = typeof v === "string" ? v : JSON.stringify(v);
       }
+    } catch {
+      args = {};
+    }
 
-      let args: Record<string, string>;
-      try {
-        const parsed = JSON.parse(tc.function.arguments) as Record<string, unknown>;
-        args = {};
-        for (const [k, v] of Object.entries(parsed)) {
-          args[k] = typeof v === "string" ? v : JSON.stringify(v);
-        }
-      } catch {
-        args = {};
-      }
+    const toolResult = await tool.execute(args);
 
-      const toolResult = await tool.execute(args);
-      toolCallsMade++;
-
-      messages.push({
+    return {
         role: "tool",
         content: JSON.stringify(toolResult),
         tool_call_id: tc.id,
         name: tc.function.name,
-      });
-    }
-  }
-
-  return { text: totalText, toolCallsMade };
+        toolCalled: true,
+    } as const;
 }
