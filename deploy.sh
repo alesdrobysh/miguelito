@@ -26,8 +26,8 @@ echo "==> Installing dependencies on remote..."
 ssh "$HOST" "cd $REMOTE_DIR && npm install --production"
 
 echo "==> Restarting miguelito on phone..."
-ssh "$HOST" "pkill -f 'node dist/index.js' 2>/dev/null || true; sleep 1; ~/.termux/boot/start-miguelito.sh"
-sleep 2
+ssh "$HOST" "pkill -f 'node dist/index.js' 2>/dev/null || true; sleep 1; ~/.termux/boot/start-miguelito.sh" || true
+sleep 12
 ssh "$HOST" "pgrep -f 'node dist/index.js' >/dev/null && echo 'Daemon started OK' || echo 'WARNING: daemon did not start'"
 
 echo "Deployed."
