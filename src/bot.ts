@@ -7,6 +7,14 @@ import { mdToTelegramHtml } from "./format.js";
 
 const MAX_HISTORY = 50;
 
+async function sendReply(ctx: Context, text: string): Promise<void> {
+  try {
+    await ctx.reply(mdToTelegramHtml(text), { parse_mode: "HTML" });
+  } catch {
+    await ctx.reply(text);
+  }
+}
+
 function isAllowed(ctx: Context, config: Config): boolean {
   if (config.allowedUsers.size === 0) return true;
   const userId = ctx.from?.id?.toString();
@@ -29,19 +37,8 @@ export function createBot(config: Config, db: BuddyDb): Bot {
     await ctx.api.sendChatAction(ctx.chat!.id, "typing");
 
     try {
-      const result = await runAgentLoop(
-        llmConfig,
-        db,
-        commandText,
-        [],
-        config.soulPath,
-      );
-
-      try {
-        await ctx.reply(mdToTelegramHtml(result.text), { parse_mode: "HTML" });
-      } catch {
-        await ctx.reply(result.text);
-      }
+      const result = await runAgentLoop(llmConfig, db, commandText, [], config.soulPath);
+      await sendReply(ctx, result.text);
     } catch (e: any) {
       console.error("Error handling command:", e.message);
       await ctx.reply("Error: " + e.message.slice(0, 200));
@@ -55,9 +52,30 @@ export function createBot(config: Config, db: BuddyDb): Bot {
   bot.command("export", (ctx) => runCommand(ctx, "/export").catch(logAndIgnore(ctx)));
   bot.command("reading", (ctx) => runCommand(ctx, "/reading").catch(logAndIgnore(ctx)));
 
+  async function handleMessage(ctx: Context): Promise<void> {
+    const text = ctx.message?.text;
+    if (!text) return;
+    const chatId = ctx.chat!.id;
+
+    await ctx.api.sendChatAction(chatId, "typing");
+
+    const history = (await db.getChatHistory(chatId, MAX_HISTORY)).map((m) => ({
+      role: m.role as ChatMessage["role"],
+      content: m.content,
+    }));
+
+    await db.addChatMessage(chatId, "user", text);
+    const result = await runAgentLoop(llmConfig, db, text, history, config.soulPath);
+
+    if (result.text) {
+      await db.addChatMessage(chatId, "assistant", result.text);
+      await sendReply(ctx, result.text);
+    }
+  }
+
   bot.on("message:text", async (ctx) => {
     if (!isAllowed(ctx, config)) return;
-    await handleMessage(ctx, config, db, llmConfig).catch(async (e) => {
+    await handleMessage(ctx).catch(async (e) => {
       logAndIgnore(ctx)(e);
       try { await ctx.reply("⚠️ " + (e?.message ?? String(e)).slice(0, 200)); } catch {}
     });
@@ -71,43 +89,6 @@ export function createBot(config: Config, db: BuddyDb): Bot {
   });
 
   return bot;
-}
-
-async function handleMessage(
-  ctx: Context,
-  config: Config,
-  db: BuddyDb,
-  llmConfig: LLMConfig,
-): Promise<void> {
-  const text = ctx.message?.text;
-  if (!text) return;
-  const chatId = ctx.chat!.id;
-
-  await ctx.api.sendChatAction(chatId, "typing");
-
-  const history = (await db.getChatHistory(chatId, MAX_HISTORY)).map((m) => ({
-    role: m.role as ChatMessage["role"],
-    content: m.content,
-  }));
-
-  const result = await runAgentLoop(
-    llmConfig,
-    db,
-    text,
-    history,
-    config.soulPath,
-  );
-
-  await db.addChatMessage(chatId, "user", text);
-  if (result.text) {
-    await db.addChatMessage(chatId, "assistant", result.text);
-  }
-
-  try {
-    await ctx.reply(mdToTelegramHtml(result.text), { parse_mode: "HTML" });
-  } catch {
-    await ctx.reply(result.text);
-  }
 }
 
 const logAndIgnore = (ctx: Context) => (e: any): void => {
