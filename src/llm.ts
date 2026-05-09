@@ -35,6 +35,7 @@ export async function llmChat(
   tools?: object[],
   temperature: number = 0.7,
   maxTokens: number = 1024,
+  structured: boolean = false,
 ): Promise<ChatResult> {
   const baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
   const model = config.model ?? BUDGET_MODEL;
@@ -54,6 +55,12 @@ export async function llmChat(
 
   if (tools && tools.length > 0) {
     body.tools = tools;
+  }
+
+  if (structured) {
+    body.response_format = {
+      type: "json_object",
+    };
   }
 
   const resp = await fetch(`${baseUrl}/chat/completions`, {
@@ -95,6 +102,7 @@ export async function llmComplete(
   userPrompt: string,
   temperature: number,
   maxTokens: number,
+  structured: boolean = false,
 ): Promise<string> {
   const messages: ChatMessage[] = [];
   if (systemPrompt) {
@@ -108,6 +116,7 @@ export async function llmComplete(
     undefined,
     temperature,
     maxTokens,
+    structured,
   );
 
   return result.content ?? "";
@@ -120,13 +129,6 @@ export async function llmCompleteJson<T>(
   temperature: number,
   maxTokens: number,
 ): Promise<T> {
-  const raw = await llmComplete(apiKey, systemPrompt, userPrompt, temperature, maxTokens);
-  const clean = raw
-    .trim()
-    .replace(/^```json\s*/, "")
-    .replace(/^```\s*/, "")
-    .replace(/\s*```$/, "")
-    .trim();
-  return JSON.parse(clean) as T;
+  const raw = await llmComplete(apiKey, systemPrompt, userPrompt, temperature, maxTokens, true);
+  return JSON.parse(raw) as T;
 }
-
