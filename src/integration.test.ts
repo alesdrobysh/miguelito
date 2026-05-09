@@ -131,32 +131,6 @@ describe("integration: profile set + get cycle", () => {
   });
 });
 
-describe("integration: conversation state session management", () => {
-  it("creates new session and tracks turns", async () => {
-    const tools = createTools(db, "fake-key", "bielorruso");
-    const getTool = tools.get("miguelito_conversation_state")!;
-    const updateTool = tools.get("miguelito_conversation_state_update")!;
-
-    const first = await getTool.execute({});
-    expect((first as any).is_new_session).toBe(true);
-    expect((first as any).state.turn_count).toBe(0);
-
-    const update1 = await updateTool.execute({ mode: "REACT" });
-    expect((update1 as any).ok).toBe(true);
-    expect((update1 as any).turn_count).toBe(1);
-    expect((update1 as any).mode).toBe("REACT");
-
-    const update2 = await updateTool.execute({ mode: "TEACH", topic: "food" });
-    expect((update2 as any).turn_count).toBe(2);
-
-    const second = await getTool.execute({});
-    expect((second as any).is_new_session).toBe(false);
-    expect((second as any).state.turn_count).toBe(2);
-    expect((second as any).state.last_two_modes).toEqual(["REACT", "TEACH"]);
-    expect((second as any).state.topics_touched).toContain("food");
-  });
-});
-
 describe("integration: interest add + list", () => {
   it("adds interests and deduplicates", async () => {
     const tools = createTools(db, "fake-key", "bielorruso");
@@ -230,8 +204,6 @@ describe("integration: tool registry creates all expected tools", () => {
     const tools = createTools(db, "fake-key", "bielorruso");
 
     const expectedNames = [
-      "miguelito_conversation_state",
-      "miguelito_conversation_state_update",
       "miguelito_vocab_add",
       "miguelito_vocab_list",
       "miguelito_vocab_due",
@@ -248,7 +220,7 @@ describe("integration: tool registry creates all expected tools", () => {
       "miguelito_progress_summary",
     ];
 
-    expect(tools.size).toBe(16);
+    expect(tools.size).toBe(14);
     for (const name of expectedNames) {
       expect(tools.has(name)).toBe(true);
     }
@@ -261,7 +233,7 @@ describe("integration: toolsToOpenAI produces valid format", () => {
     const openai = toolsToOpenAI(tools);
 
     expect(Array.isArray(openai)).toBe(true);
-    expect(openai).toHaveLength(16);
+    expect(openai).toHaveLength(14);
 
     for (const item of openai as any[]) {
       expect(item.type).toBe("function");

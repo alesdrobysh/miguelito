@@ -2,7 +2,6 @@ import { BuddyDb } from "../db.js";
 import { createVocabTools } from "./vocab.js";
 import { createErrorTools } from "./errors.js";
 import { createProfileTools } from "./profile.js";
-import { createConversationTools } from "./conversation.js";
 import { createAssessmentTools } from "./assessment.js";
 import { createReadingTools } from "./reading.js";
 import { createInterestTools } from "./interests.js";
@@ -26,7 +25,6 @@ export function createTools(db: BuddyDb, openrouterApiKey: string, nativeLanguag
   const tools = new Map<string, ToolDefinition>();
 
   for (const t of [
-    ...createConversationTools(ctx),
     ...createVocabTools(ctx),
     ...createErrorTools(ctx),
     ...createProfileTools(ctx),
