@@ -5,7 +5,8 @@ import { createTools, ToolDefinition, toolsToOpenAI } from "./tools/index.js";
 import { buildProfileInjection } from "./profile-injector.js";
 
 const MAX_TOOL_ITERATIONS = 10;
-const CONV_STATE_RE = /\n\n\[CONV_STATE:\s*(REACT|DIG|OFFER|TEACH|PLAY)(?:,\s*([^,\]]+))?(?:,\s*([^,\]]+))?\]\s*$/;
+const CONV_STATE_PARSE_RE = /\[CONV_STATE:\s*(REACT|DIG|OFFER|TEACH|PLAY)(?:,\s*([^,\]]+))?(?:,\s*([^,\]]+))?\]/;
+const CONV_STATE_STRIP_RE = /\s*\[CONV_STATE:[^\]]*\]\s*$/;
 
 export interface AgentResult {
   text: string;
@@ -61,15 +62,14 @@ Topics touched: ${convState.session.topics_touched}
     }
 
     if (result.toolCalls.length === 0) {
-      const finalText = result.content ?? "";
-      const match = finalText.match(CONV_STATE_RE);
+      const match = totalText.match(CONV_STATE_PARSE_RE);
       if (match) {
         const mode = match[1];
         const topic = match[2]?.trim() || undefined;
         const mood = match[3]?.trim() || undefined;
         await db.updateConversationState(mode, topic, mood);
-        totalText = totalText.replace(CONV_STATE_RE, "").trim();
       }
+      totalText = totalText.replace(CONV_STATE_STRIP_RE, "").trim();
       break;
     }
 
