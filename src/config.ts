@@ -38,8 +38,8 @@ export function loadConfig(): Config {
   if (!telegramChatId) throw new Error("TELEGRAM_CHAT_ID is required");
 
   const soulPath = process.env.SOUL_PATH ?? path.resolve(process.cwd(), "SOUL.md");
-  const morningCronPrompt = process.env.MORNING_CRON_PROMPT ?? "Check ## Conversation State for session context and mood. Then call miguelito_profile_get to check the user's name and level. Then send a single short Spanish message (1-3 sentences). Call miguelito_vocab_due to find a word whose review is due. If a word is returned, weave it naturally into the message and end with a hook. If no words are due, open with a brief curiosity-driven question about the user's day or a tiny cultural snippet. Never start with your name. Never paste tool output.";
-  const eveningCronPrompt = process.env.EVENING_CRON_PROMPT ?? "Check ## Conversation State for session context and mood. Then call miguelito_error_list with category 'all' and limit 5 to find a recent weak spot. If you find a relevant pattern, ask a small question that touches it. If empty, ask what the user did today in one sentence. End with a hook.";
+  const morningCronPrompt = process.env.MORNING_CRON_PROMPT ?? "Check ## Conversation State for session context and mood. Check ## Learner Profile and ## Current Learner Profile for the user's name, level, and Words to Weave In. Send a single short Spanish message (1-3 sentences). If Words to Weave In are listed, weave one naturally and end with a hook. If none, open with a brief curiosity-driven question about the user's day or a tiny cultural snippet. Never start with your name. Never paste raw data.";
+  const eveningCronPrompt = process.env.EVENING_CRON_PROMPT ?? "Check ## Conversation State for session context and mood. Check ## Current Learner Profile for Weak Areas and Error to Reinforce. If an error pattern is present, ask a small question that touches it. If not, ask what the user did today in one sentence. End with a hook.";
 
   return {
     telegramToken,
