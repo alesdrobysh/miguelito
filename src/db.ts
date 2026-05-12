@@ -89,9 +89,11 @@ CREATE TABLE IF NOT EXISTS chat_history (
     chat_id INTEGER NOT NULL,
     role TEXT NOT NULL,
     content TEXT NOT NULL,
+    session_id TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_chat_history_chat_id ON chat_history(chat_id, id);
+CREATE INDEX IF NOT EXISTS idx_chat_history_session ON chat_history(session_id);
 `;
 
 const VALID_CATEGORIES = new Set([
@@ -224,6 +226,15 @@ export class BuddyDb {
     this.dbPath = dbPath;
   }
 
+  private static runMigrations(db: Database): void {
+    const info = db.exec("PRAGMA table_info(chat_history)");
+    const cols = (info[0]?.values ?? []).map((r) => r[1] as string);
+    if (!cols.includes("session_id")) {
+      db.run("ALTER TABLE chat_history ADD COLUMN session_id TEXT");
+      db.run("CREATE INDEX IF NOT EXISTS idx_chat_history_session ON chat_history(session_id)");
+    }
+  }
+
   static async open(dbPath: string): Promise<BuddyDb> {
     const SQL = await initSqlJs();
     const dir = path.dirname(dbPath);
@@ -236,6 +247,7 @@ export class BuddyDb {
     }
     const db = new SQL.Database(buf);
     db.run(SCHEMA);
+    BuddyDb.runMigrations(db);
     return new BuddyDb(db, dbPath);
   }
 
@@ -603,12 +615,19 @@ export class BuddyDb {
     };
   }
 
-  async addChatMessage(chatId: number, role: string, content: string): Promise<void> {
+  async addChatMessage(chatId: number, role: string, content: string, sessionId?: string): Promise<void> {
     this.db.run(
-      `INSERT INTO chat_history (chat_id, role, content) VALUES (?, ?, ?)`,
-      [chatId, role, content]
+      `INSERT INTO chat_history (chat_id, role, content, session_id) VALUES (?, ?, ?, ?)`,
+      [chatId, role, content, sessionId ?? null]
     );
     this.save();
+  }
+
+  async getSessionTranscript(sessionId: string): Promise<{ role: string; content: string; created_at: string }[]> {
+    return this.queryAll(
+      `SELECT role, content, created_at FROM chat_history WHERE session_id = ? ORDER BY id ASC`,
+      [sessionId]
+    ) as { role: string; content: string; created_at: string }[];
   }
 
   async getChatHistory(chatId: number, limit: number): Promise<{ role: string; content: string }[]> {

@@ -64,11 +64,12 @@ export function createBot(config: Config, db: BuddyDb): Bot {
       content: m.content,
     }));
 
-    await db.addChatMessage(chatId, "user", text);
+    const { session } = await db.getConversationState();
+    await db.addChatMessage(chatId, "user", text, session.session_id);
     const result = await runAgentLoop(llmConfig, db, text, history, config.soulPath);
 
     if (result.text) {
-      await db.addChatMessage(chatId, "assistant", result.text);
+      await db.addChatMessage(chatId, "assistant", result.text, session.session_id);
       await sendReply(ctx, result.text);
     }
   }
