@@ -1,3 +1,4 @@
+import fs from "fs";
 import { BuddyDb } from "./db.js";
 
 interface ProfileInjection {
@@ -5,9 +6,10 @@ interface ProfileInjection {
   learnerProfile: string | null;
   userInterests: string | null;
   nativeLanguage: string;
+  dreamMemory: string | null;
 }
 
-export async function buildProfileInjection(db: BuddyDb): Promise<ProfileInjection> {
+export async function buildProfileInjection(db: BuddyDb, dreamMemoryPath?: string): Promise<ProfileInjection> {
   const [profile, assessment] = await Promise.all([db.getProfile(), db.getLatestAssessment()]);
   const nativeLanguage = profile?.native_language ?? "the user's native language";
 
@@ -35,7 +37,13 @@ export async function buildProfileInjection(db: BuddyDb): Promise<ProfileInjecti
     ? `\n\n## User Interests\n${interests.join(", ")}`
     : null;
 
-  return { basicProfile, learnerProfile, userInterests, nativeLanguage };
+  let dreamMemory: string | null = null;
+  if (dreamMemoryPath && fs.existsSync(dreamMemoryPath)) {
+    const content = fs.readFileSync(dreamMemoryPath, "utf8").trim();
+    if (content) dreamMemory = `\n\n## Dream Memory\n${content}`;
+  }
+
+  return { basicProfile, learnerProfile, userInterests, nativeLanguage, dreamMemory };
 }
 
 function formatProfile(

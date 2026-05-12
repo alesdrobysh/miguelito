@@ -19,12 +19,16 @@ export async function runAgentLoop(
   userMessage: string,
   chatHistory: ChatMessage[],
   systemPromptPath: string,
+  dreamMemoryPath?: string,
 ): Promise<AgentResult> {
   const soulContent = fs.readFileSync(systemPromptPath, "utf-8");
 
-  const { basicProfile, learnerProfile, userInterests, nativeLanguage } = await buildProfileInjection(db);
+  const { basicProfile, learnerProfile, userInterests, nativeLanguage, dreamMemory } = await buildProfileInjection(db, dreamMemoryPath);
 
   let fullSystem = soulContent + basicProfile;
+  if (dreamMemory) {
+    fullSystem += dreamMemory;
+  }
   if (learnerProfile) {
     fullSystem += learnerProfile;
   }

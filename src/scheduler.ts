@@ -1,8 +1,9 @@
 import cron from "node-cron";
 import { BuddyDb } from "./db.js";
 import { runAgentLoop } from "./agent.js";
+import { runDream } from "./dream.js";
 import { Config } from "./config.js";
-import { ChatMessage, LLMConfig } from "./llm.js";
+import { LLMConfig } from "./llm.js";
 import { Bot } from "grammy";
 import { mdToTelegramHtml } from "./format.js";
 
@@ -20,6 +21,7 @@ export function startScheduler(config: Config, db: BuddyDb, bot: Bot): void {
       prompt,
       [],
       config.soulPath,
+      config.dreamMemoryPath,
     );
 
     if (result.text && config.telegramChatId) {
@@ -41,6 +43,12 @@ export function startScheduler(config: Config, db: BuddyDb, bot: Bot): void {
 
   if (config.eveningCron) {
     cron.schedule(config.eveningCron, () => runCronJob(config.eveningCronPrompt), {
+      timezone: config.timezone,
+    });
+  }
+
+  if (config.dreamCron) {
+    cron.schedule(config.dreamCron, () => runDream(config, db).catch(console.error), {
       timezone: config.timezone,
     });
   }

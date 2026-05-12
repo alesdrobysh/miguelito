@@ -1,6 +1,7 @@
 import { Bot, Context } from "grammy";
 import { BuddyDb } from "./db.js";
 import { runAgentLoop } from "./agent.js";
+import { runDream } from "./dream.js";
 import { Config } from "./config.js";
 import { ChatMessage, LLMConfig } from "./llm.js";
 import { mdToTelegramHtml } from "./format.js";
@@ -37,7 +38,7 @@ export function createBot(config: Config, db: BuddyDb): Bot {
     await ctx.api.sendChatAction(ctx.chat!.id, "typing");
 
     try {
-      const result = await runAgentLoop(llmConfig, db, commandText, [], config.soulPath);
+      const result = await runAgentLoop(llmConfig, db, commandText, [], config.soulPath, config.dreamMemoryPath);
       await sendReply(ctx, result.text);
     } catch (e: any) {
       console.error("Error handling command:", e.message);
@@ -51,6 +52,18 @@ export function createBot(config: Config, db: BuddyDb): Bot {
   bot.command("vocabulary", (ctx) => runCommand(ctx, "/vocabulary").catch(logAndIgnore(ctx)));
   bot.command("export", (ctx) => runCommand(ctx, "/export").catch(logAndIgnore(ctx)));
   bot.command("reading", (ctx) => runCommand(ctx, "/reading").catch(logAndIgnore(ctx)));
+
+  bot.command("dream", async (ctx) => {
+    if (!isAllowed(ctx, config)) return;
+    await ctx.reply("Dreaming...");
+    try {
+      const summary = await runDream(config, db);
+      await ctx.reply(summary);
+    } catch (e: any) {
+      console.error("Dream error:", e.message);
+      await ctx.reply("Dream failed: " + e.message.slice(0, 200));
+    }
+  });
 
   async function handleMessage(ctx: Context): Promise<void> {
     const text = ctx.message?.text;
@@ -66,7 +79,7 @@ export function createBot(config: Config, db: BuddyDb): Bot {
 
     const { session } = await db.getConversationState();
     await db.addChatMessage(chatId, "user", text, session.session_id);
-    const result = await runAgentLoop(llmConfig, db, text, history, config.soulPath);
+    const result = await runAgentLoop(llmConfig, db, text, history, config.soulPath, config.dreamMemoryPath);
 
     if (result.text) {
       await db.addChatMessage(chatId, "assistant", result.text, session.session_id);

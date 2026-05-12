@@ -17,6 +17,8 @@ export interface Config {
   soulPath: string;
   morningCronPrompt: string;
   eveningCronPrompt: string;
+  dreamCron: string;
+  dreamMemoryPath: string;
 }
 
 export function loadConfig(): Config {
@@ -40,6 +42,8 @@ export function loadConfig(): Config {
   const soulPath = process.env.SOUL_PATH ?? path.resolve(process.cwd(), "SOUL.md");
   const morningCronPrompt = process.env.MORNING_CRON_PROMPT ?? "Check ## Conversation State for session context and mood. Check ## Learner Profile and ## Current Learner Profile for the user's name, level, and Words to Weave In. Send a single short Spanish message (1-3 sentences). If Words to Weave In are listed, weave one naturally and end with a hook. If none, open with a brief curiosity-driven question about the user's day or a tiny cultural snippet. Never start with your name. Never paste raw data.";
   const eveningCronPrompt = process.env.EVENING_CRON_PROMPT ?? "Check ## Conversation State for session context and mood. Check ## Current Learner Profile for Weak Areas and Error to Reinforce. If an error pattern is present, ask a small question that touches it. If not, ask what the user did today in one sentence. End with a hook.";
+  const dreamCron = process.env.DREAM_CRON ?? "0 23 * * *";
+  const dreamMemoryPath = process.env.DREAM_MEMORY_PATH ?? path.resolve(process.cwd(), "data/memory/MEMORY.md");
 
   return {
     telegramToken,
@@ -55,5 +59,7 @@ export function loadConfig(): Config {
     soulPath,
     morningCronPrompt,
     eveningCronPrompt,
+    dreamCron,
+    dreamMemoryPath,
   };
 }

@@ -93,7 +93,6 @@ CREATE TABLE IF NOT EXISTS chat_history (
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_chat_history_chat_id ON chat_history(chat_id, id);
-CREATE INDEX IF NOT EXISTS idx_chat_history_session ON chat_history(session_id);
 `;
 
 const VALID_CATEGORIES = new Set([
@@ -638,6 +637,13 @@ export class BuddyDb {
       [chatId, limit]
     ) as { role: string; content: string }[];
     return rows;
+  }
+
+  async getTodaysMessages(date: string): Promise<{ role: string; content: string; created_at: string }[]> {
+    return this.queryAll(
+      `SELECT role, content, created_at FROM chat_history WHERE date(created_at) = ? ORDER BY id ASC`,
+      [date]
+    ) as { role: string; content: string; created_at: string }[];
   }
 
   close(): void {
