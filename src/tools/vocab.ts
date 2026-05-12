@@ -85,40 +85,6 @@ function vocabList(ctx: ToolContext) {
   };
 }
 
-function vocabDue(ctx: ToolContext) {
-  return {
-    name: "miguelito_vocab_due",
-    description:
-      "Return vocabulary items whose spaced-repetition next-review timestamp is now or in the past, including never-reviewed words.",
-    parameters: {
-      type: "object",
-      properties: {
-        limit: {
-          type: "string",
-          description: "Max items to return (string-encoded integer, e.g. '5').",
-        },
-      },
-    },
-    execute: async (args: Record<string, string>) => {
-      const limit = parseInt(args.limit ?? "10", 10) || 10;
-      const items = await ctx.db.dueVocab(limit);
-      const now = new Date()
-        .toISOString()
-        .replace("T", " ")
-        .replace(/\.\d+Z$/, "");
-      const out = items.map((r) => ({
-        id: r.id,
-        word: r.word,
-        translation: r.translation,
-        repetitions: r.repetitions,
-        interval_days: r.interval_days,
-        next_review_at: r.next_review_at,
-      }));
-      return { ok: true, count: out.length, items: out, as_of: now };
-    },
-  };
-}
-
 function vocabScore(ctx: ToolContext) {
   return {
     name: "miguelito_vocab_score",
@@ -187,7 +153,6 @@ export function createVocabTools(ctx: ToolContext) {
   return [
     vocabAdd(ctx),
     vocabList(ctx),
-    vocabDue(ctx),
     vocabScore(ctx),
     vocabExport(ctx),
   ];

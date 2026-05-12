@@ -1,24 +1,32 @@
 import { BuddyDb } from "./db.js";
 
 interface ProfileInjection {
+  basicProfile: string;
   learnerProfile: string | null;
   userInterests: string | null;
+  nativeLanguage: string;
 }
 
 export async function buildProfileInjection(db: BuddyDb): Promise<ProfileInjection> {
-  const assessment = await db.getLatestAssessment();
-  const words = await getDueWords(db, 3);
+  const [profile, assessment] = await Promise.all([db.getProfile(), db.getLatestAssessment()]);
+  const nativeLanguage = profile?.native_language ?? "the user's native language";
+
+  const basicProfile = profile
+    ? `\n\n## Learner Profile\nName: ${profile.name ?? "unknown"} | Native language: ${profile.native_language} | Level: ${profile.level ?? "unknown"} | Goal: ${profile.goal ?? "none"} | Correction style: ${profile.correction_style ?? "inline"}`
+    : `\n\n## Learner Profile\nNot configured yet — begin onboarding when user sends /start.`;
+
+  const words = await getDueWords(db, 5);
   const weakAreas = await getWeakAreas(db, 3);
   const errorInfo = weakAreas.length > 0 ? await getRecentErrorForCategory(db, weakAreas[0]) : null;
   const strengths = parseJsonOrEmpty<string>(assessment?.strengths as string | null);
 
-  const hasData =
+  const hasLearnerData =
     assessment != null ||
     words.length > 0 ||
     errorInfo != null ||
     weakAreas.length > 0;
 
-  const learnerProfile = hasData
+  const learnerProfile = hasLearnerData
     ? formatProfile(assessment, words, errorInfo, weakAreas, strengths)
     : null;
 
@@ -27,7 +35,7 @@ export async function buildProfileInjection(db: BuddyDb): Promise<ProfileInjecti
     ? `\n\n## User Interests\n${interests.join(", ")}`
     : null;
 
-  return { learnerProfile, userInterests };
+  return { basicProfile, learnerProfile, userInterests, nativeLanguage };
 }
 
 function formatProfile(

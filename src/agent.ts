@@ -22,11 +22,9 @@ export async function runAgentLoop(
 ): Promise<AgentResult> {
   const soulContent = fs.readFileSync(systemPromptPath, "utf-8");
 
-  const { learnerProfile, userInterests } = await buildProfileInjection(db);
-  const profile = await db.getProfile();
-  const nativeLanguage = profile?.native_language ?? "the user's native language";
+  const { basicProfile, learnerProfile, userInterests, nativeLanguage } = await buildProfileInjection(db);
 
-  let fullSystem = soulContent;
+  let fullSystem = soulContent + basicProfile;
   if (learnerProfile) {
     fullSystem += learnerProfile;
   }
