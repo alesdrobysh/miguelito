@@ -1,24 +1,27 @@
 import initSqlJs, { Database } from "sql.js";
 import fs from "fs";
 import path from "path";
-import { sm2Review, statusOf } from "./sm2.js";
+import { fsrsInitial, fsrsReview, statusOf, Grade } from "./fsrs.js";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS vocabulary_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    word TEXT NOT NULL,
-    translation TEXT,
-    context_first_seen TEXT,
+    chunk_l2 TEXT NOT NULL,
+    anchor TEXT,
+    capture_context_l2 TEXT,
     first_seen_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    last_reviewed_at DATETIME,
-    next_review_at DATETIME,
     status TEXT DEFAULT 'new',
-    ease_factor REAL DEFAULT 2.5,
-    repetitions INTEGER DEFAULT 0,
-    interval_days INTEGER DEFAULT 0
+    pro_stability REAL DEFAULT 1.0,
+    pro_difficulty REAL DEFAULT 5.0,
+    pro_due DATETIME,
+    pro_last_review DATETIME,
+    pro_reps INTEGER DEFAULT 0,
+    rec_stability REAL DEFAULT 1.0,
+    rec_difficulty REAL DEFAULT 5.0,
+    rec_due DATETIME,
+    rec_last_review DATETIME,
+    rec_reps INTEGER DEFAULT 0
 );
-CREATE INDEX IF NOT EXISTS idx_vocab_next_review ON vocabulary_items(next_review_at);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_vocab_word_unique ON vocabulary_items(word COLLATE NOCASE);
 
 CREATE TABLE IF NOT EXISTS error_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -107,30 +110,38 @@ const VALID_CATEGORIES = new Set([
   "other",
 ]);
 
-export interface VocabItem {
+export interface ChunkItem {
   id: number;
-  word: string;
-  translation: string | null;
-  context_first_seen: string | null;
+  chunk_l2: string;
+  anchor: string | null;
+  capture_context_l2: string | null;
   first_seen_at: string | null;
-  last_reviewed_at: string | null;
-  next_review_at: string | null;
   status: string;
-  ease_factor: number;
-  repetitions: number;
-  interval_days: number;
+  pro_stability: number;
+  pro_difficulty: number;
+  pro_due: string | null;
+  pro_last_review: string | null;
+  pro_reps: number;
+  rec_stability: number;
+  rec_difficulty: number;
+  rec_due: string | null;
+  rec_last_review: string | null;
+  rec_reps: number;
 }
 
-export interface DueVocabItem {
+export interface DueChunkItem {
   id: number;
-  word: string;
-  translation: string | null;
+  chunk_l2: string;
+  anchor: string | null;
   status: string;
-  repetitions: number;
-  interval_days: number;
-  ease_factor: number;
-  next_review_at: string | null;
+  pro_stability: number;
+  pro_reps: number;
+  pro_due: string | null;
 }
+
+// Backward-compat alias used by profile-injector and tools
+export type VocabItem = ChunkItem;
+export type DueVocabItem = DueChunkItem;
 
 export interface ErrorItem {
   id: number;
@@ -172,13 +183,16 @@ export interface ConversationStateResult {
   isNew: boolean;
 }
 
-export interface Sm2Result {
-  repetitions: number;
-  interval_days: number;
-  ease_factor: number;
+export interface FsrsReviewResult {
+  stability: number;
+  difficulty: number;
+  reps: number;
   status: string;
-  next_review_at: string;
+  due: string;
 }
+
+// Backward-compat alias
+export type Sm2Result = FsrsReviewResult;
 
 export interface ProgressData {
   newCount: number;
@@ -211,6 +225,11 @@ function computeNextReview(intervalDays: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
+function computeElapsedDays(lastReviewIso: string): number {
+  const last = new Date(lastReviewIso.replace(" ", "T"));
+  return Math.max(0.1, (Date.now() - last.getTime()) / 86400000);
+}
+
 function normalizeCategory(category: string): string {
   if (VALID_CATEGORIES.has(category)) return category;
   return "other";
@@ -226,12 +245,60 @@ export class BuddyDb {
   }
 
   private static runMigrations(db: Database): void {
-    const info = db.exec("PRAGMA table_info(chat_history)");
-    const cols = (info[0]?.values ?? []).map((r) => r[1] as string);
-    if (!cols.includes("session_id")) {
+    // v1: chat_history.session_id
+    const chatInfo = db.exec("PRAGMA table_info(chat_history)");
+    const chatCols = (chatInfo[0]?.values ?? []).map((r) => r[1] as string);
+    if (!chatCols.includes("session_id")) {
       db.run("ALTER TABLE chat_history ADD COLUMN session_id TEXT");
       db.run("CREATE INDEX IF NOT EXISTS idx_chat_history_session ON chat_history(session_id)");
     }
+
+    // v3: rebuild vocabulary_items — word+translation → chunk_l2 (L2-only) + FSRS state
+    const verRow = db.exec("SELECT value FROM _buddy_meta WHERE key = 'schema_version'");
+    const ver = verRow[0]?.values[0]?.[0] as string | undefined;
+    if (ver === "3") return;
+
+    const vocabInfo = db.exec("PRAGMA table_info(vocabulary_items)");
+    const vocabCols = (vocabInfo[0]?.values ?? []).map((r) => r[1] as string);
+    const isLegacy = vocabCols.includes("word") && !vocabCols.includes("chunk_l2");
+
+    if (isLegacy) {
+      db.run(`
+        CREATE TABLE vocabulary_items_v3 (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          chunk_l2 TEXT NOT NULL,
+          anchor TEXT,
+          capture_context_l2 TEXT,
+          first_seen_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          status TEXT DEFAULT 'new',
+          pro_stability REAL DEFAULT 1.0,
+          pro_difficulty REAL DEFAULT 5.0,
+          pro_due DATETIME,
+          pro_last_review DATETIME,
+          pro_reps INTEGER DEFAULT 0,
+          rec_stability REAL DEFAULT 1.0,
+          rec_difficulty REAL DEFAULT 5.0,
+          rec_due DATETIME,
+          rec_last_review DATETIME,
+          rec_reps INTEGER DEFAULT 0
+        )
+      `);
+      db.run(`
+        INSERT INTO vocabulary_items_v3 (id, chunk_l2, anchor, capture_context_l2, first_seen_at, status)
+        SELECT id, word, NULL, context_first_seen, first_seen_at, COALESCE(status, 'new')
+        FROM vocabulary_items
+      `);
+      db.run("DROP TABLE vocabulary_items");
+      db.run("ALTER TABLE vocabulary_items_v3 RENAME TO vocabulary_items");
+      db.run("CREATE UNIQUE INDEX idx_vocab_chunk_unique ON vocabulary_items(chunk_l2 COLLATE NOCASE)");
+      db.run("CREATE INDEX idx_vocab_pro_due ON vocabulary_items(pro_due)");
+    }
+
+    db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '3')");
+    try {
+      db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_vocab_chunk_unique ON vocabulary_items(chunk_l2 COLLATE NOCASE)");
+      db.run("CREATE INDEX IF NOT EXISTS idx_vocab_pro_due ON vocabulary_items(pro_due)");
+    } catch {}
   }
 
   static async open(dbPath: string): Promise<BuddyDb> {
@@ -282,11 +349,11 @@ export class BuddyDb {
     return results;
   }
 
-  async addVocab(word: string, translation: string, context: string): Promise<number | null> {
+  async addVocab(chunk_l2: string, capture_context_l2: string, anchor?: string): Promise<number | null> {
     const now = nowIso();
     this.db.run(
-      `INSERT OR IGNORE INTO vocabulary_items (word, translation, context_first_seen, first_seen_at) VALUES (?, ?, ?, ?)`,
-      [word, translation, context, now]
+      `INSERT OR IGNORE INTO vocabulary_items (chunk_l2, capture_context_l2, anchor, first_seen_at) VALUES (?, ?, ?, ?)`,
+      [chunk_l2.trim().toLowerCase(), capture_context_l2, anchor?.trim().toLowerCase() ?? null, now]
     );
     if (this.db.getRowsModified() === 0) return null;
     const rowidResult = this.db.exec("SELECT last_insert_rowid()");
@@ -295,57 +362,78 @@ export class BuddyDb {
     return id;
   }
 
-  async listVocab(bucket: string, limit: number): Promise<VocabItem[]> {
+  async listVocab(bucket: string, limit: number): Promise<ChunkItem[]> {
     if (bucket === "all") {
-      return this.queryAll(`SELECT * FROM vocabulary_items ORDER BY id DESC LIMIT ?`, [limit]) as VocabItem[];
+      return this.queryAll(`SELECT * FROM vocabulary_items ORDER BY id DESC LIMIT ?`, [limit]) as ChunkItem[];
     }
-    const rows = this.queryAll(`SELECT * FROM vocabulary_items`) as VocabItem[];
-    const filtered = rows.filter((r: VocabItem) => statusOf(r.repetitions, r.interval_days) === bucket);
+    const rows = this.queryAll(`SELECT * FROM vocabulary_items`) as ChunkItem[];
+    const filtered = rows.filter((r) => statusOf(r.pro_reps, r.pro_stability) === bucket);
     return filtered.slice(0, limit);
   }
 
-  async dueVocab(limit: number): Promise<DueVocabItem[]> {
+  async dueVocab(limit: number): Promise<DueChunkItem[]> {
     const now = nowIso();
     return this.queryAll(
-      `SELECT id, word, translation, status, repetitions, interval_days, ease_factor
+      `SELECT id, chunk_l2, anchor, status, pro_stability, pro_reps, pro_due
        FROM vocabulary_items
-       WHERE next_review_at IS NULL OR next_review_at <= ?
-       ORDER BY next_review_at ASC
+       WHERE pro_due IS NULL OR pro_due <= ?
+       ORDER BY pro_due ASC
        LIMIT ?`,
       [now, limit]
-    ) as DueVocabItem[];
+    ) as DueChunkItem[];
   }
 
-  async scoreVocab(word: string, quality: number): Promise<Sm2Result> {
+  async scoreVocab(chunk_l2: string, grade: number, mode: "productive" | "receptive" = "productive"): Promise<FsrsReviewResult> {
+    const g = Math.max(1, Math.min(3, Math.round(grade))) as Grade;
     const row = this.queryRow(
-      `SELECT id, ease_factor, repetitions, interval_days FROM vocabulary_items WHERE word = ?`,
-      [word]
-    ) as { id: number; ease_factor: number; repetitions: number; interval_days: number } | undefined;
+      `SELECT id, pro_stability, pro_difficulty, pro_reps, pro_last_review,
+                rec_stability, rec_difficulty, rec_reps, rec_last_review
+       FROM vocabulary_items WHERE chunk_l2 = ? COLLATE NOCASE`,
+      [chunk_l2]
+    ) as {
+      id: number;
+      pro_stability: number; pro_difficulty: number; pro_reps: number; pro_last_review: string | null;
+      rec_stability: number; rec_difficulty: number; rec_reps: number; rec_last_review: string | null;
+    } | undefined;
 
-    if (!row) {
-      throw new Error(`Vocabulary item not found: ${word}`);
+    if (!row) throw new Error(`Chunk not found: ${chunk_l2}`);
+
+    const isProductive = mode === "productive";
+    const stability = isProductive ? row.pro_stability : row.rec_stability;
+    const difficulty = isProductive ? row.pro_difficulty : row.rec_difficulty;
+    const reps = isProductive ? row.pro_reps : row.rec_reps;
+    const lastReview = isProductive ? row.pro_last_review : row.rec_last_review;
+
+    let result;
+    if (reps === 0 || lastReview === null) {
+      result = fsrsInitial(g);
+    } else {
+      const elapsed = computeElapsedDays(lastReview);
+      result = fsrsReview({ stability, difficulty, reps }, g, elapsed);
     }
 
-    const result = sm2Review(row.ease_factor, row.repetitions, row.interval_days, quality);
     const now = nowIso();
-    const nextReview = computeNextReview(result.interval_days);
+    const due = computeNextReview(result.due_days);
 
-    this.db.run(
-      `UPDATE vocabulary_items
-       SET repetitions = ?, interval_days = ?, ease_factor = ?, status = ?,
-           last_reviewed_at = ?, next_review_at = ?
-       WHERE id = ?`,
-      [result.repetitions, result.interval_days, result.ease_factor, result.status, now, nextReview, row.id]
-    );
+    if (isProductive) {
+      this.db.run(
+        `UPDATE vocabulary_items
+         SET pro_stability = ?, pro_difficulty = ?, pro_reps = ?, pro_last_review = ?, pro_due = ?,
+             status = ?
+         WHERE id = ?`,
+        [result.stability, result.difficulty, result.reps, now, due, result.status, row.id]
+      );
+    } else {
+      this.db.run(
+        `UPDATE vocabulary_items
+         SET rec_stability = ?, rec_difficulty = ?, rec_reps = ?, rec_last_review = ?, rec_due = ?
+         WHERE id = ?`,
+        [result.stability, result.difficulty, result.reps, now, due, row.id]
+      );
+    }
     this.save();
 
-    return {
-      repetitions: result.repetitions,
-      interval_days: result.interval_days,
-      ease_factor: result.ease_factor,
-      status: result.status,
-      next_review_at: nextReview,
-    };
+    return { stability: result.stability, difficulty: result.difficulty, reps: result.reps, status: result.status, due };
   }
 
   async logError(userText: string, correct: string, category: string, note: string): Promise<number> {
@@ -542,43 +630,44 @@ export class BuddyDb {
   }
 
   async exportVocab(format: string): Promise<{ count: number; data: string }> {
-    const rows = this.queryAll(`SELECT * FROM vocabulary_items ORDER BY id ASC`) as VocabItem[];
+    const rows = this.queryAll(`SELECT * FROM vocabulary_items ORDER BY id ASC`) as ChunkItem[];
 
     if (format === "csv") {
-      const header = "word,translation,status,repetitions,interval_days,ease_factor,next_review_at";
+      const header = "chunk_l2,anchor,status,pro_stability,pro_reps,pro_due,rec_stability,rec_reps";
       const lines = rows.map((r) =>
         [
-          r.word,
-          r.translation ?? "",
-          statusOf(r.repetitions, r.interval_days),
-          r.repetitions,
-          r.interval_days,
-          r.ease_factor,
-          r.next_review_at ?? "",
+          r.chunk_l2,
+          r.anchor ?? "",
+          statusOf(r.pro_reps, r.pro_stability),
+          r.pro_stability,
+          r.pro_reps,
+          r.pro_due ?? "",
+          r.rec_stability,
+          r.rec_reps,
         ].join(",")
       );
       return { count: rows.length, data: [header, ...lines].join("\n") };
     }
 
     const lines = rows.map((r) => {
-      const s = statusOf(r.repetitions, r.interval_days);
-      return `- **${r.word}** (${r.translation ?? ""}) — ${s}, ease ${r.ease_factor}, next ${r.next_review_at ?? "N/A"}`;
+      const s = statusOf(r.pro_reps, r.pro_stability);
+      return `- **${r.chunk_l2}**${r.anchor ? ` [${r.anchor}]` : ""} — ${s}, S=${r.pro_stability}, due ${r.pro_due ?? "N/A"}`;
     });
     return { count: rows.length, data: lines.join("\n") };
   }
 
   async progressSummary(): Promise<ProgressData> {
-    const rows = this.queryAll(`SELECT * FROM vocabulary_items`) as VocabItem[];
+    const rows = this.queryAll(`SELECT pro_reps, pro_stability FROM vocabulary_items`) as Pick<ChunkItem, "pro_reps" | "pro_stability">[];
 
     const now = nowIso();
     const dueRow = this.queryRow(
-      `SELECT COUNT(*) AS c FROM vocabulary_items WHERE next_review_at IS NULL OR next_review_at <= ?`,
+      `SELECT COUNT(*) AS c FROM vocabulary_items WHERE pro_due IS NULL OR pro_due <= ?`,
       [now]
     ) as { c: number };
 
     const recentRows = this.queryAll(
-      `SELECT word FROM vocabulary_items ORDER BY first_seen_at DESC LIMIT 5`
-    ) as { word: string }[];
+      `SELECT chunk_l2 FROM vocabulary_items ORDER BY first_seen_at DESC LIMIT 5`
+    ) as { chunk_l2: string }[];
 
     const errorRows = this.queryAll(
       `SELECT category, COUNT(*) AS c FROM error_log GROUP BY category`
@@ -595,7 +684,7 @@ export class BuddyDb {
     let masteredCount = 0;
 
     for (const r of rows) {
-      const s = statusOf(r.repetitions, r.interval_days);
+      const s = statusOf(r.pro_reps, r.pro_stability);
       if (s === "new") newCount++;
       else if (s === "learning") learningCount++;
       else if (s === "review") reviewCount++;
@@ -609,7 +698,7 @@ export class BuddyDb {
       masteredCount,
       totalCount: rows.length,
       dueCount: dueRow?.c ?? 0,
-      recentWords: recentRows.map((r) => r.word),
+      recentWords: recentRows.map((r) => r.chunk_l2),
       errorCategories,
     };
   }

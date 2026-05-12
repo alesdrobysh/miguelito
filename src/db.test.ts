@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { BuddyDb } from "./db.js";
-import { sm2Review, statusOf } from "./sm2.js";
+import { fsrsInitial, fsrsReview, statusOf } from "./fsrs.js";
 
 let db: BuddyDb;
 let dbPath: string;
@@ -20,119 +20,172 @@ afterEach(async () => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
-describe("sm2", () => {
-  it("statusOf returns correct statuses", () => {
-    expect(statusOf(0, 0)).toBe("new");
-    expect(statusOf(1, 1)).toBe("learning");
-    expect(statusOf(2, 6)).toBe("learning");
-    expect(statusOf(3, 15)).toBe("review");
-    expect(statusOf(6, 30)).toBe("mastered");
-    expect(statusOf(6, 20)).toBe("review");
-    expect(statusOf(10, 100)).toBe("mastered");
+describe("fsrs", () => {
+  it("statusOf returns correct thresholds", () => {
+    expect(statusOf(0, 1)).toBe("new");
+    expect(statusOf(1, 3)).toBe("learning");   // S < 7
+    expect(statusOf(1, 7)).toBe("review");     // 7 ≤ S < 30
+    expect(statusOf(1, 30)).toBe("mastered");  // S ≥ 30
   });
 
-  it("sm2Review with quality >= 3 advances repetitions", () => {
-    const r = sm2Review(2.5, 0, 0, 4);
-    expect(r.repetitions).toBe(1);
-    expect(r.interval_days).toBe(1);
+  it("fsrsInitial grade=2 (Good) gives learning status", () => {
+    const r = fsrsInitial(2); // → FSRS grade 3, S₀ ≈ 3.13
+    expect(r.reps).toBe(1);
     expect(r.status).toBe("learning");
+    expect(r.due_days).toBeGreaterThanOrEqual(1);
   });
 
-  it("sm2Review second repetition gives interval 6", () => {
-    const r = sm2Review(2.5, 1, 1, 4);
-    expect(r.repetitions).toBe(2);
-    expect(r.interval_days).toBe(6);
+  it("fsrsInitial grade=3 (Easy) gives review status", () => {
+    const r = fsrsInitial(3); // S₀ ≈ 15.47
+    expect(r.reps).toBe(1);
+    expect(r.status).toBe("review");
   });
 
-  it("sm2Review uses ease factor for later repetitions", () => {
-    const r = sm2Review(2.5, 2, 6, 4);
-    expect(r.repetitions).toBe(3);
-    expect(r.interval_days).toBe(15);
-  });
-
-  it("sm2Review resets on quality < 3", () => {
-    const r = sm2Review(2.5, 5, 100, 2);
-    expect(r.repetitions).toBe(0);
-    expect(r.interval_days).toBe(1);
+  it("fsrsInitial grade=1 (Again) gives new status and reps=0", () => {
+    const r = fsrsInitial(1);
+    expect(r.reps).toBe(0);
     expect(r.status).toBe("new");
   });
 
-  it("sm2Review eases factor adjusts", () => {
-    const r = sm2Review(2.5, 0, 0, 5);
-    expect(r.ease_factor).toBe(2.6);
+  it("fsrsReview with elapsed time grows stability on grade=3 (Easy)", () => {
+    const state = { stability: 10, difficulty: 5, reps: 1 };
+    const r = fsrsReview(state, 3, 10);
+    expect(r.stability).toBeGreaterThan(10);
+    expect(r.reps).toBe(2);
   });
 
-  it("sm2Review eases factor has minimum 1.3", () => {
-    const r = sm2Review(1.3, 0, 0, 0);
-    expect(r.ease_factor).toBe(1.3);
+  it("fsrsReview grade=1 (Again) resets reps to 0", () => {
+    const state = { stability: 10, difficulty: 5, reps: 3 };
+    const r = fsrsReview(state, 1, 5);
+    expect(r.reps).toBe(0);
+    expect(r.status).toBe("new");
+  });
+
+  it("fsrsReview grade=3 (Easy) produces larger stability than grade=2 (Good)", () => {
+    const state = { stability: 5, difficulty: 5, reps: 1 };
+    const good = fsrsReview(state, 2, 3);
+    const easy = fsrsReview(state, 3, 3);
+    expect(easy.stability).toBeGreaterThan(good.stability);
   });
 });
 
-describe("BuddyDb vocabulary", () => {
-  it("addVocab inserts a new word and returns id", async () => {
-    const id = await db.addVocab("gato", "cat", "El gato duerme");
+describe("BuddyDb vocabulary (chunk-based)", () => {
+  it("addVocab inserts a chunk and returns id", async () => {
+    const id = await db.addVocab("echar de menos", "te echo de menos, amigo", "echar");
     expect(id).toBeTypeOf("number");
     expect(id).toBeGreaterThan(0);
   });
 
-  it("addVocab returns null on duplicate word (case-insensitive)", async () => {
-    await db.addVocab("gato", "cat", "El gato duerme");
-    const id2 = await db.addVocab("Gato", "cat", "another context");
+  it("addVocab returns null on duplicate (case-insensitive)", async () => {
+    await db.addVocab("echar de menos", "ctx");
+    const id2 = await db.addVocab("ECHAR DE MENOS", "ctx2");
     expect(id2).toBeNull();
   });
 
+  it("addVocab stores anchor", async () => {
+    await db.addVocab("me cuesta + [inf]", "me cuesta hablar", "costar");
+    const items = await db.listVocab("all", 10);
+    const item = items.find((i) => i.chunk_l2 === "me cuesta + [inf]");
+    expect(item).toBeDefined();
+    expect(item!.anchor).toBe("costar");
+  });
+
+  it("addVocab without anchor stores null anchor", async () => {
+    await db.addVocab("gato", "el gato es negro");
+    const items = await db.listVocab("all", 10);
+    expect(items[0].anchor).toBeNull();
+  });
+
   it("listVocab with 'all' returns all items", async () => {
-    await db.addVocab("gato", "cat", "ctx1");
-    await db.addVocab("perro", "dog", "ctx2");
+    await db.addVocab("echar de menos", "ctx");
+    await db.addVocab("tener en cuenta", "ctx");
     const items = await db.listVocab("all", 10);
     expect(items).toHaveLength(2);
   });
 
-  it("listVocab filters by bucket", async () => {
-    await db.addVocab("gato", "cat", "ctx");
-    await db.addVocab("perro", "dog", "ctx");
+  it("listVocab filters by bucket 'new'", async () => {
+    await db.addVocab("gato", "ctx");
+    await db.addVocab("perro", "ctx");
     const items = await db.listVocab("new", 10);
     expect(items).toHaveLength(2);
-
     const learning = await db.listVocab("learning", 10);
     expect(learning).toHaveLength(0);
   });
 
-  it("dueVocab returns items with null next_review_at", async () => {
-    await db.addVocab("gato", "cat", "ctx");
+  it("dueVocab returns new items (pro_due IS NULL)", async () => {
+    await db.addVocab("echar de menos", "ctx");
     const due = await db.dueVocab(10);
     expect(due).toHaveLength(1);
-    expect(due[0].word).toBe("gato");
+    expect(due[0].chunk_l2).toBe("echar de menos");
   });
 
-  it("scoreVocab updates word with SM-2 result", async () => {
-    await db.addVocab("gato", "cat", "ctx");
-    const result = await db.scoreVocab("gato", 4);
-    expect(result.repetitions).toBe(1);
-    expect(result.interval_days).toBe(1);
-    expect(result.status).toBe("learning");
-    expect(result.next_review_at).toBeTruthy();
+  it("scoreVocab defaults to productive mode", async () => {
+    await db.addVocab("llevar a cabo", "ctx");
+    const r = await db.scoreVocab("llevar a cabo", 3);
+    expect(r.reps).toBe(1);
+    expect(r.stability).toBeGreaterThan(0);
+    expect(r.due).toBeTruthy();
   });
 
-  it("scoreVocab throws on missing word", async () => {
-    await expect(() => db.scoreVocab("nonexistent", 4)).rejects.toThrow();
+  it("scoreVocab productive updates pro_ columns only", async () => {
+    await db.addVocab("dar un paseo", "ctx");
+    await db.scoreVocab("dar un paseo", 4, "productive");
+    const rows = db.db.exec(
+      `SELECT pro_reps, pro_stability, rec_reps, rec_stability FROM vocabulary_items WHERE chunk_l2 = 'dar un paseo'`
+    );
+    const [proReps, proS, recReps, recS] = rows[0].values[0];
+    expect(proReps).toBe(1);
+    expect(proS).toBeGreaterThan(1);
+    expect(recReps).toBe(0);
+    expect(recS).toBe(1.0); // untouched default
   });
 
-  it("scoreVocab transitions from new to learning to review to mastered", async () => {
-    await db.addVocab("casa", "house", "ctx");
-    let r = await db.scoreVocab("casa", 4);
-    expect(r.status).toBe("learning");
+  it("scoreVocab receptive updates rec_ columns only", async () => {
+    await db.addVocab("poner la mesa", "ctx");
+    await db.scoreVocab("poner la mesa", 4, "receptive");
+    const rows = db.db.exec(
+      `SELECT pro_reps, pro_stability, rec_reps, rec_stability FROM vocabulary_items WHERE chunk_l2 = 'poner la mesa'`
+    );
+    const [proReps, proS, recReps, recS] = rows[0].values[0];
+    expect(proReps).toBe(0);
+    expect(proS).toBe(1.0); // untouched default
+    expect(recReps).toBe(1);
+    expect(recS).toBeGreaterThan(1);
+  });
 
-    r = await db.scoreVocab("casa", 4);
-    expect(r.status).toBe("learning");
+  it("productive and receptive counters advance independently", async () => {
+    await db.addVocab("hacer caso", "ctx");
+    await db.scoreVocab("hacer caso", 4, "productive");
+    await db.scoreVocab("hacer caso", 4, "productive");
+    await db.scoreVocab("hacer caso", 5 as any, "receptive"); // grade clamped to 4
+    const rows = db.db.exec(
+      `SELECT pro_reps, rec_reps FROM vocabulary_items WHERE chunk_l2 = 'hacer caso'`
+    );
+    const [proReps, recReps] = rows[0].values[0];
+    expect(proReps).toBe(2);
+    expect(recReps).toBe(1);
+  });
 
-    r = await db.scoreVocab("casa", 4);
-    expect(r.status).toBe("review");
+  it("scoreVocab grade=1 (Again) resets reps to 0", async () => {
+    await db.addVocab("tener en cuenta", "ctx");
+    await db.scoreVocab("tener en cuenta", 3, "productive");
+    const r = await db.scoreVocab("tener en cuenta", 1, "productive");
+    expect(r.reps).toBe(0);
+    expect(r.status).toBe("new");
+  });
 
+  it("scoreVocab throws on missing chunk", async () => {
+    await expect(() => db.scoreVocab("nonexistent chunk", 3)).rejects.toThrow();
+  });
+
+  it("status column reflects productive counter only", async () => {
+    await db.addVocab("a lo mejor", "ctx");
+    // Drive receptive to mastered territory — status should stay 'new' (productive untouched)
     for (let i = 0; i < 3; i++) {
-      r = await db.scoreVocab("casa", 4);
+      await db.scoreVocab("a lo mejor", 4, "receptive");
     }
-    expect(r.status).toBe("mastered");
+    const rows = db.db.exec(`SELECT status FROM vocabulary_items WHERE chunk_l2 = 'a lo mejor'`);
+    expect(rows[0].values[0][0]).toBe("new");
   });
 });
 
@@ -215,7 +268,7 @@ describe("BuddyDb conversation state", () => {
     expect(second.session.id).toBe(first.session.id);
   });
 
-  it("getConversationState creates new session after 30 min gap (simulated by updating updated_at)", async () => {
+  it("getConversationState creates new session after 30 min gap", async () => {
     const first = await db.getConversationState();
     const oldTime = new Date(Date.now() - 31 * 60000);
     const pad = (n: number) => n.toString().padStart(2, "0");
@@ -312,26 +365,26 @@ describe("BuddyDb assessments", () => {
 
 describe("BuddyDb export and progress", () => {
   it("exportVocab CSV format", async () => {
-    await db.addVocab("gato", "cat", "ctx");
-    await db.addVocab("perro", "dog", "ctx");
+    await db.addVocab("echar de menos", "ctx", "echar");
+    await db.addVocab("tener en cuenta", "ctx", "tener");
     const result = await db.exportVocab("csv");
     expect(result.count).toBe(2);
-    expect(result.data).toContain("word,translation");
-    expect(result.data).toContain("gato,cat");
-    expect(result.data).toContain("perro,dog");
+    expect(result.data).toContain("chunk_l2,anchor");
+    expect(result.data).toContain("echar de menos");
+    expect(result.data).toContain("tener en cuenta");
   });
 
   it("exportVocab markdown format", async () => {
-    await db.addVocab("gato", "cat", "ctx");
+    await db.addVocab("echar de menos", "ctx", "echar");
     const result = await db.exportVocab("markdown");
     expect(result.count).toBe(1);
-    expect(result.data).toContain("**gato**");
+    expect(result.data).toContain("**echar de menos**");
   });
 
   it("progressSummary returns correct counts", async () => {
-    await db.addVocab("gato", "cat", "ctx");
-    await db.addVocab("perro", "dog", "ctx");
-    await db.addVocab("casa", "house", "ctx");
+    await db.addVocab("gato", "ctx");
+    await db.addVocab("perro", "ctx");
+    await db.addVocab("casa", "ctx");
 
     const summary = await db.progressSummary();
     expect(summary.newCount).toBe(3);
@@ -350,10 +403,11 @@ describe("BuddyDb export and progress", () => {
     expect(summary.errorCategories["verb_conjugation"]).toBe(1);
   });
 
-  it("progressSummary recentWords", async () => {
-    await db.addVocab("gato", "cat", "ctx");
-    await db.addVocab("perro", "dog", "ctx");
+  it("progressSummary recentWords returns chunk_l2 values", async () => {
+    await db.addVocab("echar de menos", "ctx");
+    await db.addVocab("dar un paseo", "ctx");
     const summary = await db.progressSummary();
     expect(summary.recentWords).toHaveLength(2);
+    expect(summary.recentWords).toContain("echar de menos");
   });
 });

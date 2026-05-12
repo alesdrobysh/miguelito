@@ -84,7 +84,7 @@ function formatProfile(
 async function getDueWords(db: BuddyDb, limit: number): Promise<string[]> {
   try {
     const rows = await db.dueVocab(limit);
-    return rows.map((r) => r.word);
+    return rows.map((r) => r.chunk_l2);
   } catch {
     return [];
   }

@@ -27,8 +27,8 @@ describe("integration: vocab add + score + due cycle", () => {
     const scoreTool = tools.get("miguelito_vocab_score")!;
     const dueTool = tools.get("miguelito_vocab_due")!;
 
-    const addResult = await addTool.execute({ word: "gato", translation: "cat", context: "El gato duerme" });
-    expect(addResult).toEqual({ added: true, id: expect.any(Number), word: "gato" });
+    const addResult = await addTool.execute({ word: "gato", context: "El gato duerme" });
+    expect(addResult).toEqual({ added: true, id: expect.any(Number), word: "gato", anchor: null });
 
     const dueBefore = await dueTool.execute({});
     expect((dueBefore as any).count).toBe(1);
@@ -187,31 +187,28 @@ describe("integration: vocab export produces valid CSV", () => {
     const addTool = tools.get("miguelito_vocab_add")!;
     const exportTool = tools.get("miguelito_vocab_export")!;
 
-    await addTool.execute({ word: "gato", translation: "cat", context: "El gato duerme" });
-    await addTool.execute({ word: "perro", translation: "dog", context: "El perro corre" });
+    await addTool.execute({ word: "gato", context: "El gato duerme" });
+    await addTool.execute({ word: "perro", context: "El perro corre" });
 
     const result = await exportTool.execute({ format: "csv" });
     expect((result as any).ok).toBe(true);
     expect((result as any).count).toBe(2);
-    expect((result as any).data).toContain("word,translation");
-    expect((result as any).data).toContain("gato,cat");
-    expect((result as any).data).toContain("perro,dog");
+    expect((result as any).data).toContain("chunk_l2,anchor");
+    expect((result as any).data).toContain("gato");
+    expect((result as any).data).toContain("perro");
   });
 });
 
 describe("integration: tool registry creates all expected tools", () => {
-  it("createTools returns all 16 tool names", () => {
+  it("createTools returns all tool names", () => {
     const tools = createTools(db, "fake-key", "bielorruso");
 
     const expectedNames = [
       "miguelito_vocab_add",
       "miguelito_vocab_list",
-      "miguelito_vocab_due",
       "miguelito_vocab_score",
       "miguelito_vocab_export",
       "miguelito_error_log",
-      "miguelito_error_list",
-      "miguelito_profile_get",
       "miguelito_profile_set",
       "miguelito_cefr_assess",
       "miguelito_read_link",
@@ -220,7 +217,7 @@ describe("integration: tool registry creates all expected tools", () => {
       "miguelito_progress_summary",
     ];
 
-    expect(tools.size).toBe(14);
+    expect(tools.size).toBe(11);
     for (const name of expectedNames) {
       expect(tools.has(name)).toBe(true);
     }
@@ -233,7 +230,7 @@ describe("integration: toolsToOpenAI produces valid format", () => {
     const openai = toolsToOpenAI(tools);
 
     expect(Array.isArray(openai)).toBe(true);
-    expect(openai).toHaveLength(14);
+    expect(openai).toHaveLength(11);
 
     for (const item of openai as any[]) {
       expect(item.type).toBe("function");

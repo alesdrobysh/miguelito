@@ -10,37 +10,41 @@ function vocabAdd(ctx: ToolContext) {
   return {
     name: "miguelito_vocab_add",
     description:
-      "Silently capture a Spanish vocabulary item the user just used or asked about. Idempotent: a duplicate word is a no-op. Call this freely during conversation; do not announce it to the user.",
+      "Silently capture a Spanish chunk the user just used or asked about. " +
+      "Store the collocational form, not the bare word. Idempotent. Do not announce it.",
     parameters: {
       type: "object",
       properties: {
         word: {
           type: "string",
-          description: "Canonical Spanish form: lowercase, infinitive for verbs.",
-        },
-        translation: {
-          type: "string",
-          description: `Translation in the user's native language (${ctx.nativeLanguage}). Never use English unless that is the native language.`,
+          description:
+            "Full collocational chunk in Spanish, lowercase. " +
+            "Prefer the construction over the bare word: 'echar de menos' not 'echar', " +
+            "'me cuesta + [inf]' not 'costar'. Slot markers: [inf], [noun], [adj], [clause].",
         },
         context: {
           type: "string",
-          description: "Brief snippet of the message that introduced the word.",
+          description:
+            "Exact L2 sentence or phrase from the conversation where the chunk appeared. " +
+            "e.g. 'Te echo de menos, amigo'. Keep it in Spanish — no translation.",
+        },
+        anchor: {
+          type: "string",
+          description:
+            "Base lemma for lookup/grouping, e.g. 'echar' for 'echar de menos'. " +
+            "Omit for bare-word entries.",
         },
       },
       required: ["word"],
     },
     execute: async (args: Record<string, string>) => {
-      const word = (args.word ?? "").trim().toLowerCase();
-      if (!word) {
-        return { success: false, output: "", error: "empty_word" };
-      }
-      const translation = (args.translation ?? "").trim();
+      const chunk = (args.word ?? "").trim().toLowerCase();
+      if (!chunk) return { success: false, error: "empty_chunk" };
       const context = (args.context ?? "").trim();
-      const id = await ctx.db.addVocab(word, translation, context);
-      if (id === null) {
-        return { added: false, reason: "already_exists", word };
-      }
-      return { added: true, id, word };
+      const anchor = (args.anchor ?? "").trim().toLowerCase() || undefined;
+      const id = await ctx.db.addVocab(chunk, context, anchor);
+      if (id === null) return { added: false, reason: "already_exists", word: chunk };
+      return { added: true, id, word: chunk, anchor: anchor ?? null };
     },
   };
 }
@@ -49,14 +53,14 @@ function vocabList(ctx: ToolContext) {
   return {
     name: "miguelito_vocab_list",
     description:
-      "Read back the user's vocabulary from the database. Bucket is one of: all, new, learning, review, mastered.",
+      "Read the user's chunk list from the database. Bucket: all, new, learning, review, mastered.",
     parameters: {
       type: "object",
       properties: {
         bucket: {
           type: "string",
           enum: ["all", "new", "learning", "review", "mastered"],
-          description: "Vocabulary bucket to filter by.",
+          description: "Filter by learning status.",
         },
         limit: {
           type: "string",
@@ -71,13 +75,13 @@ function vocabList(ctx: ToolContext) {
       const items = await ctx.db.listVocab(bucket, limit);
       const out = items.map((r) => ({
         id: r.id,
-        word: r.word,
-        translation: r.translation,
-        context: r.context_first_seen,
+        word: r.chunk_l2,
+        anchor: r.anchor,
+        context: r.capture_context_l2,
         status: r.status,
-        repetitions: r.repetitions,
-        interval_days: r.interval_days,
-        next_review_at: r.next_review_at,
+        pro_stability: r.pro_stability,
+        pro_reps: r.pro_reps,
+        pro_due: r.pro_due,
         first_seen_at: r.first_seen_at,
       }));
       return { ok: true, bucket, count: out.length, items: out };
@@ -89,38 +93,38 @@ function vocabScore(ctx: ToolContext) {
   return {
     name: "miguelito_vocab_score",
     description:
-      "Record the result of an SR review (SM-2). Quality: 5=perfect, 4=correct with hesitation, 3=correct with effort, 2=wrong but familiar, 1=barely recognised, 0=blank.",
+      "Record an FSRS review for a chunk. " +
+      "Grade 1-3: 1=Again (wrong/error), 2=Good (correct, independent), 3=Easy (spontaneous, fluent). " +
+      "mode='productive' (default) when the user wrote/produced the chunk. " +
+      "mode='receptive' when the bot used the chunk and the user engaged with its meaning.",
     parameters: {
       type: "object",
       properties: {
         word: {
           type: "string",
-          description: "The exact Spanish word as stored.",
+          description: "Exact chunk as stored (chunk_l2).",
         },
-        quality: {
+        grade: {
           type: "string",
-          description: "Integer 0..5 as a string (e.g. '4').",
+          description: "Integer 1..3 as a string. 1=Again, 2=Good, 3=Easy.",
+        },
+        mode: {
+          type: "string",
+          enum: ["productive", "receptive"],
+          description: "productive = user produced it; receptive = user understood it passively.",
         },
       },
-      required: ["word", "quality"],
+      required: ["word", "grade"],
     },
     execute: async (args: Record<string, string>) => {
-      const word = (args.word ?? "").trim().toLowerCase();
-      const quality = Math.max(0, Math.min(5, parseInt(args.quality ?? "0", 10) || 0));
+      const chunk = (args.word ?? "").trim().toLowerCase();
+      const grade = Math.max(1, Math.min(3, parseInt(args.grade ?? "2", 10) || 2));
+      const mode = args.mode === "receptive" ? "receptive" : "productive";
       try {
-        const result = await ctx.db.scoreVocab(word, quality);
-        return {
-          ok: true,
-          word,
-          quality,
-          repetitions: result.repetitions,
-          interval_days: result.interval_days,
-          ease_factor: result.ease_factor,
-          next_review_at: result.next_review_at,
-          status: result.status,
-        };
+        const result = await ctx.db.scoreVocab(chunk, grade, mode);
+        return { ok: true, word: chunk, grade, mode, stability: result.stability, reps: result.reps, due: result.due, status: result.status };
       } catch {
-        return { success: false, output: "", error: { error: "not_found", word } };
+        return { ok: false, error: "not_found", word: chunk };
       }
     },
   };
@@ -129,8 +133,7 @@ function vocabScore(ctx: ToolContext) {
 function vocabExport(ctx: ToolContext) {
   return {
     name: "miguelito_vocab_export",
-    description:
-      "Export vocabulary as CSV or Markdown for external use (e.g. Anki import). Format is 'csv' (default) or 'markdown'.",
+    description: "Export chunk list as CSV or Markdown.",
     parameters: {
       type: "object",
       properties: {
@@ -150,10 +153,5 @@ function vocabExport(ctx: ToolContext) {
 }
 
 export function createVocabTools(ctx: ToolContext) {
-  return [
-    vocabAdd(ctx),
-    vocabList(ctx),
-    vocabScore(ctx),
-    vocabExport(ctx),
-  ];
+  return [vocabAdd(ctx), vocabList(ctx), vocabScore(ctx), vocabExport(ctx)];
 }
