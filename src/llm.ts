@@ -1,3 +1,7 @@
+import { logger } from './infrastructure/logger.js';
+
+const log = logger.child({ ctx: 'openrouter' });
+
 const BUDGET_MODEL = "google/gemini-2.0-flash-lite";
 const DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
 
@@ -63,6 +67,9 @@ export async function llmChat(
     };
   }
 
+  const start = Date.now();
+  log.debug({ model, messageCount: messages.length }, 'http request');
+
   const resp = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
@@ -76,8 +83,12 @@ export async function llmChat(
   if (!resp.ok) {
     const text = await resp.text().catch(() => "");
     const truncated = text.slice(0, 300);
+    log.error({ status: resp.status, body: truncated }, 'http error');
     throw new Error(`openrouter_api_error_${resp.status}: ${truncated}`);
   }
+
+  const latencyMs = Date.now() - start;
+  log.debug({ status: resp.status, latencyMs }, 'http response');
 
   const data = (await resp.json()) as Record<string, unknown>;
   const choices = data.choices as Array<Record<string, unknown>> | undefined;

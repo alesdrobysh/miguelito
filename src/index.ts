@@ -1,5 +1,6 @@
 import { loadConfig } from "./infrastructure/config.js";
 import { BuddyDb } from "./infrastructure/db.js";
+import { logger } from "./infrastructure/logger.js";
 import { OpenRouterProvider } from "./providers/OpenRouterProvider.js";
 import { OllamaProvider } from "./providers/OllamaProvider.js";
 import { PromptBuilder } from "./agent/PromptBuilder.js";
@@ -10,12 +11,14 @@ import { DreamService } from "./services/DreamService.js";
 import { startScheduler } from "./services/Scheduler.js";
 import type { ChatMessage } from "./llm.js";
 
+const log = logger.child({ ctx: 'app' });
+
 process.on("uncaughtException", (e) => {
-  console.error("[uncaughtException]", e);
+  log.error({ err: e }, 'uncaughtException');
   process.exit(1);
 });
 process.on("unhandledRejection", (e) => {
-  console.error("[unhandledRejection]", e);
+  log.error({ err: e }, 'unhandledRejection');
   process.exit(1);
 });
 
@@ -73,6 +76,9 @@ async function main() {
     return result.text || null;
   });
 
+  const model = config.provider === "ollama" ? config.ollamaModel : config.openrouterModel;
+  log.info({ provider: config.provider, model, dbPath: config.dbPath, transport: config.transport }, 'miguelito-ts starting');
+
   if (config.transport === "telegram") {
     startScheduler(
       config,
@@ -80,16 +86,8 @@ async function main() {
       dreamService,
       transport,
     );
-  }
-
-  console.log("miguelito-ts starting...");
-  console.log(`Provider: ${config.provider}`);
-  console.log(`Model: ${config.provider === "ollama" ? config.ollamaModel : config.openrouterModel}`);
-  console.log(`DB: ${config.dbPath}`);
-
-  if (config.transport === "telegram") {
     transport.start({
-      onStart: (info: { username: string }) => console.log(`Bot @${info.username} started`),
+      onStart: (info: { username: string }) => log.info({ username: info.username }, 'bot started'),
       allowed_updates: ["message"],
     });
   } else {

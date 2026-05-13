@@ -3,6 +3,9 @@ import path from "path";
 import type { SessionRepository, ErrorRepository, CompetencyRepository } from "../repositories/interfaces.js";
 import type { LLMProvider } from "../providers/interfaces.js";
 import { MORPHOLOGY_TYPES } from "../infrastructure/db.js";
+import { logger } from "../infrastructure/logger.js";
+
+const log = logger.child({ ctx: 'dream' });
 
 interface DreamConfig {
   timezone: string;
@@ -33,49 +36,59 @@ export class DreamService {
   ) {}
 
   async run(): Promise<string> {
-    const today = new Intl.DateTimeFormat("en-CA", { timeZone: this.config.timezone }).format(new Date());
-    const messages = await this.session.getTodaysMessages(today);
+    try {
+      const today = new Intl.DateTimeFormat("en-CA", { timeZone: this.config.timezone }).format(new Date());
+      const messages = await this.session.getTodaysMessages(today);
 
-    if (messages.length === 0) {
-      return "Nothing to dream about today.";
+      log.info({ date: today, messageCount: messages.length }, 'dream run start');
+
+      if (messages.length === 0) {
+        log.warn('no messages to dream about');
+        return "Nothing to dream about today.";
+      }
+
+      const transcript = messages.map((m) => `[${m.role}] ${m.content}`).join("\n");
+
+      const memoryDir = path.dirname(this.config.dreamMemoryPath);
+      fs.mkdirSync(memoryDir, { recursive: true });
+
+      const existingMemory = fs.existsSync(this.config.dreamMemoryPath)
+        ? fs.readFileSync(this.config.dreamMemoryPath, "utf8").trim()
+        : "";
+
+      const userPrompt = `Existing profile:\n${existingMemory || "(empty)"}\n\nToday's transcript:\n${transcript}`;
+
+      const result = await this.provider.chat(
+        [
+          { role: "system", content: DREAM_SYSTEM_PROMPT },
+          { role: "user", content: userPrompt },
+        ],
+        undefined,
+        { temperature: 0.3, maxTokens: 2048 },
+      );
+
+      const updated = result.content?.trim();
+      if (!updated) {
+        return "Dream produced no output.";
+      }
+
+      fs.writeFileSync(this.config.dreamMemoryPath, updated, "utf8");
+      log.info({ wordCount: updated.split(/\s+/).length }, 'memory updated');
+
+      const refinementNotes = await this._runNightlyRefinement();
+
+      if (refinementNotes.length > 0) {
+        log.info({ refinementNotes }, 'refinement notes');
+        const augmented = updated + "\n\n" + refinementNotes.join("\n");
+        fs.writeFileSync(this.config.dreamMemoryPath, augmented, "utf8");
+        return `Dream complete. Memory updated (${augmented.split(/\s+/).length} words). Refinement: ${refinementNotes.join("; ")}`;
+      }
+
+      return `Dream complete. Memory updated (${updated.split(/\s+/).length} words).`;
+    } catch (err) {
+      log.error({ err }, 'dream error');
+      throw err;
     }
-
-    const transcript = messages.map((m) => `[${m.role}] ${m.content}`).join("\n");
-
-    const memoryDir = path.dirname(this.config.dreamMemoryPath);
-    fs.mkdirSync(memoryDir, { recursive: true });
-
-    const existingMemory = fs.existsSync(this.config.dreamMemoryPath)
-      ? fs.readFileSync(this.config.dreamMemoryPath, "utf8").trim()
-      : "";
-
-    const userPrompt = `Existing profile:\n${existingMemory || "(empty)"}\n\nToday's transcript:\n${transcript}`;
-
-    const result = await this.provider.chat(
-      [
-        { role: "system", content: DREAM_SYSTEM_PROMPT },
-        { role: "user", content: userPrompt },
-      ],
-      undefined,
-      { temperature: 0.3, maxTokens: 2048 },
-    );
-
-    const updated = result.content?.trim();
-    if (!updated) {
-      return "Dream produced no output.";
-    }
-
-    fs.writeFileSync(this.config.dreamMemoryPath, updated, "utf8");
-
-    const refinementNotes = await this._runNightlyRefinement();
-
-    if (refinementNotes.length > 0) {
-      const augmented = updated + "\n\n" + refinementNotes.join("\n");
-      fs.writeFileSync(this.config.dreamMemoryPath, augmented, "utf8");
-      return `Dream complete. Memory updated (${augmented.split(/\s+/).length} words). Refinement: ${refinementNotes.join("; ")}`;
-    }
-
-    return `Dream complete. Memory updated (${updated.split(/\s+/).length} words).`;
   }
 
   private async _runNightlyRefinement(): Promise<string[]> {

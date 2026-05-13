@@ -1,6 +1,9 @@
 import { Bot, Context } from "grammy";
 import { mdToTelegramHtml } from "../format.js";
 import type { Transport, MessageHandler } from "./Transport.js";
+import { logger } from "../infrastructure/logger.js";
+
+const log = logger.child({ ctx: 'telegram' });
 
 interface TelegramTransportConfig {
   telegramToken: string;
@@ -42,19 +45,27 @@ export class TelegramTransport implements Transport {
   }
 
   private async _dispatch(ctx: Context, text: string): Promise<void> {
-    if (!this._isAllowed(ctx)) return;
+    if (!this._isAllowed(ctx)) {
+      log.warn({ userId: ctx.from?.id?.toString()?.slice(0, 6) }, 'unauthorized user attempt');
+      return;
+    }
     if (!this.handler) return;
 
     const chatId = ctx.chat!.id;
     const userId = ctx.from?.id?.toString() ?? "";
 
+    log.info({ chatId, userId: userId.slice(0, 6) }, 'message received');
+
     await ctx.api.sendChatAction(chatId, "typing");
 
     try {
       const reply = await this.handler(chatId, userId, text);
-      if (reply) await this._send(ctx, reply);
+      if (reply) {
+        await this._send(ctx, reply);
+        log.info({ chatId }, 'reply sent');
+      }
     } catch (e: any) {
-      console.error("Error handling message:", e.message);
+      log.error({ updateId: ctx.update?.update_id, message: (e.message ?? String(e)).slice(0, 200) }, 'handler error');
       await ctx.reply("Error: " + (e.message ?? String(e)).slice(0, 200));
     }
   }
@@ -75,26 +86,36 @@ export class TelegramTransport implements Transport {
       );
     }
 
-    // /dream: send "Dreaming..." immediately, then dispatch and send result
     this.bot.command("dream", async (ctx) => {
-      if (!this._isAllowed(ctx)) return;
+      if (!this._isAllowed(ctx)) {
+        log.warn({ userId: ctx.from?.id?.toString()?.slice(0, 6) }, 'unauthorized user attempt');
+        return;
+      }
       if (!this.handler) return;
 
       const chatId = ctx.chat!.id;
       const userId = ctx.from?.id?.toString() ?? "";
 
+      log.info({ chatId, userId: userId.slice(0, 6) }, 'message received');
+
       await ctx.reply("Dreaming...");
       try {
         const reply = await this.handler(chatId, userId, "/dream");
-        if (reply) await this._send(ctx, reply);
+        if (reply) {
+          await this._send(ctx, reply);
+          log.info({ chatId }, 'reply sent');
+        }
       } catch (e: any) {
-        console.error("Dream error:", e.message);
+        log.error({ updateId: ctx.update?.update_id, message: (e.message ?? String(e)).slice(0, 200) }, 'handler error');
         await ctx.reply("Dream failed: " + (e.message ?? String(e)).slice(0, 200));
       }
     });
 
     this.bot.on("message:text", async (ctx) => {
-      if (!this._isAllowed(ctx)) return;
+      if (!this._isAllowed(ctx)) {
+        log.warn({ userId: ctx.from?.id?.toString()?.slice(0, 6) }, 'unauthorized user attempt');
+        return;
+      }
       const text = ctx.message?.text;
       if (!text) return;
       await this._dispatch(ctx, text).catch(async (e) => {
@@ -107,14 +128,14 @@ export class TelegramTransport implements Transport {
       const ctx = (err as any).ctx;
       const msg = (err as any).error?.message ?? (err as any).message ?? "unknown";
       const updateId = ctx?.update?.update_id ?? "?";
-      console.error(`Bot error (update ${updateId}): ${msg.slice(0, 200)}`);
+      log.error({ updateId, message: msg.slice(0, 200) }, 'handler error');
     });
   }
 
   private _logError(ctx: Context) {
     return (e: any): void => {
       const msg = e?.message ?? String(e);
-      console.error(`Error handling update ${ctx.update?.update_id}: ${msg.slice(0, 200)}`);
+      log.error({ updateId: ctx.update?.update_id, message: msg.slice(0, 200) }, 'handler error');
     };
   }
 }

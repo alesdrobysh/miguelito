@@ -5,6 +5,9 @@ import type { ToolContext } from "../tools/index.js";
 import { createTools, toolsToOpenAI } from "../tools/index.js";
 import { callTool } from "./ToolExecutor.js";
 import type { PromptBuilder } from "./PromptBuilder.js";
+import { logger } from "../infrastructure/logger.js";
+
+const log = logger.child({ ctx: 'agent' });
 
 export interface AgentDeps {
   provider: LLMProvider;
@@ -43,8 +46,11 @@ export class AgentRunner {
 
     let totalText = "";
     let toolCallsMade = 0;
+    let i = 0;
 
-    for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
+    for (; i < MAX_TOOL_ITERATIONS; i++) {
+      log.debug({ iter: i, maxIters: MAX_TOOL_ITERATIONS, toolCount: openaiTools.length }, 'llm call start');
+
       const result = await provider.chat(messages, openaiTools, { temperature: 0.7, maxTokens: 4096 });
 
       if (result.content) {
@@ -58,6 +64,7 @@ export class AgentRunner {
           const topic = match[2]?.trim() || undefined;
           const mood = match[3]?.trim() || undefined;
           await session.updateConversationState(mode, topic, mood);
+          log.debug({ mode, topic, mood }, 'conv state parsed');
         }
         totalText = totalText.replace(CONV_STATE_STRIP_RE, "").trim();
         break;
@@ -74,6 +81,8 @@ export class AgentRunner {
       messages.push(...toolResults);
       toolCallsMade += toolResults.filter((tr) => tr.toolCalled).length;
     }
+
+    log.info({ totalIters: i + 1, toolCallsMade, responseLength: totalText.length }, 'run complete');
 
     return { text: totalText, toolCallsMade };
   }

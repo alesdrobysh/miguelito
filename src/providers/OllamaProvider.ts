@@ -1,4 +1,7 @@
 import type { LLMProvider, ChatOptions, ChatResult, ChatMessage, ToolCall } from "./interfaces.js";
+import { logger } from "../infrastructure/logger.js";
+
+const log = logger.child({ ctx: 'ollama' });
 
 export interface OllamaConfig {
   baseUrl?: string;
@@ -53,6 +56,9 @@ export class OllamaProvider implements LLMProvider {
       headers["Authorization"] = `Bearer ${this.apiKey}`;
     }
 
+    const start = Date.now();
+    log.debug({ model: this.model, messageCount: messages.length }, 'http request');
+
     const resp = await fetch(`${this.baseUrl}/chat/completions`, {
       method: "POST",
       headers,
@@ -63,8 +69,12 @@ export class OllamaProvider implements LLMProvider {
     if (!resp.ok) {
       const text = await resp.text().catch(() => "");
       const truncated = text.slice(0, 300);
+      log.error({ status: resp.status, body: truncated }, 'http error');
       throw new Error(`ollama_api_error_${resp.status}: ${truncated}`);
     }
+
+    const latencyMs = Date.now() - start;
+    log.debug({ status: resp.status, latencyMs }, 'http response');
 
     const data = (await resp.json()) as Record<string, unknown>;
     const choices = data.choices as Array<Record<string, unknown>> | undefined;
