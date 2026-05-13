@@ -4,6 +4,7 @@ import os from "os";
 import path from "path";
 import { BuddyDb } from "./db.js";
 import { fsrsInitial, fsrsReview, statusOf } from "./fsrs.js";
+import { getCompetencyVector } from "./competency.js";
 
 let db: BuddyDb;
 let dbPath: string;
@@ -178,15 +179,7 @@ describe("BuddyDb vocabulary (chunk-based)", () => {
     await expect(() => db.scoreVocab("nonexistent chunk", 3)).rejects.toThrow();
   });
 
-  it("status column reflects productive counter only", async () => {
-    await db.addVocab("a lo mejor", "ctx");
-    // Drive receptive to mastered territory — status should stay 'new' (productive untouched)
-    for (let i = 0; i < 3; i++) {
-      await db.scoreVocab("a lo mejor", 4, "receptive");
-    }
-    const rows = db.db.exec(`SELECT status FROM vocabulary_items WHERE chunk_l2 = 'a lo mejor'`);
-    expect(rows[0].values[0][0]).toBe("new");
-  });
+
 });
 
 describe("BuddyDb error log", () => {
@@ -228,23 +221,23 @@ describe("BuddyDb profile", () => {
   });
 
   it("setProfile creates and updates profile fields", async () => {
-    const updated = await db.setProfile({ name: "Alice", level: "A2" });
+    const updated = await db.setProfile({ name: "Alice", goal: "travel" });
     expect(updated).toContain("name");
-    expect(updated).toContain("level");
+    expect(updated).toContain("goal");
 
     const profile = await db.getProfile();
     expect(profile).not.toBeNull();
     expect(profile!.name).toBe("Alice");
-    expect(profile!.level).toBe("A2");
+    expect(profile!.goal).toBe("travel");
   });
 
   it("setProfile updates existing profile", async () => {
     await db.setProfile({ name: "Alice" });
-    await db.setProfile({ level: "B1" });
+    await db.setProfile({ goal: "conversation" });
 
     const profile = await db.getProfile();
     expect(profile!.name).toBe("Alice");
-    expect(profile!.level).toBe("B1");
+    expect(profile!.goal).toBe("conversation");
   });
 
   it("setProfile ignores invalid keys", async () => {
@@ -348,21 +341,6 @@ describe("BuddyDb interests", () => {
   });
 });
 
-describe("BuddyDb assessments", () => {
-  it("insertAssessment and getLatestAssessment", async () => {
-    await db.insertAssessment("A2", 0.7, "verb_tenses", "casa,perro", "ser/estar", "vocabulary", 10);
-    const assessment = await db.getLatestAssessment();
-    expect(assessment).not.toBeNull();
-    expect(assessment!.cefr_level).toBe("A2");
-    expect(assessment!.confidence).toBe(0.7);
-    expect(assessment!.sample_count).toBe(10);
-  });
-
-  it("getLatestAssessment returns null when empty", async () => {
-    expect(await db.getLatestAssessment()).toBeNull();
-  });
-});
-
 describe("BuddyDb export and progress", () => {
   it("exportVocab CSV format", async () => {
     await db.addVocab("echar de menos", "ctx", "echar");
@@ -409,5 +387,127 @@ describe("BuddyDb export and progress", () => {
     const summary = await db.progressSummary();
     expect(summary.recentWords).toHaveLength(2);
     expect(summary.recentWords).toContain("echar de menos");
+  });
+});
+
+describe("BuddyDb turn annotations and competency vector", () => {
+  it("schema v5: turn_annotations and competency_vector tables exist", async () => {
+    const tables = db.db.exec(
+      `SELECT name FROM sqlite_master WHERE type='table' ORDER BY name`
+    );
+    const names = tables[0].values.map((r) => r[0] as string);
+    expect(names).toContain("turn_annotations");
+    expect(names).toContain("competency_vector");
+
+    const ver = db.db.exec("SELECT value FROM _buddy_meta WHERE key = 'schema_version'");
+    expect(ver[0].values[0][0]).toBe("8");
+  });
+
+  it("competency_vector row is seeded with defaults", async () => {
+    const vec = await db.getCompetencyVector();
+    expect(vec.id).toBe(1);
+    expect(vec.morph_successes).toBe(0.5);
+    expect(vec.morph_trials).toBe(1.0);
+    expect(vec.morph_obs).toBe(0);
+    expect(vec.reception_ewma).toBe(0.5);
+  });
+
+  it("insertTurnAnnotation with morphology obligatory contexts updates EWMA correctly", async () => {
+    // Pre-log a morphology error so the EWMA numerator reads it
+    await db.logError("yo soy buena", "yo soy bueno", "agreement", "gender agreement");
+
+    const vecBefore = await db.getCompetencyVector();
+    const sBefore = vecBefore.morph_successes;
+    const tBefore = vecBefore.morph_trials;
+
+    await db.insertTurnAnnotation({
+      obligatory: [{ type: "agreement" }, { type: "verb_conjugation" }],
+      used: ["present tense"],
+      comprehension: "smooth",
+      naturalness: 0.8,
+      tunit_length: 2,
+      had_subordination: false,
+    });
+
+    const vec = await db.getCompetencyVector();
+    // After decay + 2 obligatory + 1 error → successes incremented by 1 (not 2)
+    // trials decayed + 2, successes decayed + 1
+    expect(vec.morph_trials).toBeGreaterThan(tBefore);
+    expect(vec.morph_successes).toBeLessThan(vec.morph_trials);  // rate < 1 (had an error)
+    expect(vec.morph_obs).toBe(1);
+    expect(vec.idiom_obs).toBe(1);  // naturalness was provided
+  });
+
+  it("successive turns without morphology data decay the counters", async () => {
+    const vecInitial = await db.getCompetencyVector();
+    const trialsBefore = vecInitial.morph_trials;
+
+    for (let i = 0; i < 10; i++) {
+      await db.insertTurnAnnotation({
+        obligatory: [],  // no morphology obligatory contexts
+        used: [],
+        comprehension: "smooth",
+      });
+    }
+
+    const vec = await db.getCompetencyVector();
+    // morph_trials decays by 0.85^10 ≈ 0.197 per step — should be well below initial
+    expect(vec.morph_trials).toBeLessThan(trialsBefore);
+    expect(vec.morph_trials).toBeGreaterThanOrEqual(0);
+    expect(vec.morph_obs).toBe(0);  // no obligatory contexts → obs not incremented
+  });
+
+  it("reception EWMA rises on smooth turns", async () => {
+    const vecInitial = await db.getCompetencyVector();
+    expect(vecInitial.reception_ewma).toBe(0.5);
+
+    for (let i = 0; i < 5; i++) {
+      await db.insertTurnAnnotation({ obligatory: [], used: [], comprehension: "smooth" });
+    }
+
+    const vec = await db.getCompetencyVector();
+    expect(vec.reception_ewma).toBeGreaterThan(0.7);
+    expect(vec.reception_obs).toBe(5);
+  });
+
+  it("reception EWMA drops on requested_simpler turns", async () => {
+    // Start from a high reception baseline
+    for (let i = 0; i < 5; i++) {
+      await db.insertTurnAnnotation({ obligatory: [], used: [], comprehension: "smooth" });
+    }
+    const vecMid = await db.getCompetencyVector();
+    const midLevel = vecMid.reception_ewma;
+
+    for (let i = 0; i < 3; i++) {
+      await db.insertTurnAnnotation({ obligatory: [], used: [], comprehension: "requested_simpler" });
+    }
+
+    const vec = await db.getCompetencyVector();
+    expect(vec.reception_ewma).toBeLessThan(midLevel);
+  });
+
+  it("getRecentAnnotations returns most recent first", async () => {
+    await db.insertTurnAnnotation({ obligatory: [], used: ["first"], comprehension: "smooth" });
+    await db.insertTurnAnnotation({ obligatory: [], used: ["second"], comprehension: "smooth" });
+    const anns = await db.getRecentAnnotations(2);
+    expect(anns).toHaveLength(2);
+    const usedFirst: string[] = JSON.parse(anns[0].used_json);
+    expect(usedFirst[0]).toBe("second");  // most recent first
+  });
+
+  it("getCompetencyVector confidence gating via getCompetencyVector() wrapper", async () => {
+    // With 0 observations, all confidence levels are low/medium
+    const vec = await getCompetencyVector(db);
+    expect(vec.morphology.confidence).toBe("low");
+    expect(vec.idiomaticity.confidence).toBe("low");
+    expect(vec.syntax.confidence).toBe("low");
+  });
+
+  it("updateCompetencyVector patches specific fields", async () => {
+    await db.updateCompetencyVector({ morph_successes: 9.0, morph_trials: 10.0 });
+    const vec = await db.getCompetencyVector();
+    expect(vec.morph_successes).toBe(9.0);
+    expect(vec.morph_trials).toBe(10.0);
+    expect(vec.morph_obs).toBe(0);  // untouched
   });
 });

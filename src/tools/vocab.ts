@@ -1,9 +1,9 @@
 import { BuddyDb } from "../db.js";
+import { statusOf } from "../fsrs.js";
 
 export interface ToolContext {
   db: BuddyDb;
   apiKey: string | null;
-  nativeLanguage: string;
 }
 
 function vocabAdd(ctx: ToolContext) {
@@ -78,7 +78,7 @@ function vocabList(ctx: ToolContext) {
         word: r.chunk_l2,
         anchor: r.anchor,
         context: r.capture_context_l2,
-        status: r.status,
+        status: statusOf(r.pro_reps, r.pro_stability),
         pro_stability: r.pro_stability,
         pro_reps: r.pro_reps,
         pro_due: r.pro_due,

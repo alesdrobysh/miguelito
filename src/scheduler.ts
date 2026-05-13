@@ -48,8 +48,14 @@ export function startScheduler(config: Config, db: BuddyDb, bot: Bot): void {
   }
 
   if (config.dreamCron) {
-    cron.schedule(config.dreamCron, () => runDream(config, db).catch(console.error), {
-      timezone: config.timezone,
-    });
+    cron.schedule(
+      config.dreamCron,
+      () =>
+        runDream(config, db).then(
+          (result) => console.log("[dream]", result),
+          (err) => console.error("[dream error]", err),
+        ),
+      { timezone: config.timezone },
+    );
   }
 }

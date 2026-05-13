@@ -22,30 +22,30 @@ afterEach(async () => {
 
 describe("integration: vocab add + score + due cycle", () => {
   it("adds a word, scores it, and verifies it is no longer due", async () => {
-    const tools = createTools(db, "fake-key", "bielorruso");
+    const tools = createTools(db, "fake-key");
     const addTool = tools.get("miguelito_vocab_add")!;
     const scoreTool = tools.get("miguelito_vocab_score")!;
-    const dueTool = tools.get("miguelito_vocab_due")!;
+    const progressTool = tools.get("miguelito_progress_summary")!;
 
     const addResult = await addTool.execute({ word: "gato", context: "El gato duerme" });
     expect(addResult).toEqual({ added: true, id: expect.any(Number), word: "gato", anchor: null });
 
-    const dueBefore = await dueTool.execute({});
-    expect((dueBefore as any).count).toBe(1);
+    const dueBefore = await progressTool.execute({});
+    expect((dueBefore as any).vocab.due_now).toBe(1);
 
     const scoreResult = await scoreTool.execute({ word: "gato", quality: "4" });
     expect((scoreResult as any).ok).toBe(true);
     expect((scoreResult as any).status).toBe("learning");
-    expect((scoreResult as any).repetitions).toBe(1);
+    expect((scoreResult as any).reps).toBe(1);
 
-    const dueAfter = await dueTool.execute({});
-    expect((dueAfter as any).count).toBe(0);
+    const dueAfter = await progressTool.execute({});
+    expect((dueAfter as any).vocab.due_now).toBe(0);
   });
 });
 
 describe("integration: vocab list with buckets", () => {
   it("filters by bucket after scoring some words", async () => {
-    const tools = createTools(db, "fake-key", "bielorruso");
+    const tools = createTools(db, "fake-key");
     const addTool = tools.get("miguelito_vocab_add")!;
     const scoreTool = tools.get("miguelito_vocab_score")!;
     const listTool = tools.get("miguelito_vocab_list")!;
@@ -72,68 +72,55 @@ describe("integration: vocab list with buckets", () => {
   });
 });
 
-describe("integration: error log + list cycle", () => {
-  it("logs errors in different categories and filters correctly", async () => {
-    const tools = createTools(db, "fake-key", "bielorruso");
+describe("integration: error log + summary cycle", () => {
+  it("logs errors and verifies categories in progress summary", async () => {
+    const tools = createTools(db, "fake-key");
     const logTool = tools.get("miguelito_error_log")!;
-    const listTool = tools.get("miguelito_error_list")!;
+    const progressTool = tools.get("miguelito_progress_summary")!;
 
     await logTool.execute({ user_text: "la gata", correct: "el gato", category: "gender", note: "wrong gender" });
     await logTool.execute({ user_text: "yo es", correct: "yo soy", category: "verb_conjugation", note: "" });
     await logTool.execute({ user_text: "a escuela", correct: "a la escuela", category: "preposition", note: "" });
 
-    const genderErrors = await listTool.execute({ category: "gender" });
-    expect((genderErrors as any).count).toBe(1);
-    expect((genderErrors as any).items[0].user_text).toBe("la gata");
-
-    const allErrors = await listTool.execute({ category: "all" });
-    expect((allErrors as any).count).toBe(3);
-
-    const verbErrors = await listTool.execute({ category: "verb_conjugation" });
-    expect((verbErrors as any).count).toBe(1);
+    const summary = await progressTool.execute({});
+    expect((summary as any).error_categories["gender"]).toBe(1);
+    expect((summary as any).error_categories["verb_conjugation"]).toBe(1);
+    expect((summary as any).error_categories["preposition"]).toBe(1);
   });
 });
 
-describe("integration: profile set + get cycle", () => {
-  it("sets profile fields and retrieves them", async () => {
-    const tools = createTools(db, "fake-key", "bielorruso");
-    const getTool = tools.get("miguelito_profile_get")!;
+describe("integration: profile set cycle", () => {
+  it("sets profile fields and confirms via db", async () => {
+    const tools = createTools(db, "fake-key");
     const setTool = tools.get("miguelito_profile_set")!;
 
-    const beforeProfile = await getTool.execute({});
-    expect((beforeProfile as any).exists).toBe(false);
-    expect((beforeProfile as any).profile).toBeNull();
-
-    const setResult = await setTool.execute({ name: "Alice", level: "A2", native_language: "english" });
+    const setResult = await setTool.execute({ name: "Alice", goal: "travel" });
     expect((setResult as any).ok).toBe(true);
     expect((setResult as any).updated_fields).toContain("name");
-    expect((setResult as any).updated_fields).toContain("level");
+    expect((setResult as any).updated_fields).toContain("goal");
 
-    const afterProfile = await getTool.execute({});
-    expect((afterProfile as any).exists).toBe(true);
-    expect((afterProfile as any).profile.name).toBe("Alice");
-    expect((afterProfile as any).profile.level).toBe("A2");
-    expect((afterProfile as any).profile.native_language).toBe("english");
+    const profile = await db.getProfile();
+    expect(profile).not.toBeNull();
+    expect(profile!.name).toBe("Alice");
+    expect(profile!.goal).toBe("travel");
   });
 
   it("partial updates preserve existing fields", async () => {
-    const tools = createTools(db, "fake-key", "bielorruso");
-    const getTool = tools.get("miguelito_profile_get")!;
+    const tools = createTools(db, "fake-key");
     const setTool = tools.get("miguelito_profile_set")!;
 
-    await setTool.execute({ name: "Bob", level: "B1" });
+    await setTool.execute({ name: "Bob", goal: "travel" });
     await setTool.execute({ goal: "conversation" });
 
-    const profile = await getTool.execute({});
-    expect((profile as any).profile.name).toBe("Bob");
-    expect((profile as any).profile.level).toBe("B1");
-    expect((profile as any).profile.goal).toBe("conversation");
+    const profile = await db.getProfile();
+    expect(profile!.name).toBe("Bob");
+    expect(profile!.goal).toBe("conversation");
   });
 });
 
 describe("integration: interest add + list", () => {
   it("adds interests and deduplicates", async () => {
-    const tools = createTools(db, "fake-key", "bielorruso");
+    const tools = createTools(db, "fake-key");
     const addTool = tools.get("miguelito_interest_add")!;
 
     const result1 = await addTool.execute({ interest: "cooking", source: "conversation", confidence: "0.8" });
@@ -155,7 +142,7 @@ describe("integration: interest add + list", () => {
 
 describe("integration: progress summary aggregates", () => {
   it("returns correct counts after adding vocab and errors", async () => {
-    const tools = createTools(db, "fake-key", "bielorruso");
+    const tools = createTools(db, "fake-key");
     const addTool = tools.get("miguelito_vocab_add")!;
     const scoreTool = tools.get("miguelito_vocab_score")!;
     const errorTool = tools.get("miguelito_error_log")!;
@@ -183,7 +170,7 @@ describe("integration: progress summary aggregates", () => {
 
 describe("integration: vocab export produces valid CSV", () => {
   it("exports words as CSV with correct content", async () => {
-    const tools = createTools(db, "fake-key", "bielorruso");
+    const tools = createTools(db, "fake-key");
     const addTool = tools.get("miguelito_vocab_add")!;
     const exportTool = tools.get("miguelito_vocab_export")!;
 
@@ -201,7 +188,7 @@ describe("integration: vocab export produces valid CSV", () => {
 
 describe("integration: tool registry creates all expected tools", () => {
   it("createTools returns all tool names", () => {
-    const tools = createTools(db, "fake-key", "bielorruso");
+    const tools = createTools(db, "fake-key");
 
     const expectedNames = [
       "miguelito_vocab_add",
@@ -210,11 +197,11 @@ describe("integration: tool registry creates all expected tools", () => {
       "miguelito_vocab_export",
       "miguelito_error_log",
       "miguelito_profile_set",
-      "miguelito_cefr_assess",
       "miguelito_read_link",
       "miguelito_reading_suggest",
       "miguelito_interest_add",
       "miguelito_progress_summary",
+      "miguelito_turn_annotate",
     ];
 
     expect(tools.size).toBe(11);
@@ -226,7 +213,7 @@ describe("integration: tool registry creates all expected tools", () => {
 
 describe("integration: toolsToOpenAI produces valid format", () => {
   it("output has type/function/name structure for each tool", () => {
-    const tools = createTools(db, "fake-key", "bielorruso");
+    const tools = createTools(db, "fake-key");
     const openai = toolsToOpenAI(tools);
 
     expect(Array.isArray(openai)).toBe(true);

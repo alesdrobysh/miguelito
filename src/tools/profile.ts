@@ -13,8 +13,6 @@ function profileSet(ctx: ToolContext) {
       type: "object",
       properties: {
         name: { type: "string", description: "User's preferred name." },
-        native_language: { type: "string", description: "Language for explanations." },
-        level: { type: "string", description: "Spanish level (A1, A2, B1, etc)." },
         goal: { type: "string", description: "Main learning goal." },
         correction_style: { type: "string", description: "inline, soft, or direct." },
       },
@@ -22,7 +20,7 @@ function profileSet(ctx: ToolContext) {
     execute: async (args: Record<string, string>) => {
       const fields: Record<string, string> = {};
       for (const key of [
-        "name", "native_language", "level", "goal", "correction_style", "interests", "setup_step",
+        "name", "goal", "correction_style",
       ]) {
         const val = (args[key] ?? "").trim();
         if (val) fields[key] = val;

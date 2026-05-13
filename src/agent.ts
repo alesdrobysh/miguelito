@@ -5,8 +5,8 @@ import { createTools, ToolDefinition, toolsToOpenAI } from "./tools/index.js";
 import { buildProfileInjection } from "./profile-injector.js";
 
 const MAX_TOOL_ITERATIONS = 10;
-const CONV_STATE_PARSE_RE = /\[CONV_STATE:\s*(REACT|DIG|OFFER|TEACH|PLAY)(?:,\s*([^,\]]+))?(?:,\s*([^,\]]+))?\]/;
-const CONV_STATE_STRIP_RE = /\s*\[CONV_STATE:[^\]]*\]\s*$/;
+const CONV_STATE_PARSE_RE = /\[CONV_STATE:\s*(?:mode=)?(REACT|DIG|OFFER|TEACH|PLAY)(?:[,\s]+(?:topic=)?([^,\]\n]+?))?(?:[,\s]+(?:mood=)?([^\]\n]+?))?\s*\]/;
+const CONV_STATE_STRIP_RE = /\s*\[CONV_STATE:[^\]]*\]/g;
 
 export interface AgentResult {
   text: string;
@@ -23,7 +23,7 @@ export async function runAgentLoop(
 ): Promise<AgentResult> {
   const soulContent = fs.readFileSync(systemPromptPath, "utf-8");
 
-  const { basicProfile, learnerProfile, userInterests, nativeLanguage, dreamMemory } = await buildProfileInjection(db, dreamMemoryPath);
+  const { basicProfile, learnerProfile, calibration, userInterests, dreamMemory } = await buildProfileInjection(db, dreamMemoryPath);
 
   let fullSystem = soulContent + basicProfile;
   if (dreamMemory) {
@@ -31,6 +31,9 @@ export async function runAgentLoop(
   }
   if (learnerProfile) {
     fullSystem += learnerProfile;
+  }
+  if (calibration) {
+    fullSystem += calibration;
   }
   if (userInterests) {
     fullSystem += userInterests;
@@ -50,7 +53,7 @@ Topics touched: ${convState.session.topics_touched}
     { role: "user", content: userMessage },
   ];
 
-  const tools = createTools(db, config.apiKey, nativeLanguage);
+  const tools = createTools(db, config.apiKey);
   const openaiTools = toolsToOpenAI(tools);
 
   let totalText = "";
@@ -77,7 +80,7 @@ Topics touched: ${convState.session.topics_touched}
 
     messages.push({
       role: "assistant",
-      content: result.content ?? "",
+      content: (result.content ?? "").replace(CONV_STATE_STRIP_RE, "").trim(),
       tool_calls: result.toolCalls,
     });
 

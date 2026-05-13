@@ -2,10 +2,10 @@ import { BuddyDb } from "../db.js";
 import { createVocabTools } from "./vocab.js";
 import { createErrorTools } from "./errors.js";
 import { createProfileTools } from "./profile.js";
-import { createAssessmentTools } from "./assessment.js";
 import { createReadingTools } from "./reading.js";
 import { createInterestTools } from "./interests.js";
 import { createProgressTools } from "./progress.js";
+import { createAnnotateTools } from "./annotate.js";
 
 export interface ToolDefinition {
   name: string;
@@ -17,21 +17,20 @@ export interface ToolDefinition {
 export interface ToolContext {
   db: BuddyDb;
   apiKey: string | null;
-  nativeLanguage: string;
 }
 
-export function createTools(db: BuddyDb, openrouterApiKey: string, nativeLanguage: string): Map<string, ToolDefinition> {
-  const ctx: ToolContext = { db, apiKey: openrouterApiKey, nativeLanguage };
+export function createTools(db: BuddyDb, openrouterApiKey: string): Map<string, ToolDefinition> {
+  const ctx: ToolContext = { db, apiKey: openrouterApiKey };
   const tools = new Map<string, ToolDefinition>();
 
   for (const t of [
     ...createVocabTools(ctx),
     ...createErrorTools(ctx),
     ...createProfileTools(ctx),
-    ...createAssessmentTools(ctx),
     ...createReadingTools(ctx),
     ...createInterestTools(ctx),
     ...createProgressTools(ctx),
+    ...createAnnotateTools(ctx),
   ]) {
     tools.set(t.name, t);
   }

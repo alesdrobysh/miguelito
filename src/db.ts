@@ -10,7 +10,6 @@ CREATE TABLE IF NOT EXISTS vocabulary_items (
     anchor TEXT,
     capture_context_l2 TEXT,
     first_seen_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    status TEXT DEFAULT 'new',
     pro_stability REAL DEFAULT 1.0,
     pro_difficulty REAL DEFAULT 5.0,
     pro_due DATETIME,
@@ -37,31 +36,43 @@ CREATE INDEX IF NOT EXISTS idx_error_created ON error_log(created_at);
 CREATE TABLE IF NOT EXISTS user_profile (
     id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
     name TEXT,
-    native_language TEXT,
-    level TEXT,
     goal TEXT,
     correction_style TEXT,
-    interests TEXT,
-    setup_step TEXT,
     started_at TEXT,
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS turn_annotations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT,
+    turn_number INTEGER,
+    obligatory_json TEXT NOT NULL DEFAULT '[]',
+    used_json TEXT NOT NULL DEFAULT '[]',
+    naturalness REAL,
+    comprehension TEXT NOT NULL DEFAULT 'smooth',
+    tunit_length INTEGER NOT NULL DEFAULT 1,
+    had_subordination INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_annotation_created ON turn_annotations(created_at);
+
+CREATE TABLE IF NOT EXISTS competency_vector (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    morph_successes REAL NOT NULL DEFAULT 0.5,
+    morph_trials REAL NOT NULL DEFAULT 1.0,
+    morph_obs INTEGER NOT NULL DEFAULT 0,
+    idiom_successes REAL NOT NULL DEFAULT 0.5,
+    idiom_trials REAL NOT NULL DEFAULT 1.0,
+    idiom_obs INTEGER NOT NULL DEFAULT 0,
+    syntax_window TEXT NOT NULL DEFAULT '[]',
+    reception_ewma REAL NOT NULL DEFAULT 0.5,
+    reception_obs INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS _buddy_meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS learner_assessments (
-    id                INTEGER PRIMARY KEY AUTOINCREMENT,
-    cefr_level        TEXT NOT NULL,
-    confidence        REAL,
-    weak_areas        TEXT,
-    words_to_weave    TEXT,
-    error_to_reinforce TEXT,
-    strengths         TEXT,
-    sample_count      INTEGER,
-    assessed_at       DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS user_interests (
@@ -78,7 +89,6 @@ CREATE TABLE IF NOT EXISTS conversation_state (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id TEXT NOT NULL,
     turn_count INTEGER DEFAULT 0,
-    corrections_this_session Integer DEFAULT 0,
     last_mode TEXT,
     last_two_modes TEXT DEFAULT '[]',
     topics_touched TEXT DEFAULT '[]',
@@ -110,13 +120,19 @@ const VALID_CATEGORIES = new Set([
   "other",
 ]);
 
+const MORPHOLOGY_TYPES = new Set([
+  "verb_conjugation",
+  "agreement",
+  "ser_estar",
+  "gender",
+]);
+
 export interface ChunkItem {
   id: number;
   chunk_l2: string;
   anchor: string | null;
   capture_context_l2: string | null;
   first_seen_at: string | null;
-  status: string;
   pro_stability: number;
   pro_difficulty: number;
   pro_due: string | null;
@@ -133,7 +149,6 @@ export interface DueChunkItem {
   id: number;
   chunk_l2: string;
   anchor: string | null;
-  status: string;
   pro_stability: number;
   pro_reps: number;
   pro_due: string | null;
@@ -155,12 +170,8 @@ export interface ErrorItem {
 export interface UserProfile {
   id: number;
   name: string | null;
-  native_language: string | null;
-  level: string | null;
   goal: string | null;
   correction_style: string | null;
-  interests: string | null;
-  setup_step: string | null;
   started_at: string | null;
   updated_at: string;
 }
@@ -169,7 +180,6 @@ export interface ConversationStateData {
   id: number;
   session_id: string;
   turn_count: number;
-  corrections_this_session: number;
   last_mode: string | null;
   last_two_modes: string;
   topics_touched: string;
@@ -207,9 +217,61 @@ export interface ProgressData {
 
 export interface UpdateResult {
   turn_count: number;
-  corrections_this_session: number;
   last_two_modes: string[];
   topics_touched: string[];
+}
+
+export type ErrorCategory =
+  | "gender"
+  | "verb_conjugation"
+  | "preposition"
+  | "spelling"
+  | "word_choice"
+  | "agreement"
+  | "ser_estar"
+  | "por_para"
+  | "other";
+
+export interface ObligatoryContext {
+  type: ErrorCategory;
+}
+
+export interface TurnAnnotationInput {
+  session_id?: string;
+  turn_number?: number;
+  obligatory: ObligatoryContext[];
+  used: string[];
+  naturalness?: number | null;
+  comprehension: "smooth" | "asked_clarify" | "requested_simpler";
+  tunit_length?: number;
+  had_subordination?: boolean;
+}
+
+export interface TurnAnnotation {
+  id: number;
+  session_id: string | null;
+  turn_number: number | null;
+  obligatory_json: string;
+  used_json: string;
+  naturalness: number | null;
+  comprehension: string;
+  tunit_length: number;
+  had_subordination: number;
+  created_at: string;
+}
+
+export interface CompetencyVectorRow {
+  id: number;
+  morph_successes: number;
+  morph_trials: number;
+  morph_obs: number;
+  idiom_successes: number;
+  idiom_trials: number;
+  idiom_obs: number;
+  syntax_window: string;
+  reception_ewma: number;
+  reception_obs: number;
+  created_at: string;
 }
 
 function nowIso(): string {
@@ -253,24 +315,21 @@ export class BuddyDb {
       db.run("CREATE INDEX IF NOT EXISTS idx_chat_history_session ON chat_history(session_id)");
     }
 
-    // v3: rebuild vocabulary_items — word+translation → chunk_l2 (L2-only) + FSRS state
     const verRow = db.exec("SELECT value FROM _buddy_meta WHERE key = 'schema_version'");
     const ver = verRow[0]?.values[0]?.[0] as string | undefined;
-    if (ver === "3") return;
+    if (ver === "6") return;
 
+    // v3: rebuild vocabulary_items — word+translation → chunk_l2 (L2-only) + FSRS state
     const vocabInfo = db.exec("PRAGMA table_info(vocabulary_items)");
     const vocabCols = (vocabInfo[0]?.values ?? []).map((r) => r[1] as string);
-    const isLegacy = vocabCols.includes("word") && !vocabCols.includes("chunk_l2");
-
-    if (isLegacy) {
+    if (vocabCols.includes("word") && !vocabCols.includes("chunk_l2")) {
       db.run(`
-        CREATE TABLE vocabulary_items_v3 (
+        CREATE TABLE vocabulary_items_new (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           chunk_l2 TEXT NOT NULL,
           anchor TEXT,
           capture_context_l2 TEXT,
           first_seen_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          status TEXT DEFAULT 'new',
           pro_stability REAL DEFAULT 1.0,
           pro_difficulty REAL DEFAULT 5.0,
           pro_due DATETIME,
@@ -284,17 +343,160 @@ export class BuddyDb {
         )
       `);
       db.run(`
-        INSERT INTO vocabulary_items_v3 (id, chunk_l2, anchor, capture_context_l2, first_seen_at, status)
-        SELECT id, word, NULL, context_first_seen, first_seen_at, COALESCE(status, 'new')
-        FROM vocabulary_items
+        INSERT INTO vocabulary_items_new (id, chunk_l2, anchor, capture_context_l2, first_seen_at)
+        SELECT id, word, NULL, context_first_seen, first_seen_at FROM vocabulary_items
       `);
       db.run("DROP TABLE vocabulary_items");
-      db.run("ALTER TABLE vocabulary_items_v3 RENAME TO vocabulary_items");
+      db.run("ALTER TABLE vocabulary_items_new RENAME TO vocabulary_items");
       db.run("CREATE UNIQUE INDEX idx_vocab_chunk_unique ON vocabulary_items(chunk_l2 COLLATE NOCASE)");
       db.run("CREATE INDEX idx_vocab_pro_due ON vocabulary_items(pro_due)");
     }
 
-    db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '3')");
+    // v4: drop dead columns (status, user_profile.interests/setup_step, conversation_state.corrections_this_session)
+    const vocabColsNow = (db.exec("PRAGMA table_info(vocabulary_items)")[0]?.values ?? []).map((r) => r[1] as string);
+    if (vocabColsNow.includes("status")) {
+      db.run(`
+        CREATE TABLE vocabulary_items_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          chunk_l2 TEXT NOT NULL,
+          anchor TEXT,
+          capture_context_l2 TEXT,
+          first_seen_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          pro_stability REAL DEFAULT 1.0,
+          pro_difficulty REAL DEFAULT 5.0,
+          pro_due DATETIME,
+          pro_last_review DATETIME,
+          pro_reps INTEGER DEFAULT 0,
+          rec_stability REAL DEFAULT 1.0,
+          rec_difficulty REAL DEFAULT 5.0,
+          rec_due DATETIME,
+          rec_last_review DATETIME,
+          rec_reps INTEGER DEFAULT 0
+        )
+      `);
+      db.run(`
+        INSERT INTO vocabulary_items_new
+          (id, chunk_l2, anchor, capture_context_l2, first_seen_at,
+           pro_stability, pro_difficulty, pro_due, pro_last_review, pro_reps,
+           rec_stability, rec_difficulty, rec_due, rec_last_review, rec_reps)
+        SELECT
+          id, chunk_l2, anchor, capture_context_l2, first_seen_at,
+          pro_stability, pro_difficulty, pro_due, pro_last_review, pro_reps,
+          rec_stability, rec_difficulty, rec_due, rec_last_review, rec_reps
+        FROM vocabulary_items
+      `);
+      db.run("DROP TABLE vocabulary_items");
+      db.run("ALTER TABLE vocabulary_items_new RENAME TO vocabulary_items");
+      db.run("CREATE UNIQUE INDEX idx_vocab_chunk_unique ON vocabulary_items(chunk_l2 COLLATE NOCASE)");
+      db.run("CREATE INDEX idx_vocab_pro_due ON vocabulary_items(pro_due)");
+    }
+
+    const profileCols = (db.exec("PRAGMA table_info(user_profile)")[0]?.values ?? []).map((r) => r[1] as string);
+    if (profileCols.includes("interests") || profileCols.includes("setup_step")) {
+      db.run(`
+        CREATE TABLE user_profile_new (
+          id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+          name TEXT,
+          native_language TEXT,
+          level TEXT,
+          goal TEXT,
+          correction_style TEXT,
+          started_at TEXT,
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `);
+      db.run(`
+        INSERT INTO user_profile_new (id, name, native_language, level, goal, correction_style, started_at, updated_at)
+        SELECT id, name, native_language, level, goal, correction_style, started_at, updated_at FROM user_profile
+      `);
+      db.run("DROP TABLE user_profile");
+      db.run("ALTER TABLE user_profile_new RENAME TO user_profile");
+    }
+
+    const convCols = (db.exec("PRAGMA table_info(conversation_state)")[0]?.values ?? []).map((r) => r[1] as string);
+    if (convCols.includes("corrections_this_session")) {
+      db.run(`
+        CREATE TABLE conversation_state_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          session_id TEXT NOT NULL,
+          turn_count INTEGER DEFAULT 0,
+          last_mode TEXT,
+          last_two_modes TEXT DEFAULT '[]',
+          topics_touched TEXT DEFAULT '[]',
+          mood_hint TEXT,
+          started_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      db.run(`
+        INSERT INTO conversation_state_new
+          (id, session_id, turn_count, last_mode, last_two_modes, topics_touched, mood_hint, started_at, updated_at)
+        SELECT
+          id, session_id, turn_count, last_mode, last_two_modes, topics_touched, mood_hint, started_at, updated_at
+        FROM conversation_state
+      `);
+      db.run("DROP TABLE conversation_state");
+      db.run("ALTER TABLE conversation_state_new RENAME TO conversation_state");
+    }
+
+    // v6: convert competency_vector from single-row (id=1 constraint) to append-only time-series.
+    // Detect old schema by presence of `updated_at` column (new schema uses `created_at`).
+    const cvCols = (db.exec("PRAGMA table_info(competency_vector)")[0]?.values ?? []).map((r) => r[1] as string);
+    if (cvCols.includes("updated_at")) {
+      const oldRows = db.exec("SELECT morph_successes, morph_trials, morph_obs, idiom_successes, idiom_trials, idiom_obs, syntax_window, reception_ewma, reception_obs FROM competency_vector LIMIT 1");
+      db.run("DROP TABLE competency_vector");
+      db.run(`CREATE TABLE competency_vector (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        morph_successes REAL NOT NULL DEFAULT 0.5,
+        morph_trials REAL NOT NULL DEFAULT 1.0,
+        morph_obs INTEGER NOT NULL DEFAULT 0,
+        idiom_successes REAL NOT NULL DEFAULT 0.5,
+        idiom_trials REAL NOT NULL DEFAULT 1.0,
+        idiom_obs INTEGER NOT NULL DEFAULT 0,
+        syntax_window TEXT NOT NULL DEFAULT '[]',
+        reception_ewma REAL NOT NULL DEFAULT 0.5,
+        reception_obs INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`);
+      const oldRow = oldRows[0]?.values[0];
+      if (oldRow) {
+        db.run(
+          `INSERT INTO competency_vector (morph_successes, morph_trials, morph_obs, idiom_successes, idiom_trials, idiom_obs, syntax_window, reception_ewma, reception_obs) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          oldRow as any[]
+        );
+      } else {
+        db.run("INSERT INTO competency_vector DEFAULT VALUES");
+      }
+    } else if (cvCols.length > 0) {
+      // New schema already, just seed if empty
+      const count = db.exec("SELECT COUNT(*) FROM competency_vector")[0]?.values[0]?.[0] as number;
+      if (!count) db.run("INSERT INTO competency_vector DEFAULT VALUES");
+    } else {
+      // Table didn't exist (very old DB, pre-v5) — SCHEMA created it with new schema above
+      db.run("INSERT INTO competency_vector DEFAULT VALUES");
+    }
+
+    // v7: drop obsolete learner_assessments table
+    db.run("DROP TABLE IF EXISTS learner_assessments");
+
+    // v8: drop native_language and level from user_profile
+    const profileColsV8 = (db.exec("PRAGMA table_info(user_profile)")[0]?.values ?? []).map((r) => r[1] as string);
+    if (profileColsV8.includes("native_language") || profileColsV8.includes("level")) {
+      db.run(`CREATE TABLE user_profile_new (
+        id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+        name TEXT,
+        goal TEXT,
+        correction_style TEXT,
+        started_at TEXT,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`);
+      db.run(`INSERT INTO user_profile_new (id, name, goal, correction_style, started_at, updated_at)
+        SELECT id, name, goal, correction_style, started_at, updated_at FROM user_profile`);
+      db.run("DROP TABLE user_profile");
+      db.run("ALTER TABLE user_profile_new RENAME TO user_profile");
+    }
+
+    db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '8')");
     try {
       db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_vocab_chunk_unique ON vocabulary_items(chunk_l2 COLLATE NOCASE)");
       db.run("CREATE INDEX IF NOT EXISTS idx_vocab_pro_due ON vocabulary_items(pro_due)");
@@ -374,7 +576,7 @@ export class BuddyDb {
   async dueVocab(limit: number): Promise<DueChunkItem[]> {
     const now = nowIso();
     return this.queryAll(
-      `SELECT id, chunk_l2, anchor, status, pro_stability, pro_reps, pro_due
+      `SELECT id, chunk_l2, anchor, pro_stability, pro_reps, pro_due
        FROM vocabulary_items
        WHERE pro_due IS NULL OR pro_due <= ?
        ORDER BY pro_due ASC
@@ -418,10 +620,9 @@ export class BuddyDb {
     if (isProductive) {
       this.db.run(
         `UPDATE vocabulary_items
-         SET pro_stability = ?, pro_difficulty = ?, pro_reps = ?, pro_last_review = ?, pro_due = ?,
-             status = ?
+         SET pro_stability = ?, pro_difficulty = ?, pro_reps = ?, pro_last_review = ?, pro_due = ?
          WHERE id = ?`,
-        [result.stability, result.difficulty, result.reps, now, due, result.status, row.id]
+        [result.stability, result.difficulty, result.reps, now, due, row.id]
       );
     } else {
       this.db.run(
@@ -466,12 +667,8 @@ export class BuddyDb {
   async setProfile(fields: Record<string, string>): Promise<string[]> {
     const validKeys = new Set([
       "name",
-      "native_language",
-      "level",
       "goal",
       "correction_style",
-      "interests",
-      "setup_step",
     ]);
     const filtered: Record<string, string> = {};
     for (const [k, v] of Object.entries(fields)) {
@@ -514,8 +711,8 @@ export class BuddyDb {
     const sessionId = crypto.randomUUID();
     const now = nowIso();
     this.db.run(
-      `INSERT INTO conversation_state (session_id, turn_count, corrections_this_session, last_two_modes, topics_touched, started_at, updated_at)
-       VALUES (?, 0, 0, '[]', '[]', ?, ?)`,
+      `INSERT INTO conversation_state (session_id, turn_count, last_two_modes, topics_touched, started_at, updated_at)
+       VALUES (?, 0, '[]', '[]', ?, ?)`,
       [sessionId, now, now]
     );
     const rowidResult = this.db.exec("SELECT last_insert_rowid()");
@@ -566,7 +763,6 @@ export class BuddyDb {
 
     return {
       turn_count: updated.turn_count,
-      corrections_this_session: updated.corrections_this_session,
       last_two_modes: JSON.parse(updated.last_two_modes),
       topics_touched: JSON.parse(updated.topics_touched),
     };
@@ -602,31 +798,6 @@ export class BuddyDb {
       [limit]
     ) as { interest: string }[];
     return rows.map((r) => r.interest);
-  }
-
-  async insertAssessment(
-    cefrLevel: string,
-    confidence: number | null,
-    weakAreas: string | null,
-    wordsToWeave: string | null,
-    errorToReinforce: string | null,
-    strengths: string | null,
-    sampleCount: number | null
-  ): Promise<number> {
-    this.db.run(
-      `INSERT INTO learner_assessments (cefr_level, confidence, weak_areas, words_to_weave, error_to_reinforce, strengths, sample_count)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [cefrLevel, confidence, weakAreas, wordsToWeave, errorToReinforce, strengths, sampleCount]
-    );
-    const rowidResult = this.db.exec("SELECT last_insert_rowid()");
-    const id = rowidResult[0].values[0][0] as number;
-    this.save();
-    return id;
-  }
-
-  async getLatestAssessment(): Promise<Record<string, unknown> | null> {
-    const row = this.queryRow(`SELECT * FROM learner_assessments ORDER BY id DESC LIMIT 1`);
-    return (row ?? null) as Record<string, unknown> | null;
   }
 
   async exportVocab(format: string): Promise<{ count: number; data: string }> {
@@ -733,6 +904,127 @@ export class BuddyDb {
       `SELECT role, content, created_at FROM chat_history WHERE date(created_at) = ? ORDER BY id ASC`,
       [date]
     ) as { role: string; content: string; created_at: string }[];
+  }
+
+  // Returns a UTC ISO-ish string N seconds in the past, for comparing against
+  // error_log.created_at which uses SQLite's datetime('now') (UTC).
+  private static utcAgoIso(seconds: number): string {
+    const d = new Date(Date.now() - seconds * 1000);
+    return d.toISOString().slice(0, 19).replace("T", " ");
+  }
+
+  private _updateVectorFromAnnotation(ann: TurnAnnotationInput, since: string): void {
+    const DECAY = 0.85;
+    const RECEPTION_ALPHA = 0.2;
+
+    const vec = this.queryRow("SELECT * FROM competency_vector ORDER BY id DESC LIMIT 1") as CompetencyVectorRow | undefined;
+    if (!vec) return;
+
+    // 1. Decay
+    let morphS = vec.morph_successes * DECAY;
+    let morphT = vec.morph_trials * DECAY;
+    let idiomS = vec.idiom_successes * DECAY;
+    let idiomT = vec.idiom_trials * DECAY;
+    let morphObs = vec.morph_obs;
+    let idiomObs = vec.idiom_obs;
+
+    // 2. Morphology (denominator from annotation, numerator from error_log)
+    const morphObligatory = ann.obligatory.filter((o) => MORPHOLOGY_TYPES.has(o.type)).length;
+    if (morphObligatory > 0) {
+      const recentMorphErrors = this.queryAll(
+        `SELECT id FROM error_log WHERE created_at >= ? AND category IN ('verb_conjugation','agreement','ser_estar','gender')`,
+        [since]
+      );
+      morphT += morphObligatory;
+      morphS += Math.max(0, morphObligatory - recentMorphErrors.length);
+      morphObs++;
+    }
+
+    // 3. Idiomaticity (EWMA of naturalness score)
+    if (ann.naturalness != null) {
+      idiomT += 1;
+      idiomS += ann.naturalness;
+      idiomObs++;
+    }
+
+    // 4. Syntax rolling window (last 20 observations)
+    const window: { tunit_length: number; had_sub: boolean }[] = JSON.parse(vec.syntax_window);
+    window.push({ tunit_length: ann.tunit_length ?? 1, had_sub: ann.had_subordination ?? false });
+    const trimmedWindow = window.slice(-20);
+
+    // 5. Reception EWMA
+    const signals: Record<string, number> = { smooth: 1.0, asked_clarify: 0.4, requested_simpler: 0.0 };
+    const signal = signals[ann.comprehension] ?? 0.5;
+    const recEwma = RECEPTION_ALPHA * signal + (1 - RECEPTION_ALPHA) * vec.reception_ewma;
+    const recObs = vec.reception_obs + 1;
+
+    this.db.run(
+      `INSERT INTO competency_vector
+        (morph_successes, morph_trials, morph_obs, idiom_successes, idiom_trials, idiom_obs, syntax_window, reception_ewma, reception_obs)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [morphS, morphT, morphObs, idiomS, idiomT, idiomObs, JSON.stringify(trimmedWindow), recEwma, recObs]
+    );
+  }
+
+  async insertTurnAnnotation(ann: TurnAnnotationInput): Promise<void> {
+    const since60s = BuddyDb.utcAgoIso(60);
+    this.db.run(
+      `INSERT INTO turn_annotations
+        (session_id, turn_number, obligatory_json, used_json, naturalness, comprehension, tunit_length, had_subordination)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        ann.session_id ?? null,
+        ann.turn_number ?? null,
+        JSON.stringify(ann.obligatory),
+        JSON.stringify(ann.used),
+        ann.naturalness ?? null,
+        ann.comprehension,
+        ann.tunit_length ?? 1,
+        ann.had_subordination ? 1 : 0,
+      ]
+    );
+    this._updateVectorFromAnnotation(ann, since60s);
+    this.save();
+  }
+
+  async getRecentAnnotations(limit: number): Promise<TurnAnnotation[]> {
+    return this.queryAll(
+      `SELECT * FROM turn_annotations ORDER BY id DESC LIMIT ?`,
+      [limit]
+    ) as TurnAnnotation[];
+  }
+
+  async getCompetencyVector(): Promise<CompetencyVectorRow> {
+    const row = this.queryRow(`SELECT * FROM competency_vector ORDER BY id DESC LIMIT 1`);
+    if (!row) throw new Error("competency_vector not initialized");
+    return row as CompetencyVectorRow;
+  }
+
+  async updateCompetencyVector(fields: Partial<Omit<CompetencyVectorRow, "id" | "created_at">>): Promise<void> {
+    if (Object.keys(fields).length === 0) return;
+    const current = await this.getCompetencyVector();
+    const merged = { ...current, ...fields };
+    this.db.run(
+      `INSERT INTO competency_vector
+        (morph_successes, morph_trials, morph_obs, idiom_successes, idiom_trials, idiom_obs, syntax_window, reception_ewma, reception_obs)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [merged.morph_successes, merged.morph_trials, merged.morph_obs, merged.idiom_successes, merged.idiom_trials, merged.idiom_obs, merged.syntax_window, merged.reception_ewma, merged.reception_obs]
+    );
+    this.save();
+  }
+
+  async listRecentErrors(since: string, categories?: string[]): Promise<ErrorItem[]> {
+    if (!categories || categories.length === 0) {
+      return this.queryAll(
+        `SELECT * FROM error_log WHERE created_at >= ? ORDER BY id ASC`,
+        [since]
+      ) as ErrorItem[];
+    }
+    const placeholders = categories.map(() => "?").join(",");
+    return this.queryAll(
+      `SELECT * FROM error_log WHERE created_at >= ? AND category IN (${placeholders}) ORDER BY id ASC`,
+      [since, ...categories]
+    ) as ErrorItem[];
   }
 
   close(): void {

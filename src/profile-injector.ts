@@ -1,35 +1,37 @@
 import fs from "fs";
 import { BuddyDb } from "./db.js";
+import { getCompetencyVector, selectFocusAxis, renderCalibration } from "./competency.js";
 
 interface ProfileInjection {
   basicProfile: string;
   learnerProfile: string | null;
+  calibration: string | null;
   userInterests: string | null;
-  nativeLanguage: string;
   dreamMemory: string | null;
 }
 
 export async function buildProfileInjection(db: BuddyDb, dreamMemoryPath?: string): Promise<ProfileInjection> {
-  const [profile, assessment] = await Promise.all([db.getProfile(), db.getLatestAssessment()]);
-  const nativeLanguage = profile?.native_language ?? "the user's native language";
+  const profile = await db.getProfile();
 
   const basicProfile = profile
-    ? `\n\n## Learner Profile\nName: ${profile.name ?? "unknown"} | Native language: ${profile.native_language} | Level: ${profile.level ?? "unknown"} | Goal: ${profile.goal ?? "none"} | Correction style: ${profile.correction_style ?? "inline"}`
+    ? `\n\n## Learner Profile\nName: ${profile.name ?? "unknown"} | Goal: ${profile.goal ?? "none"} | Correction style: ${profile.correction_style ?? "inline"}`
     : `\n\n## Learner Profile\nNot configured yet — begin onboarding when user sends /start.`;
+
+  let calibration: string | null = null;
+  try {
+    const vec = await getCompetencyVector(db);
+    const focus = selectFocusAxis(vec);
+    calibration = `\n\n${renderCalibration(vec, focus)}`;
+  } catch {}
 
   const words = await getDueWords(db, 5);
   const weakAreas = await getWeakAreas(db, 3);
   const errorInfo = weakAreas.length > 0 ? await getRecentErrorForCategory(db, weakAreas[0]) : null;
-  const strengths = parseJsonOrEmpty<string>(assessment?.strengths as string | null);
 
-  const hasLearnerData =
-    assessment != null ||
-    words.length > 0 ||
-    errorInfo != null ||
-    weakAreas.length > 0;
+  const hasLearnerData = words.length > 0 || errorInfo != null || weakAreas.length > 0;
 
   const learnerProfile = hasLearnerData
-    ? formatProfile(assessment, words, errorInfo, weakAreas, strengths)
+    ? formatProfile(words, errorInfo, weakAreas)
     : null;
 
   const interests = await db.listInterests(10);
@@ -43,24 +45,15 @@ export async function buildProfileInjection(db: BuddyDb, dreamMemoryPath?: strin
     if (content) dreamMemory = `\n\n## Dream Memory\n${content}`;
   }
 
-  return { basicProfile, learnerProfile, userInterests, nativeLanguage, dreamMemory };
+  return { basicProfile, learnerProfile, calibration, userInterests, dreamMemory };
 }
 
 function formatProfile(
-  assessment: Record<string, unknown> | null,
   words: string[],
   errorInfo: { user_text: string; correct: string; category: string } | null,
   weakAreas: string[],
-  strengths: string[],
 ): string {
   const lines: string[] = ["\n\n## Current Learner Profile"];
-
-  if (assessment) {
-    const level = assessment.cefr_level as string;
-    const confidence = assessment.confidence as number | null;
-    const confPct = confidence != null ? Math.round(confidence * 100) : 0;
-    lines.push(`**CEFR Level**: ${level} (confidence: ${confPct}%)`);
-  }
 
   if (weakAreas.length > 0) {
     lines.push(`**Weak Areas**: ${weakAreas.join(", ")}`);
@@ -72,10 +65,6 @@ function formatProfile(
 
   if (errorInfo) {
     lines.push(`**Error to Reinforce**: "${errorInfo.user_text}" → "${errorInfo.correct}" (${errorInfo.category})`);
-  }
-
-  if (strengths.length > 0) {
-    lines.push(`**Strengths**: ${strengths.join(", ")}`);
   }
 
   return lines.join("\n");
@@ -117,15 +106,5 @@ async function getRecentErrorForCategory(
     return { user_text: e.user_text, correct: e.correct_form, category: e.category };
   } catch {
     return null;
-  }
-}
-
-function parseJsonOrEmpty<T>(value: string | null | undefined): T[] {
-  if (!value) return [];
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
   }
 }

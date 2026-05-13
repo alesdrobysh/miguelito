@@ -43,17 +43,14 @@ function readLink(ctx: ToolContext) {
         const titleCapped = title.slice(0, 200);
 
         if (ctx.apiKey) {
-          const profile = await ctx.db.getProfile();
-          const level = profile?.level ?? "A2";
-          const nativeLang = profile?.native_language ?? "inglés";
           try {
             const result = await llmCompleteJson<{
               summary: string;
-              words: Array<{ word: string; translation: string }>;
+              words: Array<{ word: string; explanation: string }>;
             }>(
               ctx.apiKey,
               null,
-              `Eres un asistente de aprendizaje de español.\n\nArtículo: "${titleCapped}"\n\nTexto: ${text}\n\nTareas:\n1. Escribe un resumen de 3-5 frases en español a nivel ${level}.\n2. Extrae 3-5 palabras españolas interesantes del texto. Para cada una, da la traducción en ${nativeLang}.\n\nResponde SOLO con JSON:\n{"summary": "...", "words": [{"word": "...", "translation": "..."}]}`,
+              `Eres un asistente de aprendizaje de español.\n\nArtículo: "${titleCapped}"\n\nTexto: ${text}\n\nTareas:\n1. Escribe un resumen de 3-5 frases en español claro y accesible.\n2. Extrae 3-5 palabras o expresiones españolas interesantes del texto. Para cada una, da una breve explicación en español (1 frase, no traducción).\n\nResponde SOLO con JSON:\n{"summary": "...", "words": [{"word": "...", "explanation": "..."}]}`,
               0.3,
               768,
             );
@@ -92,7 +89,7 @@ function readLink(ctx: ToolContext) {
 function readingSuggest(ctx: ToolContext) {
   return {
     name: "miguelito_reading_suggest",
-    description: "Find an interesting Spanish article matching the user's interests at their CEFR level+1. Tries preferred Spanish reading sources first (yorokobu.es, ethic.es, jotdown.es, etc.), then falls back to DuckDuckGo. Fetches the best result, summarizes it at the target level via LLM, and extracts 1-2 vocabulary words. Pass interests (comma-separated), level (A1-C2), and native_language. If these are omitted, reads from the user profile. Returns ok:true with url, title, summary, and words array. Returns ok:false on failure.",
+    description: "Find an interesting Spanish article matching the user's interests. Tries preferred Spanish reading sources first (yorokobu.es, ethic.es, jotdown.es, etc.), then falls back to DuckDuckGo. Fetches the best result, summarizes it in clear Spanish via LLM, and extracts 1-2 vocabulary words. Pass interests (comma-separated); if omitted, reads from the user profile. Returns ok:true with url, title, summary, and words array. Returns ok:false on failure.",
     parameters: {
       type: "object",
       properties: {
@@ -100,27 +97,16 @@ function readingSuggest(ctx: ToolContext) {
           type: "string",
           description: "Comma-separated user interests, e.g. 'naturaleza, historia'. If omitted, reads from profile.",
         },
-        level: {
-          type: "string",
-          description: "User's CEFR level (A1/A2/B1/B2/C1/C2). If omitted, reads from profile.",
-        },
-        native_language: {
-          type: "string",
-          description: "User's native language for vocabulary translations (e.g. 'ruso', 'inglés'). If omitted, reads from profile.",
-        },
       },
     },
     execute: async (args: Record<string, string>) => {
       const profile = await ctx.db.getProfile();
-      const interests = args.interests || profile?.interests || "cultura viajes tecnología";
-      const level = args.level || profile?.level || "B1";
-      const nativeLang = args.native_language || profile?.native_language || "inglés";
-      const targetLevel = levelToIPlusOne(level);
+      const interests = args.interests || (await ctx.db.listInterests(10)).join(", ") || "cultura viajes tecnología";
 
       try {
         const rssResults = await fetchRssArticles(interests);
         if (rssResults.length > 0) {
-          return await processArticles(ctx, rssResults, interests, targetLevel, nativeLang, `rss:${interests}`);
+          return await processArticles(ctx, rssResults, interests, `rss:${interests}`);
         }
 
         const query = `${interests} en español`;
@@ -128,7 +114,7 @@ function readingSuggest(ctx: ToolContext) {
         if (ddgResults.length === 0) {
           return { ok: false, error: "no_results", query };
         }
-        return await processArticles(ctx, ddgResults, interests, targetLevel, nativeLang, query);
+        return await processArticles(ctx, ddgResults, interests, query);
       } catch (e: any) {
         return { ok: false, error: e.message };
       }
@@ -136,10 +122,6 @@ function readingSuggest(ctx: ToolContext) {
   };
 }
 
-function levelToIPlusOne(level: string): string {
-  const map: Record<string, string> = { A1: "A2", A2: "B1", B1: "B2", B2: "C1", C1: "C2", C2: "C2" };
-  return map[level.toUpperCase()] ?? "B1";
-}
 
 async function searchDuckDuckGo(query: string): Promise<Array<{ url: string; title: string; snippet: string }>> {
   const resp = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
@@ -221,8 +203,6 @@ async function processArticles(
   ctx: ToolContext,
   results: Array<{ url: string; title: string; snippet: string }>,
   interests: string,
-  targetLevel: string,
-  nativeLang: string,
   searchQuery: string,
 ): Promise<Record<string, unknown>> {
   for (const result of results.slice(0, 3)) {
@@ -242,11 +222,11 @@ async function processArticles(
         try {
           const llmResult = await llmCompleteJson<{
             summary: string;
-            words: Array<{ word: string; translation: string }>;
+            words: Array<{ word: string; explanation: string }>;
           }>(
             ctx.apiKey,
             null,
-            `Eres un asistente de aprendizaje de español.\n\nArtículo: "${displayTitle}"\n\nTexto: ${text}\n\nTareas:\n1. Escribe un resumen de 2-3 frases en español a nivel ${targetLevel}.\n2. Extrae 1-2 palabras españolas interesantes del texto. Para cada una, da la traducción en ${nativeLang}.\n\nResponde SOLO con JSON:\n{"summary": "...", "words": [{"word": "...", "translation": "..."}]}`,
+            `Eres un asistente de aprendizaje de español.\n\nArtículo: "${displayTitle}"\n\nTexto: ${text}\n\nTareas:\n1. Escribe un resumen de 2-3 frases en español claro y accesible.\n2. Extrae 1-2 palabras o expresiones españolas interesantes del texto. Para cada una, da una breve explicación en español (1 frase, no traducción).\n\nResponde SOLO con JSON:\n{"summary": "...", "words": [{"word": "...", "explanation": "..."}]}`,
             0.3,
             512,
           );
@@ -258,7 +238,6 @@ async function processArticles(
             words: llmResult.words,
             search_query: searchQuery,
             used_interest: interests,
-            target_level: targetLevel,
           };
         } catch {
           continue;
