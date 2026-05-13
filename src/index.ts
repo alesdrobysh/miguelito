@@ -1,6 +1,7 @@
 import { loadConfig } from "./infrastructure/config.js";
 import { BuddyDb } from "./infrastructure/db.js";
 import { OpenRouterProvider } from "./providers/OpenRouterProvider.js";
+import { OllamaProvider } from "./providers/OllamaProvider.js";
 import { PromptBuilder } from "./agent/PromptBuilder.js";
 import { AgentRunner } from "./agent/AgentRunner.js";
 import { TelegramTransport } from "./transport/TelegramTransport.js";
@@ -22,11 +23,17 @@ async function main() {
   const config = loadConfig();
   const db = await BuddyDb.open(config.dbPath);
 
-  const provider = new OpenRouterProvider({
-    apiKey: config.openrouterApiKey,
-    model: config.openrouterModel,
-    baseUrl: config.openrouterBaseUrl,
-  });
+  const provider = config.provider === "ollama"
+    ? new OllamaProvider({
+        baseUrl: config.ollamaBaseUrl,
+        model: config.ollamaModel,
+        apiKey: config.ollamaApiKey || undefined,
+      })
+    : new OpenRouterProvider({
+        apiKey: config.openrouterApiKey,
+        model: config.openrouterModel,
+        baseUrl: config.openrouterBaseUrl,
+      });
 
   const toolCtx = { vocab: db, errors: db, profile: db, interests: db, competency: db, provider };
   const promptBuilder = new PromptBuilder({ vocab: db, errors: db, profile: db, interests: db, competency: db, session: db });
@@ -76,7 +83,8 @@ async function main() {
   }
 
   console.log("miguelito-ts starting...");
-  console.log(`Model: ${config.openrouterModel}`);
+  console.log(`Provider: ${config.provider}`);
+  console.log(`Model: ${config.provider === "ollama" ? config.ollamaModel : config.openrouterModel}`);
   console.log(`DB: ${config.dbPath}`);
 
   if (config.transport === "telegram") {
