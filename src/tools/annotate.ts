@@ -10,14 +10,14 @@ function turnAnnotate(ctx: ToolContext) {
       "Call this silently every turn after composing your reply. " +
       "obligatory: morphological/grammatical contexts the learner was required to handle this turn. " +
       "used: specific constructions the learner actually produced (for avoidance tracking). " +
-      "naturalness: 0.0–1.0 idomaticity score (1=fully native, 0=clear calque/unnatural). " +
+      "naturalness: 0.0–1.0 idiomaticity score (1=fully native, 0=clear calque/unnatural). When unsure or utterance is too short to judge, use 1.0 (neutral). " +
       "comprehension: how the learner responded to YOUR previous turn (smooth=followed fine, asked_clarify=asked what you meant, requested_simpler=asked you to simplify).",
     parameters: {
       type: "object",
       properties: {
         obligatory: {
           type: "array",
-          description: "Morphological/grammatical contexts required this turn (e.g. verb conjugation, noun-adjective agreement).",
+          description: "Morphological/grammatical contexts required this turn (e.g. verb_conjugation, agreement, gender, ser_estar, spelling, preposition, word_choice, por_para). Be thorough — include every relevant category.",
           items: {
             type: "object",
             properties: {
@@ -36,7 +36,7 @@ function turnAnnotate(ctx: ToolContext) {
         },
         naturalness: {
           type: "number",
-          description: "Idiomaticity score 0.0–1.0. Omit if not enough production to judge.",
+          description: "Idiomaticity score 0.0–1.0 (1=fully native, 0=clear calque/unnatural). When unsure or utterance is too short, use 1.0 (neutral).",
         },
         comprehension: {
           type: "string",
@@ -51,7 +51,7 @@ function turnAnnotate(ctx: ToolContext) {
           description: "True if the learner used at least one subordinate clause.",
         },
       },
-      required: ["obligatory", "used", "comprehension"],
+      required: ["obligatory", "used", "naturalness", "comprehension"],
     },
     // agent.ts serialises all non-string values with JSON.stringify, so arrays
     // arrive as JSON strings — parse them explicitly.
@@ -72,7 +72,7 @@ function turnAnnotate(ctx: ToolContext) {
       } catch {}
 
       const rawNaturalness = parseFloat(args.naturalness ?? "");
-      const naturalness = isNaN(rawNaturalness) ? null : Math.max(0, Math.min(1, rawNaturalness));
+      const naturalness = isNaN(rawNaturalness) ? 1.0 : Math.max(0, Math.min(1, rawNaturalness));
 
       const rawComprehension = (args.comprehension ?? "smooth").trim();
       const validComprehension = new Set(["smooth", "asked_clarify", "requested_simpler"]);
