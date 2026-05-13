@@ -4,6 +4,7 @@ import { OpenRouterProvider } from "./providers/OpenRouterProvider.js";
 import { PromptBuilder } from "./agent/PromptBuilder.js";
 import { AgentRunner } from "./agent/AgentRunner.js";
 import { TelegramTransport } from "./transport/TelegramTransport.js";
+import { TuiTransport } from "./transport/TuiTransport.js";
 import { DreamService } from "./services/DreamService.js";
 import { startScheduler } from "./services/Scheduler.js";
 import type { ChatMessage } from "./llm.js";
@@ -44,10 +45,12 @@ async function main() {
     dreamMemoryPath: config.dreamMemoryPath,
   });
 
-  const transport = new TelegramTransport({
-    telegramToken: config.telegramToken,
-    allowedUsers: config.allowedUsers,
-  });
+  const transport = config.transport === "tui"
+    ? new TuiTransport()
+    : new TelegramTransport({
+        telegramToken: config.telegramToken,
+        allowedUsers: config.allowedUsers,
+      });
 
   transport.onMessage(async (chatId, userId, text) => {
     if (text === "/dream") return dreamService.run();
@@ -63,21 +66,27 @@ async function main() {
     return result.text || null;
   });
 
-  startScheduler(
-    config,
-    (prompt) => agentRunner.run(prompt, []),
-    dreamService,
-    transport,
-  );
+  if (config.transport === "telegram") {
+    startScheduler(
+      config,
+      (prompt) => agentRunner.run(prompt, []),
+      dreamService,
+      transport,
+    );
+  }
 
   console.log("miguelito-ts starting...");
   console.log(`Model: ${config.openrouterModel}`);
   console.log(`DB: ${config.dbPath}`);
 
-  transport.start({
-    onStart: (info: { username: string }) => console.log(`Bot @${info.username} started`),
-    allowed_updates: ["message"],
-  });
+  if (config.transport === "telegram") {
+    transport.start({
+      onStart: (info: { username: string }) => console.log(`Bot @${info.username} started`),
+      allowed_updates: ["message"],
+    });
+  } else {
+    transport.start();
+  }
 }
 
 main();
