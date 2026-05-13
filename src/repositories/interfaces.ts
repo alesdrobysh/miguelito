@@ -1,0 +1,54 @@
+import type {
+  ChunkItem,
+  DueChunkItem,
+  ErrorItem,
+  UserProfile,
+  ConversationStateResult,
+  UpdateResult,
+  FsrsReviewResult,
+  TurnAnnotationInput,
+  TurnAnnotation,
+  CompetencyVectorRow,
+  ProgressData,
+} from "../domain/types.js";
+
+export interface VocabRepository {
+  addVocab(chunk_l2: string, capture_context_l2: string, anchor?: string): Promise<number | null>;
+  listVocab(bucket: string, limit: number): Promise<ChunkItem[]>;
+  dueVocab(limit: number): Promise<DueChunkItem[]>;
+  scoreVocab(chunk_l2: string, grade: number, mode?: "productive" | "receptive"): Promise<FsrsReviewResult>;
+  exportVocab(format: string): Promise<{ count: number; data: string }>;
+  progressSummary(): Promise<ProgressData>;
+}
+
+export interface ErrorRepository {
+  logError(userText: string, correct: string, category: string, note: string): Promise<number>;
+  listErrors(category: string, limit: number): Promise<ErrorItem[]>;
+  listRecentErrors(since: string, categories?: string[]): Promise<ErrorItem[]>;
+}
+
+export interface SessionRepository {
+  addChatMessage(chatId: number, role: string, content: string, sessionId?: string): Promise<void>;
+  getChatHistory(chatId: number, limit: number): Promise<{ role: string; content: string }[]>;
+  getSessionTranscript(sessionId: string): Promise<{ role: string; content: string; created_at: string }[]>;
+  getTodaysMessages(date: string): Promise<{ role: string; content: string; created_at: string }[]>;
+  getConversationState(): Promise<ConversationStateResult>;
+  updateConversationState(mode: string, topic?: string, mood?: string): Promise<UpdateResult>;
+}
+
+export interface ProfileRepository {
+  getProfile(): Promise<UserProfile | null>;
+  setProfile(fields: Record<string, string>): Promise<string[]>;
+}
+
+export interface InterestRepository {
+  addInterest(interest: string, source: string, confidence: number): Promise<boolean>;
+  listInterests(limit: number): Promise<string[]>;
+}
+
+export interface CompetencyRepository {
+  getCompetencyVector(): Promise<CompetencyVectorRow>;
+  updateCompetencyVector(fields: Partial<Omit<CompetencyVectorRow, "id" | "created_at">>): Promise<void>;
+  insertTurnAnnotation(ann: TurnAnnotationInput): Promise<void>;
+  getRecentAnnotations(limit: number): Promise<TurnAnnotation[]>;
+}

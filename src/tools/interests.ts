@@ -1,9 +1,4 @@
-import { BuddyDb } from "../db.js";
-
-export interface ToolContext {
-  db: BuddyDb;
-  apiKey: string | null;
-}
+import type { ToolContext } from "./index.js";
 
 function interestAdd(ctx: ToolContext) {
   return {
@@ -34,9 +29,9 @@ function interestAdd(ctx: ToolContext) {
       }
       const source = args.source ?? "conversation";
       const confidence = parseFloat(args.confidence as unknown as string ?? "0.5");
-      const added = await ctx.db.addInterest(interest, source, confidence);
+      const added = await ctx.interests.addInterest(interest, source, confidence);
       if (added) {
-        const count = (await ctx.db.listInterests(100)).length;
+        const count = (await ctx.interests.listInterests(100)).length;
         return { added: true, interest, total_interests: count };
       }
       return { added: false, reason: "invalid_or_duplicate", interest };

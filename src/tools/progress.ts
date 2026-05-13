@@ -1,10 +1,5 @@
-import { BuddyDb } from "../db.js";
-import { getCompetencyVector, selectFocusAxis, formatVectorForDisplay } from "../competency.js";
-
-export interface ToolContext {
-  db: BuddyDb;
-  apiKey: string | null;
-}
+import { getCompetencyVector, selectFocusAxis, formatVectorForDisplay } from "../domain/competency.js";
+import type { ToolContext } from "./index.js";
 
 function progressSummary(ctx: ToolContext) {
   return {
@@ -15,25 +10,25 @@ function progressSummary(ctx: ToolContext) {
       properties: {},
     },
     execute: async () => {
-      const data = await ctx.db.progressSummary();
+      const data = await ctx.vocab.progressSummary();
 
       let competency: Record<string, unknown> | null = null;
       try {
-        const vec = await getCompetencyVector(ctx.db);
-        const focus = selectFocusAxis(vec);
+        const cv = await getCompetencyVector(ctx);
+        const focus = selectFocusAxis(cv);
         competency = {
-          summary: formatVectorForDisplay(vec),
+          summary: formatVectorForDisplay(cv),
           focus_axis: focus ?? "none",
-          lexicon_active_chunks: vec.lexicon.activeChunks,
-          morph_accuracy: Math.round(vec.morphology.rate * 100),
-          morph_confidence: vec.morphology.confidence,
-          idiom_naturalness: Math.round(vec.idiomaticity.rate * 100),
-          idiom_confidence: vec.idiomaticity.confidence,
-          syntax_tunit_mean: parseFloat(vec.syntax.meanTunitLength.toFixed(1)),
-          syntax_sub_index: Math.round(vec.syntax.subIndex * 100),
-          syntax_confidence: vec.syntax.confidence,
-          reception: Math.round(vec.reception.level * 100),
-          reception_confidence: vec.reception.confidence,
+          lexicon_active_chunks: cv.lexicon.activeChunks,
+          morph_accuracy: Math.round(cv.morphology.rate * 100),
+          morph_confidence: cv.morphology.confidence,
+          idiom_naturalness: Math.round(cv.idiomaticity.rate * 100),
+          idiom_confidence: cv.idiomaticity.confidence,
+          syntax_tunit_mean: parseFloat(cv.syntax.meanTunitLength.toFixed(1)),
+          syntax_sub_index: Math.round(cv.syntax.subIndex * 100),
+          syntax_confidence: cv.syntax.confidence,
+          reception: Math.round(cv.reception.level * 100),
+          reception_confidence: cv.reception.confidence,
         };
       } catch {}
 

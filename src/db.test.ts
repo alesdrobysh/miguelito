@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { BuddyDb } from "./db.js";
-import { fsrsInitial, fsrsReview, statusOf } from "./fsrs.js";
-import { getCompetencyVector } from "./competency.js";
+import { BuddyDb } from "./infrastructure/db.js";
+import { fsrsInitial, fsrsReview, statusOf } from "./domain/fsrs.js";
+import { getCompetencyVector } from "./domain/competency.js";
 
 let db: BuddyDb;
 let dbPath: string;
@@ -497,7 +497,7 @@ describe("BuddyDb turn annotations and competency vector", () => {
 
   it("getCompetencyVector confidence gating via getCompetencyVector() wrapper", async () => {
     // With 0 observations, all confidence levels are low/medium
-    const vec = await getCompetencyVector(db);
+    const vec = await getCompetencyVector({ competency: db, vocab: db });
     expect(vec.morphology.confidence).toBe("low");
     expect(vec.idiomaticity.confidence).toBe("low");
     expect(vec.syntax.confidence).toBe("low");

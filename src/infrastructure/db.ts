@@ -1,7 +1,17 @@
 import initSqlJs, { Database } from "sql.js";
 import fs from "fs";
 import path from "path";
-import { fsrsInitial, fsrsReview, statusOf, Grade } from "./fsrs.js";
+import { fsrsInitial, fsrsReview, statusOf, Grade } from "../domain/fsrs.js";
+import type {
+  ChunkItem, DueChunkItem, ErrorItem, UserProfile, ConversationStateData,
+  ConversationStateResult, FsrsReviewResult, ProgressData, UpdateResult,
+  TurnAnnotationInput, TurnAnnotation, CompetencyVectorRow,
+} from "../domain/types.js";
+import { VALID_CATEGORIES } from "../domain/types.js";
+import type {
+  VocabRepository, ErrorRepository, SessionRepository, ProfileRepository,
+  InterestRepository, CompetencyRepository,
+} from "../repositories/interfaces.js";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS vocabulary_items (
@@ -108,168 +118,14 @@ CREATE TABLE IF NOT EXISTS chat_history (
 CREATE INDEX IF NOT EXISTS idx_chat_history_chat_id ON chat_history(chat_id, id);
 `;
 
-const VALID_CATEGORIES = new Set([
-  "gender",
-  "verb_conjugation",
-  "preposition",
-  "spelling",
-  "word_choice",
-  "agreement",
-  "ser_estar",
-  "por_para",
-  "other",
-]);
-
-const MORPHOLOGY_TYPES = new Set([
+export const MORPHOLOGY_TYPES = new Set([
   "verb_conjugation",
   "agreement",
   "ser_estar",
   "gender",
 ]);
 
-export interface ChunkItem {
-  id: number;
-  chunk_l2: string;
-  anchor: string | null;
-  capture_context_l2: string | null;
-  first_seen_at: string | null;
-  pro_stability: number;
-  pro_difficulty: number;
-  pro_due: string | null;
-  pro_last_review: string | null;
-  pro_reps: number;
-  rec_stability: number;
-  rec_difficulty: number;
-  rec_due: string | null;
-  rec_last_review: string | null;
-  rec_reps: number;
-}
-
-export interface DueChunkItem {
-  id: number;
-  chunk_l2: string;
-  anchor: string | null;
-  pro_stability: number;
-  pro_reps: number;
-  pro_due: string | null;
-}
-
-// Backward-compat alias used by profile-injector and tools
-export type VocabItem = ChunkItem;
-export type DueVocabItem = DueChunkItem;
-
-export interface ErrorItem {
-  id: number;
-  user_text: string;
-  correct_form: string;
-  category: string;
-  note: string | null;
-  created_at: string;
-}
-
-export interface UserProfile {
-  id: number;
-  name: string | null;
-  goal: string | null;
-  correction_style: string | null;
-  started_at: string | null;
-  updated_at: string;
-}
-
-export interface ConversationStateData {
-  id: number;
-  session_id: string;
-  turn_count: number;
-  last_mode: string | null;
-  last_two_modes: string;
-  topics_touched: string;
-  mood_hint: string | null;
-  started_at: string;
-  updated_at: string;
-}
-
-export interface ConversationStateResult {
-  session: ConversationStateData;
-  isNew: boolean;
-}
-
-export interface FsrsReviewResult {
-  stability: number;
-  difficulty: number;
-  reps: number;
-  status: string;
-  due: string;
-}
-
-export interface ProgressData {
-  newCount: number;
-  learningCount: number;
-  reviewCount: number;
-  masteredCount: number;
-  totalCount: number;
-  dueCount: number;
-  recentWords: string[];
-  errorCategories: Record<string, number>;
-}
-
-export interface UpdateResult {
-  turn_count: number;
-  last_two_modes: string[];
-  topics_touched: string[];
-}
-
-export type ErrorCategory =
-  | "gender"
-  | "verb_conjugation"
-  | "preposition"
-  | "spelling"
-  | "word_choice"
-  | "agreement"
-  | "ser_estar"
-  | "por_para"
-  | "other";
-
-export interface ObligatoryContext {
-  type: ErrorCategory;
-}
-
-export interface TurnAnnotationInput {
-  session_id?: string;
-  turn_number?: number;
-  obligatory: ObligatoryContext[];
-  used: string[];
-  naturalness?: number | null;
-  comprehension: "smooth" | "asked_clarify" | "requested_simpler";
-  tunit_length?: number;
-  had_subordination?: boolean;
-}
-
-export interface TurnAnnotation {
-  id: number;
-  session_id: string | null;
-  turn_number: number | null;
-  obligatory_json: string;
-  used_json: string;
-  naturalness: number | null;
-  comprehension: string;
-  tunit_length: number;
-  had_subordination: number;
-  created_at: string;
-}
-
-export interface CompetencyVectorRow {
-  id: number;
-  morph_successes: number;
-  morph_trials: number;
-  morph_obs: number;
-  idiom_successes: number;
-  idiom_trials: number;
-  idiom_obs: number;
-  syntax_window: string;
-  reception_ewma: number;
-  reception_obs: number;
-  created_at: string;
-}
+export type { ChunkItem, DueChunkItem, ErrorItem, UserProfile, ConversationStateResult, FsrsReviewResult, ProgressData, UpdateResult, TurnAnnotationInput, TurnAnnotation, CompetencyVectorRow } from "../domain/types.js";
 
 function nowIso(): string {
   const d = new Date();
@@ -294,7 +150,7 @@ function normalizeCategory(category: string): string {
   return "other";
 }
 
-export class BuddyDb {
+export class BuddyDb implements VocabRepository, ErrorRepository, SessionRepository, ProfileRepository, InterestRepository, CompetencyRepository {
   readonly db: Database;
   private dbPath: string;
 

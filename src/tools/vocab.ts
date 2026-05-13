@@ -1,10 +1,5 @@
-import { BuddyDb } from "../db.js";
-import { statusOf } from "../fsrs.js";
-
-export interface ToolContext {
-  db: BuddyDb;
-  apiKey: string | null;
-}
+import { statusOf } from "../domain/fsrs.js";
+import type { ToolContext } from "./index.js";
 
 function vocabAdd(ctx: ToolContext) {
   return {
@@ -42,7 +37,7 @@ function vocabAdd(ctx: ToolContext) {
       if (!chunk) return { success: false, error: "empty_chunk" };
       const context = (args.context ?? "").trim();
       const anchor = (args.anchor ?? "").trim().toLowerCase() || undefined;
-      const id = await ctx.db.addVocab(chunk, context, anchor);
+      const id = await ctx.vocab.addVocab(chunk, context, anchor);
       if (id === null) return { added: false, reason: "already_exists", word: chunk };
       return { added: true, id, word: chunk, anchor: anchor ?? null };
     },
@@ -72,7 +67,7 @@ function vocabList(ctx: ToolContext) {
     execute: async (args: Record<string, string>) => {
       const bucket = (args.bucket ?? "all").toLowerCase();
       const limit = parseInt(args.limit ?? "50", 10) || 50;
-      const items = await ctx.db.listVocab(bucket, limit);
+      const items = await ctx.vocab.listVocab(bucket, limit);
       const out = items.map((r) => ({
         id: r.id,
         word: r.chunk_l2,
@@ -121,7 +116,7 @@ function vocabScore(ctx: ToolContext) {
       const grade = Math.max(1, Math.min(3, parseInt(args.grade ?? "2", 10) || 2));
       const mode = args.mode === "receptive" ? "receptive" : "productive";
       try {
-        const result = await ctx.db.scoreVocab(chunk, grade, mode);
+        const result = await ctx.vocab.scoreVocab(chunk, grade, mode);
         return { ok: true, word: chunk, grade, mode, stability: result.stability, reps: result.reps, due: result.due, status: result.status };
       } catch {
         return { ok: false, error: "not_found", word: chunk };
@@ -146,7 +141,7 @@ function vocabExport(ctx: ToolContext) {
     },
     execute: async (args: Record<string, string>) => {
       const format = args.format ?? "csv";
-      const result = await ctx.db.exportVocab(format);
+      const result = await ctx.vocab.exportVocab(format);
       return { ok: true, format, count: result.count, data: result.data };
     },
   };

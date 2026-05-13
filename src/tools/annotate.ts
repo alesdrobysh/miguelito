@@ -1,13 +1,6 @@
-import { BuddyDb, ErrorCategory, ObligatoryContext } from "../db.js";
-
-export interface ToolContext {
-  db: BuddyDb;
-}
-
-const VALID_CATEGORIES = new Set<string>([
-  "gender", "verb_conjugation", "preposition", "spelling",
-  "word_choice", "agreement", "ser_estar", "por_para", "other",
-]);
+import type { ErrorCategory, ObligatoryContext } from "../domain/types.js";
+import { VALID_CATEGORIES } from "../domain/types.js";
+import type { ToolContext } from "./index.js";
 
 function turnAnnotate(ctx: ToolContext) {
   return {
@@ -90,7 +83,7 @@ function turnAnnotate(ctx: ToolContext) {
       const tunit_length = Math.max(1, Math.round(parseFloat(args.tunit_length ?? "1") || 1));
       const had_subordination = args.had_subordination === "true" || args.had_subordination === "1";
 
-      await ctx.db.insertTurnAnnotation({
+      await ctx.competency.insertTurnAnnotation({
         obligatory,
         used: used.map(String),
         naturalness,

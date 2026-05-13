@@ -1,10 +1,4 @@
-import { BuddyDb } from "../db.js";
-import { llmCompleteJson } from "../llm.js";
-
-export interface ToolContext {
-  db: BuddyDb;
-  apiKey: string | null;
-}
+import type { ToolContext } from "./index.js";
 
 function readLink(ctx: ToolContext) {
   return {
@@ -42,17 +36,15 @@ function readLink(ctx: ToolContext) {
         const truncated = body.length > 3000;
         const titleCapped = title.slice(0, 200);
 
-        if (ctx.apiKey) {
+        if (ctx.provider) {
           try {
-            const result = await llmCompleteJson<{
+            const result = await ctx.provider.completeJson<{
               summary: string;
               words: Array<{ word: string; explanation: string }>;
             }>(
-              ctx.apiKey,
               null,
               `Eres un asistente de aprendizaje de español.\n\nArtículo: "${titleCapped}"\n\nTexto: ${text}\n\nTareas:\n1. Escribe un resumen de 3-5 frases en español claro y accesible.\n2. Extrae 3-5 palabras o expresiones españolas interesantes del texto. Para cada una, da una breve explicación en español (1 frase, no traducción).\n\nResponde SOLO con JSON:\n{"summary": "...", "words": [{"word": "...", "explanation": "..."}]}`,
-              0.3,
-              768,
+              { temperature: 0.3, maxTokens: 768 },
             );
             return {
               ok: true,
@@ -100,8 +92,7 @@ function readingSuggest(ctx: ToolContext) {
       },
     },
     execute: async (args: Record<string, string>) => {
-      const profile = await ctx.db.getProfile();
-      const interests = args.interests || (await ctx.db.listInterests(10)).join(", ") || "cultura viajes tecnología";
+      const interests = args.interests || (await ctx.interests.listInterests(10)).join(", ") || "cultura viajes tecnología";
 
       try {
         const rssResults = await fetchRssArticles(interests);
@@ -218,17 +209,15 @@ async function processArticles(
       if (text.length < 100) continue;
       const displayTitle = fetchTitle || result.title;
 
-      if (ctx.apiKey) {
+      if (ctx.provider) {
         try {
-          const llmResult = await llmCompleteJson<{
+          const llmResult = await ctx.provider.completeJson<{
             summary: string;
             words: Array<{ word: string; explanation: string }>;
           }>(
-            ctx.apiKey,
             null,
             `Eres un asistente de aprendizaje de español.\n\nArtículo: "${displayTitle}"\n\nTexto: ${text}\n\nTareas:\n1. Escribe un resumen de 2-3 frases en español claro y accesible.\n2. Extrae 1-2 palabras o expresiones españolas interesantes del texto. Para cada una, da una breve explicación en español (1 frase, no traducción).\n\nResponde SOLO con JSON:\n{"summary": "...", "words": [{"word": "...", "explanation": "..."}]}`,
-            0.3,
-            512,
+            { temperature: 0.3, maxTokens: 512 },
           );
           return {
             ok: true,

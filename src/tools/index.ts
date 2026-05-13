@@ -1,4 +1,5 @@
-import { BuddyDb } from "../db.js";
+import type { VocabRepository, ErrorRepository, ProfileRepository, InterestRepository, CompetencyRepository } from "../repositories/interfaces.js";
+import type { LLMProvider } from "../providers/interfaces.js";
 import { createVocabTools } from "./vocab.js";
 import { createErrorTools } from "./errors.js";
 import { createProfileTools } from "./profile.js";
@@ -15,12 +16,15 @@ export interface ToolDefinition {
 }
 
 export interface ToolContext {
-  db: BuddyDb;
-  apiKey: string | null;
+  vocab: VocabRepository;
+  errors: ErrorRepository;
+  profile: ProfileRepository;
+  interests: InterestRepository;
+  competency: CompetencyRepository;
+  provider: LLMProvider | null;
 }
 
-export function createTools(db: BuddyDb, openrouterApiKey: string): Map<string, ToolDefinition> {
-  const ctx: ToolContext = { db, apiKey: openrouterApiKey };
+export function createTools(ctx: ToolContext): Map<string, ToolDefinition> {
   const tools = new Map<string, ToolDefinition>();
 
   for (const t of [
@@ -37,6 +41,7 @@ export function createTools(db: BuddyDb, openrouterApiKey: string): Map<string, 
 
   return tools;
 }
+
 
 export function toolsToOpenAI(tools: Map<string, ToolDefinition>): object[] {
   return Array.from(tools.values()).map((t) => ({

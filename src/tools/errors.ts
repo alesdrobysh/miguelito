@@ -1,9 +1,5 @@
-import { BuddyDb } from "../db.js";
-
-export interface ToolContext {
-  db: BuddyDb;
-  apiKey: string | null;
-}
+import { VALID_CATEGORIES } from "../domain/types.js";
+import type { ToolContext } from "./index.js";
 
 function errorLog(ctx: ToolContext) {
   return {
@@ -38,13 +34,9 @@ function errorLog(ctx: ToolContext) {
       let category = (args.category ?? "other").trim().toLowerCase();
       const note = (args.note ?? "").trim();
 
-      const validCategories = new Set([
-        "gender", "verb_conjugation", "preposition", "spelling",
-        "word_choice", "agreement", "ser_estar", "por_para", "other",
-      ]);
-      if (!validCategories.has(category)) category = "other";
+      if (!VALID_CATEGORIES.has(category)) category = "other";
 
-      const id = await ctx.db.logError(userText, correct, category, note);
+      const id = await ctx.errors.logError(userText, correct, category, note);
       return { ok: true, id, category };
     },
   };

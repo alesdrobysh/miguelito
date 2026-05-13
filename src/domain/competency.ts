@@ -1,4 +1,4 @@
-import { BuddyDb } from "./db.js";
+import type { CompetencyRepository, VocabRepository } from "../repositories/interfaces.js";
 
 export type Confidence = "low" | "medium" | "high";
 export type Axis = "lexicon" | "syntax" | "morphology" | "idiomaticity";
@@ -36,17 +36,19 @@ function obsToConfidence(obs: number): Confidence {
   return "high";
 }
 
-export async function getCompetencyVector(db: BuddyDb): Promise<CompetencyVector> {
+export async function getCompetencyVector(repos: {
+  competency: CompetencyRepository;
+  vocab: VocabRepository;
+}): Promise<CompetencyVector> {
   const [vec, learning, review, mastered] = await Promise.all([
-    db.getCompetencyVector(),
-    db.listVocab("learning", 9999),
-    db.listVocab("review", 9999),
-    db.listVocab("mastered", 9999),
+    repos.competency.getCompetencyVector(),
+    repos.vocab.listVocab("learning", 9999),
+    repos.vocab.listVocab("review", 9999),
+    repos.vocab.listVocab("mastered", 9999),
   ]);
 
   const activeChunks = learning.length + review.length + mastered.length;
-  const lexiconConf: "low" | "medium" | "high" =
-    activeChunks < 5 ? "low" : activeChunks < 30 ? "medium" : "high";
+  const lexiconConf = activeChunks < 5 ? "low" : activeChunks < 30 ? "medium" : "high";
 
   type SyntaxEntry = { tunit_length: number; had_sub: boolean };
   let syntaxWindow: SyntaxEntry[] = [];
@@ -83,7 +85,6 @@ export function selectFocusAxis(v: CompetencyVector): Axis | null {
 
   if (weak.length === 0) return null;
 
-  // Priority: accuracy axes first (morphology > idiomaticity), then breadth (lexicon > syntax)
   for (const axis of ["morphology", "idiomaticity", "lexicon", "syntax"] as Axis[]) {
     if (weak.includes(axis)) return axis;
   }
@@ -93,7 +94,6 @@ export function selectFocusAxis(v: CompetencyVector): Axis | null {
 export function renderCalibration(v: CompetencyVector, focus: Axis | null): string {
   const lines: string[] = ["## Difficulty Calibration"];
 
-  // Vocabulary
   if (v.lexicon.confidence === "low") {
     lines.push("Vocabulary: use natural, varied vocabulary appropriate for a developing learner.");
   } else if (focus === "lexicon") {
@@ -102,7 +102,6 @@ export function renderCalibration(v: CompetencyVector, focus: Axis | null): stri
     lines.push("Vocabulary: keep mostly within the top-3,000 band; mid-frequency words are fine when they fit naturally.");
   }
 
-  // Syntax
   if (v.syntax.confidence === "low") {
     lines.push("Syntax: use clear, mostly simple sentences.");
   } else if (focus === "syntax") {
@@ -114,7 +113,6 @@ export function renderCalibration(v: CompetencyVector, focus: Axis | null): stri
     lines.push(`Syntax: use ${label} sentence structures; include an occasional subordinate clause.`);
   }
 
-  // Morphology
   if (v.morphology.confidence === "low") {
     lines.push("Morphology: use present tense and pretérito freely; introduce other tenses as they arise naturally.");
   } else if (focus === "morphology") {
@@ -126,7 +124,6 @@ export function renderCalibration(v: CompetencyVector, focus: Axis | null): stri
     lines.push("Morphology: use present, pretérito, and imperfecto freely; introduce subjunctive contextually.");
   }
 
-  // Idiomaticity
   if (v.idiomaticity.confidence === "low") {
     lines.push("Idiomaticity: use natural Spanish; avoid literal translations.");
   } else if (focus === "idiomaticity") {
@@ -138,7 +135,6 @@ export function renderCalibration(v: CompetencyVector, focus: Axis | null): stri
     lines.push("Idiomaticity: use natural, idiomatic Spanish; native collocations over literal translations.");
   }
 
-  // Reception note (Phase 3: adjusts your own output complexity)
   if (v.reception.confidence !== "low") {
     if (v.reception.level > 0.75) {
       lines.push(`Reception: ${Math.round(v.reception.level * 100)}% smooth — nudge your own output complexity up one step.`);

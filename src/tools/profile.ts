@@ -1,9 +1,4 @@
-import { BuddyDb } from "../db.js";
-
-export interface ToolContext {
-  db: BuddyDb;
-  apiKey: string | null;
-}
+import type { ToolContext } from "./index.js";
 
 function profileSet(ctx: ToolContext) {
   return {
@@ -28,7 +23,7 @@ function profileSet(ctx: ToolContext) {
       if (Object.keys(fields).length === 0) {
         return { success: false, output: "", error: "no_fields_provided" };
       }
-      const updatedFields = await ctx.db.setProfile(fields);
+      const updatedFields = await ctx.profile.setProfile(fields);
       return { ok: true, updated_fields: updatedFields };
     },
   };
