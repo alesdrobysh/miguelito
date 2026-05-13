@@ -201,9 +201,6 @@ export interface FsrsReviewResult {
   due: string;
 }
 
-// Backward-compat alias
-export type Sm2Result = FsrsReviewResult;
-
 export interface ProgressData {
   newCount: number;
   learningCount: number;
