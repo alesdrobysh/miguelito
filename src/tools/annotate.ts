@@ -50,6 +50,10 @@ function turnAnnotate(ctx: ToolContext) {
           type: "boolean",
           description: "True if the learner used at least one subordinate clause.",
         },
+        mode: {
+          type: "string",
+          description: "Which response mode you used this turn: REACT | DIG | OFFER | TEACH | PLAY",
+        },
       },
       required: ["obligatory", "used", "naturalness", "comprehension"],
     },
@@ -91,6 +95,12 @@ function turnAnnotate(ctx: ToolContext) {
         tunit_length,
         had_subordination,
       });
+
+      const mode = (args.mode ?? "").trim();
+      const validModes = new Set(["REACT", "DIG", "OFFER", "TEACH", "PLAY"]);
+      if (validModes.has(mode)) {
+        await ctx.session.updateConversationState(mode);
+      }
 
       return {};
     },
