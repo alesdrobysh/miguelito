@@ -66,8 +66,9 @@ Topics touched: ${convState.session.topics_touched}
     const learnerProfile = hasLearnerData ? formatProfile(words, errorInfo, weakAreas) : null;
 
     const interests = await this.repos.interests.listInterests(10);
-    const userInterests = interests.length > 0
-      ? `\n\n## User Interests\n${interests.join(", ")}`
+    const subset = shuffleArray(interests).slice(0, 2);
+    const userInterests = subset.length > 0
+      ? `\n\n## Lo que sé de esta persona\n${subset.join(", ")}`
       : null;
 
     let dreamMemory: string | null = null;
@@ -120,6 +121,15 @@ Topics touched: ${convState.session.topics_touched}
       return null;
     }
   }
+}
+
+function shuffleArray<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
 }
 
 function formatProfile(
