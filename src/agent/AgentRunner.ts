@@ -24,14 +24,12 @@ export interface AgentResult {
 }
 
 const MAX_TOOL_ITERATIONS = 10;
-const CONV_STATE_PARSE_RE = /\[CONV_STATE:\s*(?:mode=)?(REACT|DIG|OFFER|TEACH|PLAY)(?:[,\s]+(?:topic=)?([^,\]\n]+?))?(?:[,\s]+(?:mood=)?([^\]\n]+?))?\s*\]/;
-const CONV_STATE_STRIP_RE = /\s*\[CONV_STATE:[^\]]*\]/g;
 
 export class AgentRunner {
   constructor(private deps: AgentDeps) {}
 
   async run(userMessage: string, chatHistory: ChatMessage[]): Promise<AgentResult> {
-    const { provider, session, promptBuilder, toolCtx, soulPath, dreamMemoryPath } = this.deps;
+    const { provider, promptBuilder, toolCtx, soulPath, dreamMemoryPath } = this.deps;
 
     const fullSystem = await promptBuilder.build(soulPath, dreamMemoryPath);
 
@@ -58,21 +56,12 @@ export class AgentRunner {
       }
 
       if (result.toolCalls.length === 0) {
-        const match = totalText.match(CONV_STATE_PARSE_RE);
-        if (match) {
-          const mode = match[1];
-          const topic = match[2]?.trim() || undefined;
-          const mood = match[3]?.trim() || undefined;
-          await session.updateConversationState(mode, topic, mood);
-          log.debug({ mode, topic, mood }, 'conv state parsed');
-        }
-        totalText = totalText.replace(CONV_STATE_STRIP_RE, "").trim();
         break;
       }
 
       messages.push({
         role: "assistant",
-        content: (result.content ?? "").replace(CONV_STATE_STRIP_RE, "").trim(),
+        content: result.content ?? "",
         tool_calls: result.toolCalls,
       });
 
