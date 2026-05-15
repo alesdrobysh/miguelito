@@ -38,7 +38,7 @@ async function main() {
         baseUrl: config.openrouterBaseUrl,
       });
 
-  const toolCtx = { vocab: db, errors: db, profile: db, interests: db, competency: db, provider };
+  const toolCtx = { vocab: db, errors: db, profile: db, interests: db, competency: db, session: db, provider };
   const promptBuilder = new PromptBuilder({ vocab: db, errors: db, profile: db, interests: db, competency: db, session: db });
 
   const agentRunner = new AgentRunner({
