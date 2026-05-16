@@ -34,7 +34,9 @@ export class TelegramTransport implements Transport {
   }
 
   start(opts?: Record<string, unknown>): void {
-    this.bot.start(opts as any);
+    this.bot.start(opts as any).catch((e) => {
+      log.error({ err: e }, 'Telegram bot start error');
+    });
   }
 
   private _isAllowed(ctx: Context): boolean {

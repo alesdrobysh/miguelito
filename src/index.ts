@@ -95,4 +95,7 @@ async function main() {
   }
 }
 
-main();
+main().catch((e) => {
+  log.error({ err: e }, 'Fatal error in main');
+  process.exit(1);
+});
