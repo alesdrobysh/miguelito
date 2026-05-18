@@ -1,6 +1,7 @@
 import type { ToolContext } from "./index.js";
+import type { LanguageConfig } from "../languages/LanguageConfig.js";
 
-function readLink(ctx: ToolContext) {
+function readLink(ctx: ToolContext, lang: LanguageConfig) {
   return {
     name: "miguelito_read_link",
     description: "Fetch a URL the user pasted, extract the article text, and paraphrase it in Spanish at the user's level with vocabulary extraction. Returns a level-adapted summary and key words. Falls back to raw text if the LLM paraphrase is unavailable.",
@@ -43,7 +44,7 @@ function readLink(ctx: ToolContext) {
               words: Array<{ word: string; explanation: string }>;
             }>(
               null,
-              `Eres un asistente de aprendizaje de español.\n\nArtículo: "${titleCapped}"\n\nTexto: ${text}\n\nTareas:\n1. Escribe un resumen de 3-5 frases en español claro y accesible.\n2. Extrae 3-5 palabras o expresiones españolas interesantes del texto. Para cada una, da una breve explicación en español (1 frase, no traducción).\n\nResponde SOLO con JSON:\n{"summary": "...", "words": [{"word": "...", "explanation": "..."}]}`,
+              lang.prompts.readLink(titleCapped, text),
               { temperature: 0.3, maxTokens: 768 },
             );
             return {
@@ -78,7 +79,7 @@ function readLink(ctx: ToolContext) {
   };
 }
 
-function readingSuggest(ctx: ToolContext) {
+function readingSuggest(ctx: ToolContext, lang: LanguageConfig) {
   return {
     name: "miguelito_reading_suggest",
     description: "Find an interesting Spanish article matching the user's interests. Tries preferred Spanish reading sources first (yorokobu.es, ethic.es, jotdown.es, etc.), then falls back to DuckDuckGo. Fetches the best result, summarizes it in clear Spanish via LLM, and extracts 1-2 vocabulary words. Pass interests (comma-separated); if omitted, reads from the user profile. Returns ok:true with url, title, summary, and words array. Returns ok:false on failure.",
@@ -97,7 +98,7 @@ function readingSuggest(ctx: ToolContext) {
       try {
         const rssResults = await fetchRssArticles(interests);
         if (rssResults.length > 0) {
-          return await processArticles(ctx, rssResults, interests, `rss:${interests}`);
+          return await processArticles(ctx, rssResults, interests, `rss:${interests}`, lang);
         }
 
         const query = `${interests} en español`;
@@ -105,7 +106,7 @@ function readingSuggest(ctx: ToolContext) {
         if (ddgResults.length === 0) {
           return { ok: false, error: "no_results", query };
         }
-        return await processArticles(ctx, ddgResults, interests, query);
+        return await processArticles(ctx, ddgResults, interests, query, lang);
       } catch (e: any) {
         return { ok: false, error: e.message };
       }
@@ -195,6 +196,7 @@ async function processArticles(
   results: Array<{ url: string; title: string; snippet: string }>,
   interests: string,
   searchQuery: string,
+  lang: LanguageConfig,
 ): Promise<Record<string, unknown>> {
   for (const result of results.slice(0, 3)) {
     try {
@@ -216,7 +218,7 @@ async function processArticles(
             words: Array<{ word: string; explanation: string }>;
           }>(
             null,
-            `Eres un asistente de aprendizaje de español.\n\nArtículo: "${displayTitle}"\n\nTexto: ${text}\n\nTareas:\n1. Escribe un resumen de 2-3 frases en español claro y accesible.\n2. Extrae 1-2 palabras o expresiones españolas interesantes del texto. Para cada una, da una breve explicación en español (1 frase, no traducción).\n\nResponde SOLO con JSON:\n{"summary": "...", "words": [{"word": "...", "explanation": "..."}]}`,
+            lang.prompts.readingSuggest(displayTitle, text),
             { temperature: 0.3, maxTokens: 512 },
           );
           return {
@@ -268,6 +270,6 @@ function htmlToText(html: string): { title: string; body: string } {
   return { title, body: doc };
 }
 
-export function createReadingTools(ctx: ToolContext) {
-  return [readLink(ctx), readingSuggest(ctx)];
+export function createReadingTools(ctx: ToolContext, lang: LanguageConfig) {
+  return [readLink(ctx, lang), readingSuggest(ctx, lang)];
 }

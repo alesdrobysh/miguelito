@@ -7,6 +7,7 @@ import { createReadingTools } from "./reading.js";
 import { createInterestTools } from "./interests.js";
 import { createProgressTools } from "./progress.js";
 import { createAnnotateTools } from "./annotate.js";
+import type { LanguageConfig } from "../languages/LanguageConfig.js";
 
 export interface ToolDefinition {
   name: string;
@@ -25,17 +26,17 @@ export interface ToolContext {
   provider: LLMProvider | null;
 }
 
-export function createTools(ctx: ToolContext): Map<string, ToolDefinition> {
+export function createTools(ctx: ToolContext, lang: LanguageConfig): Map<string, ToolDefinition> {
   const tools = new Map<string, ToolDefinition>();
 
   for (const t of [
     ...createVocabTools(ctx),
-    ...createErrorTools(ctx),
+    ...createErrorTools(ctx, lang),
     ...createProfileTools(ctx),
-    ...createReadingTools(ctx),
+    ...createReadingTools(ctx, lang),
     ...createInterestTools(ctx),
     ...createProgressTools(ctx),
-    ...createAnnotateTools(ctx),
+    ...createAnnotateTools(ctx, lang),
   ]) {
     tools.set(t.name, t);
   }

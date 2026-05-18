@@ -1,14 +1,14 @@
-import type { ErrorCategory, ObligatoryContext } from "../domain/types.js";
-import { VALID_CATEGORIES } from "../domain/types.js";
+import type { ObligatoryContext } from "../domain/types.js";
 import type { ToolContext } from "./index.js";
+import type { LanguageConfig } from "../languages/LanguageConfig.js";
 
-function turnAnnotate(ctx: ToolContext) {
+function turnAnnotate(ctx: ToolContext, lang: LanguageConfig) {
   return {
     name: "miguelito_turn_annotate",
     description:
       "Record a per-turn production annotation for the learner's utterance. " +
       "Call this silently every turn after composing your reply. " +
-      "obligatory: morphological/grammatical contexts the learner was required to handle this turn. " +
+      `obligatory: morphological/grammatical contexts the learner was required to handle this turn (categories: ${lang.errorCategories.join(", ")}). ` +
       "used: specific constructions the learner actually produced (for avoidance tracking). " +
       "naturalness: 0.0–1.0 idiomaticity score (1=fully native, 0=clear calque/unnatural). When unsure or utterance is too short to judge, use 1.0 (neutral). " +
       "comprehension: how the learner responded to YOUR previous turn (smooth=followed fine, asked_clarify=asked what you meant, requested_simpler=asked you to simplify).",
@@ -17,13 +17,13 @@ function turnAnnotate(ctx: ToolContext) {
       properties: {
         obligatory: {
           type: "array",
-          description: "Morphological/grammatical contexts required this turn (e.g. verb_conjugation, agreement, gender, ser_estar, spelling, preposition, word_choice, por_para). Be thorough — include every relevant category.",
+          description: `Morphological/grammatical contexts required this turn (${lang.errorCategories.join(", ")}). Be thorough — include every relevant category.`,
           items: {
             type: "object",
             properties: {
               type: {
                 type: "string",
-                description: "Category: gender, verb_conjugation, preposition, spelling, word_choice, agreement, ser_estar, por_para, other",
+                description: `Category: ${lang.errorCategories.join(", ")}`,
               },
             },
             required: ["type"],
@@ -65,9 +65,10 @@ function turnAnnotate(ctx: ToolContext) {
         const parsed = JSON.parse(args.obligatory ?? "[]");
         if (Array.isArray(parsed)) rawObligatory = parsed;
       } catch {}
+      const validCategories = new Set(lang.errorCategories);
       const obligatory: ObligatoryContext[] = rawObligatory
-        .filter((o) => o?.type && VALID_CATEGORIES.has(o.type))
-        .map((o) => ({ type: (VALID_CATEGORIES.has(o.type!) ? o.type! : "other") as ErrorCategory }));
+        .filter((o) => o?.type && validCategories.has(o.type))
+        .map((o) => ({ type: validCategories.has(o.type!) ? o.type! : "other" }));
 
       let used: string[] = [];
       try {
@@ -107,6 +108,6 @@ function turnAnnotate(ctx: ToolContext) {
   };
 }
 
-export function createAnnotateTools(ctx: ToolContext) {
-  return [turnAnnotate(ctx)];
+export function createAnnotateTools(ctx: ToolContext, lang: LanguageConfig) {
+  return [turnAnnotate(ctx, lang)];
 }

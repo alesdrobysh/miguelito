@@ -1,11 +1,11 @@
-import { VALID_CATEGORIES } from "../domain/types.js";
 import type { ToolContext } from "./index.js";
+import type { LanguageConfig } from "../languages/LanguageConfig.js";
 
-function errorLog(ctx: ToolContext) {
+function errorLog(ctx: ToolContext, lang: LanguageConfig) {
   return {
     name: "miguelito_error_log",
     description:
-      "Record a Spanish-mistake correction the user just received. Categories: gender, verb_conjugation, preposition, spelling, word_choice, agreement, ser_estar, por_para, other.",
+      `Record a ${lang.name}-mistake correction the user just received. Categories: ${lang.errorCategories.join(", ")}.`,
     parameters: {
       type: "object",
       properties: {
@@ -34,7 +34,7 @@ function errorLog(ctx: ToolContext) {
       let category = (args.category ?? "other").trim().toLowerCase();
       const note = (args.note ?? "").trim();
 
-      if (!VALID_CATEGORIES.has(category)) category = "other";
+      if (!new Set(lang.errorCategories).has(category)) category = "other";
 
       const id = await ctx.errors.logError(userText, correct, category, note);
       return { ok: true, id, category };
@@ -42,6 +42,6 @@ function errorLog(ctx: ToolContext) {
   };
 }
 
-export function createErrorTools(ctx: ToolContext) {
-  return [errorLog(ctx)];
+export function createErrorTools(ctx: ToolContext, lang: LanguageConfig) {
+  return [errorLog(ctx, lang)];
 }
