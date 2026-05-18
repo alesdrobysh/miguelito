@@ -7,7 +7,6 @@ import type {
   ConversationStateResult, FsrsReviewResult, ProgressData, UpdateResult,
   TurnAnnotationInput, TurnAnnotation, CompetencyVectorRow,
 } from "../domain/types.js";
-import { VALID_CATEGORIES } from "../domain/types.js";
 import type {
   VocabRepository, ErrorRepository, SessionRepository, ProfileRepository,
   InterestRepository, CompetencyRepository,
@@ -118,13 +117,6 @@ CREATE TABLE IF NOT EXISTS chat_history (
 CREATE INDEX IF NOT EXISTS idx_chat_history_chat_id ON chat_history(chat_id, id);
 `;
 
-export const MORPHOLOGY_TYPES = new Set([
-  "verb_conjugation",
-  "agreement",
-  "ser_estar",
-  "gender",
-]);
-
 export type { ChunkItem, DueChunkItem, ErrorItem, UserProfile, ConversationStateResult, FsrsReviewResult, ProgressData, UpdateResult, TurnAnnotationInput, TurnAnnotation, CompetencyVectorRow } from "../domain/types.js";
 
 function nowIso(): string {
@@ -145,18 +137,22 @@ function computeElapsedDays(lastReviewIso: string): number {
   return Math.max(0.1, (Date.now() - last.getTime()) / 86400000);
 }
 
-function normalizeCategory(category: string): string {
-  if (VALID_CATEGORIES.has(category)) return category;
-  return "other";
-}
-
 export class BuddyDb implements VocabRepository, ErrorRepository, SessionRepository, ProfileRepository, InterestRepository, CompetencyRepository {
   readonly db: Database;
   private dbPath: string;
+  private validCategories: ReadonlySet<string>;
+  private morphologyTypes: ReadonlySet<string>;
 
-  private constructor(db: Database, dbPath: string) {
+  private constructor(
+    db: Database,
+    dbPath: string,
+    validCategories: readonly string[],
+    morphologyCategories: readonly string[],
+  ) {
     this.db = db;
     this.dbPath = dbPath;
+    this.validCategories = new Set(validCategories);
+    this.morphologyTypes = new Set(morphologyCategories);
   }
 
   private static runMigrations(db: Database): void {
@@ -356,7 +352,11 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
     } catch {}
   }
 
-  static async open(dbPath: string): Promise<BuddyDb> {
+  static async open(
+    dbPath: string,
+    errorCategories: readonly string[],
+    morphologyCategories: readonly string[],
+  ): Promise<BuddyDb> {
     const SQL = await initSqlJs();
     const dir = path.dirname(dbPath);
     if (!fs.existsSync(dir)) {
@@ -369,7 +369,12 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
     const db = new SQL.Database(buf);
     db.run(SCHEMA);
     BuddyDb.runMigrations(db);
-    return new BuddyDb(db, dbPath);
+    return new BuddyDb(db, dbPath, errorCategories, morphologyCategories);
+  }
+
+  private normalizeCategory(category: string): string {
+    if (this.validCategories.has(category)) return category;
+    return "other";
   }
 
   private save(): void {
@@ -491,7 +496,7 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
   }
 
   async logError(userText: string, correct: string, category: string, note: string): Promise<number> {
-    const cat = normalizeCategory(category);
+    const cat = this.normalizeCategory(category);
     this.db.run(
       `INSERT INTO error_log (user_text, correct_form, category, note) VALUES (?, ?, ?, ?)`,
       [userText, correct, cat, note]
@@ -782,11 +787,13 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
     let idiomObs = vec.idiom_obs;
 
     // 2. Morphology (denominator from annotation, numerator from error_log)
-    const morphObligatory = ann.obligatory.filter((o) => MORPHOLOGY_TYPES.has(o.type)).length;
+    const morphObligatory = ann.obligatory.filter((o) => this.morphologyTypes.has(o.type)).length;
     if (morphObligatory > 0) {
+      const morphCats = Array.from(this.morphologyTypes);
+      const placeholders = morphCats.map(() => "?").join(",");
       const recentMorphErrors = this.queryAll(
-        `SELECT id FROM error_log WHERE created_at >= ? AND category IN ('verb_conjugation','agreement','ser_estar','gender')`,
-        [since]
+        `SELECT id FROM error_log WHERE created_at >= ? AND category IN (${placeholders})`,
+        [since, ...morphCats]
       );
       morphT += morphObligatory;
       morphS += Math.max(0, morphObligatory - recentMorphErrors.length);

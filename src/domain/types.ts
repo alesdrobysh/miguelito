@@ -88,24 +88,8 @@ export interface UpdateResult {
   topics_touched: string[];
 }
 
-export type ErrorCategory =
-  | "gender"
-  | "verb_conjugation"
-  | "preposition"
-  | "spelling"
-  | "word_choice"
-  | "agreement"
-  | "ser_estar"
-  | "por_para"
-  | "other";
-
-export const VALID_CATEGORIES: ReadonlySet<string> = new Set([
-  "gender", "verb_conjugation", "preposition", "spelling",
-  "word_choice", "agreement", "ser_estar", "por_para", "other",
-]);
-
 export interface ObligatoryContext {
-  type: ErrorCategory;
+  type: string;
 }
 
 export interface TurnAnnotationInput {
