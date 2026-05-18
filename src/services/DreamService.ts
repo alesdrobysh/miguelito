@@ -2,7 +2,6 @@ import fs from "fs";
 import path from "path";
 import type { SessionRepository, ErrorRepository, CompetencyRepository } from "../repositories/interfaces.js";
 import type { LLMProvider } from "../providers/interfaces.js";
-import { MORPHOLOGY_TYPES } from "../infrastructure/db.js";
 import { logger } from "../infrastructure/logger.js";
 
 const log = logger.child({ ctx: 'dream' });
@@ -10,21 +9,9 @@ const log = logger.child({ ctx: 'dream' });
 interface DreamConfig {
   timezone: string;
   dreamMemoryPath: string;
-  openrouterModel?: string;
+  dreamSystemPrompt: string;
+  morphologyCategories: ReadonlySet<string>;
 }
-
-const DREAM_SYSTEM_PROMPT = `You are Miguelito, a Spanish tutor. You have just finished your conversations for the day.
-Update the learner's long-term memory profile by merging today's observations into the existing profile.
-
-Rules:
-1. Deduplicate — if a fact already appears, reinforce or refine rather than repeat it.
-2. Update stale facts when new information contradicts them.
-3. Keep the output ≤400 words total.
-4. Write in compact, factual prose — no headers, no bullet points.
-5. If today added nothing new, return the existing profile unchanged.
-
-Focus on: vocabulary progress, persistent error patterns, strengths, topics of interest,
-effective teaching approaches, and learner personality/preferences.`;
 
 export class DreamService {
   constructor(
@@ -60,7 +47,7 @@ export class DreamService {
 
       const result = await this.provider.chat(
         [
-          { role: "system", content: DREAM_SYSTEM_PROMPT },
+          { role: "system", content: this.config.dreamSystemPrompt },
           { role: "user", content: userPrompt },
         ],
         undefined,
@@ -128,7 +115,7 @@ export class DreamService {
     const recentErrorCategories = new Set(recentErrors.map((e) => e.category));
 
     for (const [type, count] of obligatoryCounts.entries()) {
-      if (MORPHOLOGY_TYPES.has(type) && count >= 5 && !recentErrorCategories.has(type)) {
+      if (this.config.morphologyCategories.has(type) && count >= 5 && !recentErrorCategories.has(type)) {
         notes.push(`${type} appears stable — no errors in the last 14 days with ${count} obligatory contexts.`);
       }
     }

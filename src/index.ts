@@ -1,4 +1,5 @@
 import { loadConfig } from "./infrastructure/config.js";
+import { loadLanguage } from "./languages/index.js";
 import { BuddyDb } from "./infrastructure/db.js";
 import { logger } from "./infrastructure/logger.js";
 import { OpenRouterProvider } from "./providers/OpenRouterProvider.js";
@@ -24,7 +25,13 @@ process.on("unhandledRejection", (e) => {
 
 async function main() {
   const config = loadConfig();
-  const db = await BuddyDb.open(config.dbPath);
+  const lang = loadLanguage(process.env.LANGUAGE ?? "spanish");
+
+  const soulPath = process.env.SOUL_PATH ?? lang.soulPath;
+  const morningCronPrompt = process.env.MORNING_CRON_PROMPT ?? lang.prompts.morning;
+  const eveningCronPrompt = process.env.EVENING_CRON_PROMPT ?? lang.prompts.evening;
+
+  const db = await BuddyDb.open(config.dbPath, lang.errorCategories, lang.morphologyCategories);
 
   const provider = config.provider === "ollama"
     ? new OllamaProvider({
@@ -39,20 +46,25 @@ async function main() {
       });
 
   const toolCtx = { vocab: db, errors: db, profile: db, interests: db, competency: db, session: db, provider };
-  const promptBuilder = new PromptBuilder({ vocab: db, errors: db, profile: db, interests: db, competency: db, session: db });
+  const promptBuilder = new PromptBuilder(
+    { vocab: db, errors: db, profile: db, interests: db, competency: db, session: db },
+    lang,
+  );
 
   const agentRunner = new AgentRunner({
     provider,
     session: db,
     promptBuilder,
     toolCtx,
-    soulPath: config.soulPath,
+    lang,
     dreamMemoryPath: config.dreamMemoryPath,
   });
 
   const dreamService = new DreamService(db, db, db, provider, {
     timezone: config.timezone,
     dreamMemoryPath: config.dreamMemoryPath,
+    dreamSystemPrompt: lang.prompts.dream,
+    morphologyCategories: new Set(lang.morphologyCategories),
   });
 
   const transport = config.transport === "tui"
@@ -77,11 +89,19 @@ async function main() {
   });
 
   const model = config.provider === "ollama" ? config.ollamaModel : config.openrouterModel;
-  log.info({ provider: config.provider, model, dbPath: config.dbPath, transport: config.transport }, 'miguelito-ts starting');
+  log.info({ provider: config.provider, model, dbPath: config.dbPath, transport: config.transport, language: lang.id }, 'miguelito-ts starting');
 
   if (config.transport === "telegram") {
     startScheduler(
-      config,
+      {
+        morningCron: config.morningCron,
+        eveningCron: config.eveningCron,
+        dreamCron: config.dreamCron,
+        timezone: config.timezone,
+        telegramChatId: config.telegramChatId,
+        morningCronPrompt,
+        eveningCronPrompt,
+      },
       (prompt) => agentRunner.run(prompt, []),
       dreamService,
       transport,

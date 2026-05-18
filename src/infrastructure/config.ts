@@ -19,9 +19,6 @@ export interface Config {
   eveningCron: string;
   timezone: string;
   telegramChatId: string;
-  soulPath: string;
-  morningCronPrompt: string;
-  eveningCronPrompt: string;
   dreamCron: string;
   dreamMemoryPath: string;
 }
@@ -55,9 +52,6 @@ export function loadConfig(
     if (!telegramChatId) throw new Error("TELEGRAM_CHAT_ID is required when TRANSPORT=telegram");
   }
 
-  const soulPath = env.SOUL_PATH ?? path.resolve(process.cwd(), "SOUL.md");
-  const morningCronPrompt = env.MORNING_CRON_PROMPT ?? "Check ## Conversation State for session context and mood. Check ## Learner Profile and ## Current Learner Profile for the user's name, level, and Words to Weave In. Send a single short Spanish message (1-3 sentences). If Words to Weave In are listed, weave one naturally and end with a hook. If none, open with a brief curiosity-driven question about the user's day or a tiny cultural snippet. Never start with your name. Never paste raw data.";
-  const eveningCronPrompt = env.EVENING_CRON_PROMPT ?? "Check ## Conversation State for session context and mood. Check ## Learner Profile and ## Current Learner Profile for the user's name, level, and Words to Weave In. Send a single short Spanish message (1-3 sentences). If Words to Weave In are listed, weave one naturally and end with a hook. If none, open with a brief curiosity-driven question about the user's day or a tiny cultural snippet. Never start with your name. Never paste raw data.";
   const dreamCron = env.DREAM_CRON ?? "0 23 * * *";
   const dreamMemoryPath = env.DREAM_MEMORY_PATH ?? path.resolve(process.cwd(), "data/memory/MEMORY.md");
 
@@ -77,9 +71,6 @@ export function loadConfig(
     eveningCron,
     timezone,
     telegramChatId,
-    soulPath,
-    morningCronPrompt,
-    eveningCronPrompt,
     dreamCron,
     dreamMemoryPath,
   };
