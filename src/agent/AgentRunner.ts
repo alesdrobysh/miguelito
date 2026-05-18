@@ -1,4 +1,5 @@
 import type { ChatMessage } from "../llm.js";
+import type { LanguageConfig } from "../languages/LanguageConfig.js";
 import type { LLMProvider } from "../providers/interfaces.js";
 import type { SessionRepository } from "../repositories/interfaces.js";
 import type { ToolContext } from "../tools/index.js";
@@ -14,7 +15,7 @@ export interface AgentDeps {
   session: SessionRepository;
   promptBuilder: PromptBuilder;
   toolCtx: ToolContext;
-  soulPath: string;
+  lang: LanguageConfig;
   dreamMemoryPath?: string;
 }
 
@@ -29,9 +30,9 @@ export class AgentRunner {
   constructor(private deps: AgentDeps) {}
 
   async run(userMessage: string, chatHistory: ChatMessage[]): Promise<AgentResult> {
-    const { provider, promptBuilder, toolCtx, soulPath, dreamMemoryPath } = this.deps;
+    const { provider, promptBuilder, toolCtx, lang, dreamMemoryPath } = this.deps;
 
-    const fullSystem = await promptBuilder.build(soulPath, dreamMemoryPath);
+    const fullSystem = await promptBuilder.build(dreamMemoryPath);
 
     const messages: ChatMessage[] = [
       { role: "system", content: fullSystem },
@@ -39,7 +40,7 @@ export class AgentRunner {
       { role: "user", content: userMessage },
     ];
 
-    const tools = createTools(toolCtx);
+    const tools = createTools(toolCtx, lang);
     const openaiTools = toolsToOpenAI(tools);
 
     let totalText = "";

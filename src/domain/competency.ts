@@ -1,3 +1,4 @@
+import type { LanguageConfig } from "../languages/LanguageConfig.js";
 import type { CompetencyRepository, VocabRepository } from "../repositories/interfaces.js";
 
 export type Confidence = "low" | "medium" | "high";
@@ -73,11 +74,11 @@ export async function getCompetencyVector(repos: {
   };
 }
 
-export function selectFocusAxis(v: CompetencyVector): Axis | null {
+export function selectFocusAxis(v: CompetencyVector, lang: LanguageConfig): Axis | null {
   const weak: Axis[] = [];
 
-  if (v.morphology.confidence !== "low" && v.morphology.rate < 0.75) weak.push("morphology");
-  if (v.idiomaticity.confidence !== "low" && v.idiomaticity.rate < 0.70) weak.push("idiomaticity");
+  if (v.morphology.confidence !== "low" && v.morphology.rate < lang.calibrationThresholds.morphology) weak.push("morphology");
+  if (v.idiomaticity.confidence !== "low" && v.idiomaticity.rate < lang.calibrationThresholds.idiomaticity) weak.push("idiomaticity");
   if (v.lexicon.confidence !== "low" && v.lexicon.activeChunks < 30) weak.push("lexicon");
   if (v.syntax.confidence !== "low" && (v.syntax.meanTunitLength < 6 || v.syntax.subIndex < 0.15)) {
     weak.push("syntax");
@@ -91,7 +92,7 @@ export function selectFocusAxis(v: CompetencyVector): Axis | null {
   return weak[0];
 }
 
-export function renderCalibration(v: CompetencyVector, focus: Axis | null): string {
+export function renderCalibration(v: CompetencyVector, focus: Axis | null, lang: LanguageConfig): string {
   const lines: string[] = ["## Difficulty Calibration"];
 
   if (v.lexicon.confidence === "low") {
@@ -114,25 +115,21 @@ export function renderCalibration(v: CompetencyVector, focus: Axis | null): stri
   }
 
   if (v.morphology.confidence === "low") {
-    lines.push("Morphology: use present tense and pretérito freely; introduce other tenses as they arise naturally.");
+    lines.push(`Morphology: ${lang.calibrationText.morphologyLow}`);
   } else if (focus === "morphology") {
     const pct = Math.round(v.morphology.rate * 100);
-    lines.push(
-      `Morphology: learner accuracy ${pct}% on obligatory contexts — model correct verb conjugation and agreement prominently; use imperfecto and subjunctive in contrastive situations to expose the patterns.`
-    );
+    lines.push(`Morphology: ${lang.calibrationText.morphologyFocus(pct)}`);
   } else {
-    lines.push("Morphology: use present, pretérito, and imperfecto freely; introduce subjunctive contextually.");
+    lines.push(`Morphology: ${lang.calibrationText.morphologyNormal}`);
   }
 
   if (v.idiomaticity.confidence === "low") {
-    lines.push("Idiomaticity: use natural Spanish; avoid literal translations.");
+    lines.push(`Idiomaticity: ${lang.calibrationText.idiomaticityLow}`);
   } else if (focus === "idiomaticity") {
     const pct = Math.round(v.idiomaticity.rate * 100);
-    lines.push(
-      `Idiomaticity: naturalness score ${pct}% — prefer idiomatic collocations; model native phrasing prominently and gently flag calques.`
-    );
+    lines.push(`Idiomaticity: ${lang.calibrationText.idiomaticityFocus(pct)}`);
   } else {
-    lines.push("Idiomaticity: use natural, idiomatic Spanish; native collocations over literal translations.");
+    lines.push(`Idiomaticity: ${lang.calibrationText.idiomaticityNormal}`);
   }
 
   if (v.reception.confidence !== "low") {

@@ -1,4 +1,5 @@
 import fs from "fs";
+import type { LanguageConfig } from "../languages/LanguageConfig.js";
 import type { VocabRepository, ErrorRepository, ProfileRepository, InterestRepository, CompetencyRepository, SessionRepository } from "../repositories/interfaces.js";
 import { getCompetencyVector, selectFocusAxis, renderCalibration } from "../domain/competency.js";
 
@@ -20,10 +21,10 @@ interface ProfileInjection {
 }
 
 export class PromptBuilder {
-  constructor(private repos: PromptRepos) {}
+  constructor(private repos: PromptRepos, private lang: LanguageConfig) {}
 
-  async build(soulPath: string, dreamMemoryPath?: string): Promise<string> {
-    const soulContent = fs.readFileSync(soulPath, "utf-8");
+  async build(dreamMemoryPath?: string): Promise<string> {
+    const soulContent = fs.readFileSync(this.lang.soulPath, "utf-8");
     const { basicProfile, learnerProfile, calibration, userInterests, dreamMemory } =
       await this._buildInjection(dreamMemoryPath);
 
@@ -54,8 +55,8 @@ Topics touched: ${convState.session.topics_touched}
     let calibration: string | null = null;
     try {
       const cv = await this._buildCompetencyVector();
-      const focus = selectFocusAxis(cv);
-      calibration = `\n\n${renderCalibration(cv, focus)}`;
+      const focus = selectFocusAxis(cv, this.lang);
+      calibration = `\n\n${renderCalibration(cv, focus, this.lang)}`;
     } catch {}
 
     const words = await this._getDueWords(5);
