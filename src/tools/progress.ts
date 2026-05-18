@@ -1,7 +1,8 @@
 import { getCompetencyVector, selectFocusAxis, formatVectorForDisplay } from "../domain/competency.js";
+import type { LanguageConfig } from "../languages/LanguageConfig.js";
 import type { ToolContext } from "./index.js";
 
-function progressSummary(ctx: ToolContext) {
+function progressSummary(ctx: ToolContext, lang: LanguageConfig) {
   return {
     name: "miguelito_progress_summary",
     description: "Aggregate counts of vocab buckets, due-now words, recent additions, recent errors, error category histogram, and live competency vector. Call this when the user sends /progreso.",
@@ -15,7 +16,7 @@ function progressSummary(ctx: ToolContext) {
       let competency: Record<string, unknown> | null = null;
       try {
         const cv = await getCompetencyVector(ctx);
-        const focus = selectFocusAxis(cv);
+        const focus = selectFocusAxis(cv, lang);
         competency = {
           summary: formatVectorForDisplay(cv),
           focus_axis: focus ?? "none",
@@ -50,6 +51,6 @@ function progressSummary(ctx: ToolContext) {
   };
 }
 
-export function createProgressTools(ctx: ToolContext) {
-  return [progressSummary(ctx)];
+export function createProgressTools(ctx: ToolContext, lang: LanguageConfig) {
+  return [progressSummary(ctx, lang)];
 }

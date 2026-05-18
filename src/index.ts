@@ -27,7 +27,6 @@ async function main() {
   const config = loadConfig();
   const lang = loadLanguage(process.env.LANGUAGE ?? "spanish");
 
-  const soulPath = process.env.SOUL_PATH ?? lang.soulPath;
   const morningCronPrompt = process.env.MORNING_CRON_PROMPT ?? lang.prompts.morning;
   const eveningCronPrompt = process.env.EVENING_CRON_PROMPT ?? lang.prompts.evening;
 

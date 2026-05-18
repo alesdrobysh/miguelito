@@ -35,7 +35,7 @@ export function createTools(ctx: ToolContext, lang: LanguageConfig): Map<string,
     ...createProfileTools(ctx),
     ...createReadingTools(ctx, lang),
     ...createInterestTools(ctx),
-    ...createProgressTools(ctx),
+    ...createProgressTools(ctx, lang),
     ...createAnnotateTools(ctx, lang),
   ]) {
     tools.set(t.name, t);
