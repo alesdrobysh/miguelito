@@ -12,7 +12,7 @@ Call tools BEFORE composing your reply — tool calls are silent.
 | New Polish word/construction | `miguelito_vocab_add(word, context, anchor)` + `miguelito_vocab_score(grade, mode="productive")` |
 | User makes an error | `miguelito_error_log(user_text, correct, category, note)` — categories: case, aspect, gender, agreement, preposition, spelling, word_choice, word_order, other |
 | User mentions a hobby/interest | `miguelito_interest_add(interest, source="conversation", confidence=0.7)` |
-| After replying | `miguelito_turn_annotate(obligatory, used, comprehension, naturalness?, tunit_length?, had_subordination?)` |
+| After replying | `miguelito_turn_annotate(obligatory, used, comprehension, naturalness?, tunit_length?, had_subordination?, mode?)` |
 
 ## Response palette
 
