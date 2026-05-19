@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS vocabulary_items (
     chunk_l2 TEXT NOT NULL,
     anchor TEXT,
     capture_context_l2 TEXT,
+    language TEXT NOT NULL DEFAULT '',
     first_seen_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     pro_stability REAL DEFAULT 1.0,
     pro_difficulty REAL DEFAULT 5.0,
@@ -36,6 +37,7 @@ CREATE TABLE IF NOT EXISTS error_log (
     user_text TEXT NOT NULL,
     correct_form TEXT NOT NULL,
     category TEXT NOT NULL DEFAULT 'other',
+    language TEXT NOT NULL DEFAULT '',
     note TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -61,6 +63,7 @@ CREATE TABLE IF NOT EXISTS turn_annotations (
     comprehension TEXT NOT NULL DEFAULT 'smooth',
     tunit_length INTEGER NOT NULL DEFAULT 1,
     had_subordination INTEGER NOT NULL DEFAULT 0,
+    language TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_annotation_created ON turn_annotations(created_at);
@@ -76,6 +79,7 @@ CREATE TABLE IF NOT EXISTS competency_vector (
     syntax_window TEXT NOT NULL DEFAULT '[]',
     reception_ewma REAL NOT NULL DEFAULT 0.5,
     reception_obs INTEGER NOT NULL DEFAULT 0,
+    language TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -102,6 +106,7 @@ CREATE TABLE IF NOT EXISTS conversation_state (
     last_two_modes TEXT DEFAULT '[]',
     topics_touched TEXT DEFAULT '[]',
     mood_hint TEXT,
+    language TEXT NOT NULL DEFAULT '',
     started_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -112,6 +117,7 @@ CREATE TABLE IF NOT EXISTS chat_history (
     role TEXT NOT NULL,
     content TEXT NOT NULL,
     session_id TEXT,
+    language TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_chat_history_chat_id ON chat_history(chat_id, id);
@@ -140,17 +146,20 @@ function computeElapsedDays(lastReviewIso: string): number {
 export class BuddyDb implements VocabRepository, ErrorRepository, SessionRepository, ProfileRepository, InterestRepository, CompetencyRepository {
   readonly db: Database;
   private dbPath: string;
+  private languageId: string;
   private validCategories: ReadonlySet<string>;
   private morphologyTypes: ReadonlySet<string>;
 
   private constructor(
     db: Database,
     dbPath: string,
+    languageId: string,
     validCategories: readonly string[],
     morphologyCategories: readonly string[],
   ) {
     this.db = db;
     this.dbPath = dbPath;
+    this.languageId = languageId;
     this.validCategories = new Set(validCategories);
     this.morphologyTypes = new Set(morphologyCategories);
   }
@@ -345,7 +354,25 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
       db.run("ALTER TABLE user_profile_new RENAME TO user_profile");
     }
 
-    db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '8')");
+    db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '9')");
+
+    // v9: language-scoping for all teaching-related tables
+    const tablesToScope = [
+      "vocabulary_items",
+      "error_log",
+      "turn_annotations",
+      "competency_vector",
+      "conversation_state",
+      "chat_history"
+    ];
+    for (const table of tablesToScope) {
+      const info = db.exec(`PRAGMA table_info(${table})`);
+      const cols = (info[0]?.values ?? []).map((r) => r[1] as string);
+      if (!cols.includes("language")) {
+        db.run(`ALTER TABLE ${table} ADD COLUMN language TEXT NOT NULL DEFAULT ''`);
+      }
+    }
+
     try {
       db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_vocab_chunk_unique ON vocabulary_items(chunk_l2 COLLATE NOCASE)");
       db.run("CREATE INDEX IF NOT EXISTS idx_vocab_pro_due ON vocabulary_items(pro_due)");
@@ -354,6 +381,7 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
 
   static async open(
     dbPath: string,
+    languageId: string,
     errorCategories: readonly string[],
     morphologyCategories: readonly string[],
   ): Promise<BuddyDb> {
@@ -369,7 +397,7 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
     const db = new SQL.Database(buf);
     db.run(SCHEMA);
     BuddyDb.runMigrations(db);
-    return new BuddyDb(db, dbPath, errorCategories, morphologyCategories);
+    return new BuddyDb(db, dbPath, languageId, errorCategories, morphologyCategories);
   }
 
   private normalizeCategory(category: string): string {
@@ -412,8 +440,8 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
   async addVocab(chunk_l2: string, capture_context_l2: string, anchor?: string): Promise<number | null> {
     const now = nowIso();
     this.db.run(
-      `INSERT OR IGNORE INTO vocabulary_items (chunk_l2, capture_context_l2, anchor, first_seen_at) VALUES (?, ?, ?, ?)`,
-      [chunk_l2.trim().toLowerCase(), capture_context_l2, anchor?.trim().toLowerCase() ?? null, now]
+      `INSERT OR IGNORE INTO vocabulary_items (chunk_l2, capture_context_l2, anchor, language, first_seen_at) VALUES (?, ?, ?, ?, ?)`,
+      [chunk_l2.trim().toLowerCase(), capture_context_l2, anchor?.trim().toLowerCase() ?? null, this.languageId, now]
     );
     if (this.db.getRowsModified() === 0) return null;
     const rowidResult = this.db.exec("SELECT last_insert_rowid()");
@@ -424,9 +452,9 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
 
   async listVocab(bucket: string, limit: number): Promise<ChunkItem[]> {
     if (bucket === "all") {
-      return this.queryAll(`SELECT * FROM vocabulary_items ORDER BY id DESC LIMIT ?`, [limit]) as ChunkItem[];
+      return this.queryAll(`SELECT * FROM vocabulary_items WHERE language = ? ORDER BY id DESC LIMIT ?`, [this.languageId, limit]) as ChunkItem[];
     }
-    const rows = this.queryAll(`SELECT * FROM vocabulary_items`) as ChunkItem[];
+    const rows = this.queryAll(`SELECT * FROM vocabulary_items WHERE language = ?`, [this.languageId]) as ChunkItem[];
     const filtered = rows.filter((r) => statusOf(r.pro_reps, r.pro_stability) === bucket);
     return filtered.slice(0, limit);
   }
@@ -436,10 +464,10 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
     return this.queryAll(
       `SELECT id, chunk_l2, anchor, pro_stability, pro_reps, pro_due
        FROM vocabulary_items
-       WHERE pro_due IS NULL OR pro_due <= ?
+       WHERE language = ? AND (pro_due IS NULL OR pro_due <= ?)
        ORDER BY pro_due ASC
        LIMIT ?`,
-      [now, limit]
+      [this.languageId, now, limit]
     ) as DueChunkItem[];
   }
 
@@ -448,8 +476,8 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
     const row = this.queryRow(
       `SELECT id, pro_stability, pro_difficulty, pro_reps, pro_last_review,
                 rec_stability, rec_difficulty, rec_reps, rec_last_review
-       FROM vocabulary_items WHERE chunk_l2 = ? COLLATE NOCASE`,
-      [chunk_l2]
+       FROM vocabulary_items WHERE chunk_l2 = ? COLLATE NOCASE AND language = ?`,
+      [chunk_l2, this.languageId]
     ) as {
       id: number;
       pro_stability: number; pro_difficulty: number; pro_reps: number; pro_last_review: string | null;
@@ -498,8 +526,8 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
   async logError(userText: string, correct: string, category: string, note: string): Promise<number> {
     const cat = this.normalizeCategory(category);
     this.db.run(
-      `INSERT INTO error_log (user_text, correct_form, category, note) VALUES (?, ?, ?, ?)`,
-      [userText, correct, cat, note]
+      `INSERT INTO error_log (user_text, correct_form, category, language, note) VALUES (?, ?, ?, ?, ?)`,
+      [userText, correct, cat, this.languageId, note]
     );
     const rowidResult = this.db.exec("SELECT last_insert_rowid()");
     const id = rowidResult[0].values[0][0] as number;
@@ -509,11 +537,11 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
 
   async listErrors(category: string, limit: number): Promise<ErrorItem[]> {
     if (category === "all") {
-      return this.queryAll(`SELECT * FROM error_log ORDER BY created_at DESC LIMIT ?`, [limit]) as ErrorItem[];
+      return this.queryAll(`SELECT * FROM error_log WHERE language = ? ORDER BY created_at DESC LIMIT ?`, [this.languageId, limit]) as ErrorItem[];
     }
     return this.queryAll(
-      `SELECT * FROM error_log WHERE category = ? ORDER BY created_at DESC LIMIT ?`,
-      [category, limit]
+      `SELECT * FROM error_log WHERE language = ? AND category = ? ORDER BY created_at DESC LIMIT ?`,
+      [this.languageId, category, limit]
     ) as ErrorItem[];
   }
 
@@ -555,7 +583,8 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
 
   async getConversationState(): Promise<ConversationStateResult> {
     const row = this.queryRow(
-      `SELECT * FROM conversation_state ORDER BY id DESC LIMIT 1`
+      `SELECT * FROM conversation_state WHERE language = ? ORDER BY id DESC LIMIT 1`,
+      [this.languageId]
     ) as ConversationStateData | undefined;
 
     if (row) {
@@ -569,9 +598,9 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
     const sessionId = crypto.randomUUID();
     const now = nowIso();
     this.db.run(
-      `INSERT INTO conversation_state (session_id, turn_count, last_two_modes, topics_touched, started_at, updated_at)
-       VALUES (?, 0, '[]', '[]', ?, ?)`,
-      [sessionId, now, now]
+      `INSERT INTO conversation_state (session_id, turn_count, last_two_modes, topics_touched, language, started_at, updated_at)
+       VALUES (?, 0, '[]', '[]', ?, ?, ?)`,
+      [sessionId, this.languageId, now, now]
     );
     const rowidResult = this.db.exec("SELECT last_insert_rowid()");
     const newId = rowidResult[0].values[0][0];
@@ -659,7 +688,7 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
   }
 
   async exportVocab(format: string): Promise<{ count: number; data: string }> {
-    const rows = this.queryAll(`SELECT * FROM vocabulary_items ORDER BY id ASC`) as ChunkItem[];
+    const rows = this.queryAll(`SELECT * FROM vocabulary_items WHERE language = ? ORDER BY id ASC`, [this.languageId]) as ChunkItem[];
 
     if (format === "csv") {
       const header = "chunk_l2,anchor,status,pro_stability,pro_reps,pro_due,rec_stability,rec_reps";
@@ -686,20 +715,22 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
   }
 
   async progressSummary(): Promise<ProgressData> {
-    const rows = this.queryAll(`SELECT pro_reps, pro_stability FROM vocabulary_items`) as Pick<ChunkItem, "pro_reps" | "pro_stability">[];
+    const rows = this.queryAll(`SELECT pro_reps, pro_stability FROM vocabulary_items WHERE language = ?`, [this.languageId]) as Pick<ChunkItem, "pro_reps" | "pro_stability">[];
 
     const now = nowIso();
     const dueRow = this.queryRow(
-      `SELECT COUNT(*) AS c FROM vocabulary_items WHERE pro_due IS NULL OR pro_due <= ?`,
-      [now]
+      `SELECT COUNT(*) AS c FROM vocabulary_items WHERE language = ? AND (pro_due IS NULL OR pro_due <= ?)`,
+      [this.languageId, now]
     ) as { c: number };
 
     const recentRows = this.queryAll(
-      `SELECT chunk_l2 FROM vocabulary_items ORDER BY first_seen_at DESC LIMIT 5`
+      `SELECT chunk_l2 FROM vocabulary_items WHERE language = ? ORDER BY first_seen_at DESC LIMIT 5`,
+      [this.languageId]
     ) as { chunk_l2: string }[];
 
     const errorRows = this.queryAll(
-      `SELECT category, COUNT(*) AS c FROM error_log GROUP BY category`
+      `SELECT category, COUNT(*) AS c FROM error_log WHERE language = ? GROUP BY category`,
+      [this.languageId]
     ) as { category: string; c: number }[];
 
     const errorCategories: Record<string, number> = {};
@@ -734,8 +765,8 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
 
   async addChatMessage(chatId: number, role: string, content: string, sessionId?: string): Promise<void> {
     this.db.run(
-      `INSERT INTO chat_history (chat_id, role, content, session_id) VALUES (?, ?, ?, ?)`,
-      [chatId, role, content, sessionId ?? null]
+      `INSERT INTO chat_history (chat_id, role, content, session_id, language) VALUES (?, ?, ?, ?, ?)`,
+      [chatId, role, content, sessionId ?? null, this.languageId]
     );
     this.save();
   }
@@ -750,17 +781,17 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
   async getChatHistory(chatId: number, limit: number): Promise<{ role: string; content: string }[]> {
     const rows = this.queryAll(
       `SELECT role, content FROM (
-         SELECT id, role, content FROM chat_history WHERE chat_id = ? ORDER BY id DESC LIMIT ?
+         SELECT id, role, content FROM chat_history WHERE chat_id = ? AND language = ? ORDER BY id DESC LIMIT ?
        ) ORDER BY id ASC`,
-      [chatId, limit]
+      [chatId, this.languageId, limit]
     ) as { role: string; content: string }[];
     return rows;
   }
 
   async getTodaysMessages(date: string): Promise<{ role: string; content: string; created_at: string }[]> {
     return this.queryAll(
-      `SELECT role, content, created_at FROM chat_history WHERE date(created_at) = ? ORDER BY id ASC`,
-      [date]
+      `SELECT role, content, created_at FROM chat_history WHERE date(created_at) = ? AND language = ? ORDER BY id ASC`,
+      [date, this.languageId]
     ) as { role: string; content: string; created_at: string }[];
   }
 
@@ -775,7 +806,7 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
     const DECAY = 0.85;
     const RECEPTION_ALPHA = 0.2;
 
-    const vec = this.queryRow("SELECT * FROM competency_vector ORDER BY id DESC LIMIT 1") as CompetencyVectorRow | undefined;
+    const vec = this.queryRow("SELECT * FROM competency_vector WHERE language = ? ORDER BY id DESC LIMIT 1", [this.languageId]) as CompetencyVectorRow | undefined;
     if (!vec) return;
 
     // 1. Decay
@@ -792,8 +823,8 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
       const morphCats = Array.from(this.morphologyTypes);
       const placeholders = morphCats.map(() => "?").join(",");
       const recentMorphErrors = this.queryAll(
-        `SELECT id FROM error_log WHERE created_at >= ? AND category IN (${placeholders})`,
-        [since, ...morphCats]
+        `SELECT id FROM error_log WHERE language = ? AND created_at >= ? AND category IN (${placeholders})`,
+        [this.languageId, since, ...morphCats]
       );
       morphT += morphObligatory;
       morphS += Math.max(0, morphObligatory - recentMorphErrors.length);
@@ -820,9 +851,9 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
 
     this.db.run(
       `INSERT INTO competency_vector
-        (morph_successes, morph_trials, morph_obs, idiom_successes, idiom_trials, idiom_obs, syntax_window, reception_ewma, reception_obs)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [morphS, morphT, morphObs, idiomS, idiomT, idiomObs, JSON.stringify(trimmedWindow), recEwma, recObs]
+        (morph_successes, morph_trials, morph_obs, idiom_successes, idiom_trials, idiom_obs, syntax_window, reception_ewma, reception_obs, language)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [morphS, morphT, morphObs, idiomS, idiomT, idiomObs, JSON.stringify(trimmedWindow), recEwma, recObs, this.languageId]
     );
   }
 
@@ -830,8 +861,8 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
     const since60s = BuddyDb.utcAgoIso(60);
     this.db.run(
       `INSERT INTO turn_annotations
-        (session_id, turn_number, obligatory_json, used_json, naturalness, comprehension, tunit_length, had_subordination)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        (session_id, turn_number, obligatory_json, used_json, naturalness, comprehension, tunit_length, had_subordination, language)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         ann.session_id ?? null,
         ann.turn_number ?? null,
@@ -841,6 +872,7 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
         ann.comprehension,
         ann.tunit_length ?? 1,
         ann.had_subordination ? 1 : 0,
+        this.languageId,
       ]
     );
     this._updateVectorFromAnnotation(ann, since60s);
@@ -849,14 +881,18 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
 
   async getRecentAnnotations(limit: number): Promise<TurnAnnotation[]> {
     return this.queryAll(
-      `SELECT * FROM turn_annotations ORDER BY id DESC LIMIT ?`,
-      [limit]
+      `SELECT * FROM turn_annotations WHERE language = ? ORDER BY id DESC LIMIT ?`,
+      [this.languageId, limit]
     ) as TurnAnnotation[];
   }
 
   async getCompetencyVector(): Promise<CompetencyVectorRow> {
-    const row = this.queryRow(`SELECT * FROM competency_vector ORDER BY id DESC LIMIT 1`);
-    if (!row) throw new Error("competency_vector not initialized");
+    let row = this.queryRow(`SELECT * FROM competency_vector WHERE language = ? ORDER BY id DESC LIMIT 1`, [this.languageId]);
+    if (!row) {
+      this.db.run("INSERT INTO competency_vector (language) VALUES (?)", [this.languageId]);
+      this.save();
+      row = this.queryRow(`SELECT * FROM competency_vector WHERE language = ? ORDER BY id DESC LIMIT 1`, [this.languageId]);
+    }
     return row as CompetencyVectorRow;
   }
 
@@ -866,9 +902,9 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
     const merged = { ...current, ...fields };
     this.db.run(
       `INSERT INTO competency_vector
-        (morph_successes, morph_trials, morph_obs, idiom_successes, idiom_trials, idiom_obs, syntax_window, reception_ewma, reception_obs)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [merged.morph_successes, merged.morph_trials, merged.morph_obs, merged.idiom_successes, merged.idiom_trials, merged.idiom_obs, merged.syntax_window, merged.reception_ewma, merged.reception_obs]
+        (morph_successes, morph_trials, morph_obs, idiom_successes, idiom_trials, idiom_obs, syntax_window, reception_ewma, reception_obs, language)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [merged.morph_successes, merged.morph_trials, merged.morph_obs, merged.idiom_successes, merged.idiom_trials, merged.idiom_obs, merged.syntax_window, merged.reception_ewma, merged.reception_obs, this.languageId]
     );
     this.save();
   }
@@ -876,14 +912,14 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
   async listRecentErrors(since: string, categories?: string[]): Promise<ErrorItem[]> {
     if (!categories || categories.length === 0) {
       return this.queryAll(
-        `SELECT * FROM error_log WHERE created_at >= ? ORDER BY id ASC`,
-        [since]
+        `SELECT * FROM error_log WHERE language = ? AND created_at >= ? ORDER BY id ASC`,
+        [this.languageId, since]
       ) as ErrorItem[];
     }
     const placeholders = categories.map(() => "?").join(",");
     return this.queryAll(
-      `SELECT * FROM error_log WHERE created_at >= ? AND category IN (${placeholders}) ORDER BY id ASC`,
-      [since, ...categories]
+      `SELECT * FROM error_log WHERE language = ? AND created_at >= ? AND category IN (${placeholders}) ORDER BY id ASC`,
+      [this.languageId, since, ...categories]
     ) as ErrorItem[];
   }
 

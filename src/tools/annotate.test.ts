@@ -15,6 +15,7 @@ beforeEach(async () => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "miguelito-ann-test-"));
   db = await BuddyDb.open(
     path.join(tmpDir, "test.db"),
+    "spanish",
     SpanishLanguage.errorCategories,
     SpanishLanguage.morphologyCategories,
   );

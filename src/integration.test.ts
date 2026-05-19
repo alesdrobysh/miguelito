@@ -15,6 +15,7 @@ beforeEach(async () => {
   dbPath = path.join(tmpDir, "test.db");
   db = await BuddyDb.open(
     dbPath,
+    "spanish",
     SpanishLanguage.errorCategories,
     SpanishLanguage.morphologyCategories,
   );

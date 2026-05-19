@@ -16,6 +16,7 @@ beforeEach(async () => {
   dbPath = path.join(tmpDir, "test.db");
   db = await BuddyDb.open(
     dbPath,
+    "spanish",
     SpanishLanguage.errorCategories,
     SpanishLanguage.morphologyCategories,
   );
@@ -405,12 +406,12 @@ describe("BuddyDb turn annotations and competency vector", () => {
     expect(names).toContain("competency_vector");
 
     const ver = db.db.exec("SELECT value FROM _buddy_meta WHERE key = 'schema_version'");
-    expect(ver[0].values[0][0]).toBe("8");
+    expect(ver[0].values[0][0]).toBe("9");
   });
 
   it("competency_vector row is seeded with defaults", async () => {
     const vec = await db.getCompetencyVector();
-    expect(vec.id).toBe(1);
+    expect(vec.id).toBeTypeOf("number");
     expect(vec.morph_successes).toBe(0.5);
     expect(vec.morph_trials).toBe(1.0);
     expect(vec.morph_obs).toBe(0);

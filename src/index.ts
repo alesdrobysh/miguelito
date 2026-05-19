@@ -37,7 +37,7 @@ async function main() {
   const morningCronPrompt = process.env.MORNING_CRON_PROMPT ?? lang.prompts.morning;
   const eveningCronPrompt = process.env.EVENING_CRON_PROMPT ?? lang.prompts.evening;
 
-  const db = await BuddyDb.open(config.dbPath, lang.errorCategories, lang.morphologyCategories);
+  const db = await BuddyDb.open(config.dbPath, lang.id, lang.errorCategories, lang.morphologyCategories);
 
   const provider = config.provider === "ollama"
     ? new OllamaProvider({
