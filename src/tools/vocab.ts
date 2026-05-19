@@ -5,7 +5,9 @@ function vocabAdd(ctx: ToolContext) {
   return {
     name: "miguelito_vocab_add",
     description:
-      "Silently capture a Spanish chunk the user just used or asked about. " +
+      "Add a chunk to the vocabulary list for future spaced-repetition practice. " +
+      "Call ONLY when: (1) the learner made an error with this chunk, OR (2) the learner explicitly asked about its meaning (e.g. 'what does X mean?'). " +
+      "Do NOT add chunks the learner produced correctly on their own — correct production means they already know it. " +
       "Store the collocational form, not the bare word. Idempotent. Do not announce it.",
     parameters: {
       type: "object",
