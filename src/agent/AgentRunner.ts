@@ -58,11 +58,8 @@ export class AgentRunner {
         stop: ["\nUser:", "\nLearner:", "\n<|im_start|>", "\n<|im_end|>"],
       });
 
-      if (result.content) {
-        totalText += result.content;
-      }
-
       if (result.toolCalls.length === 0) {
+        totalText = result.content ?? "";
         break;
       }
 
