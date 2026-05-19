@@ -28,7 +28,7 @@ export class TuiTransport implements Transport {
     });
 
     console.log(`${BOLD}${YELLOW}miguelito-ts TUI${RESET}`);
-    console.log(`${YELLOW}Type a message in Spanish to chat with your tutor.${RESET}`);
+    console.log(`${YELLOW}Type a message to chat with your tutor.${RESET}`);
     console.log(`${YELLOW}Commands: /quit, /dream, /progress, /vocabulary${RESET}`);
     console.log("");
 

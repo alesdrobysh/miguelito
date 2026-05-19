@@ -76,8 +76,8 @@ async function main() {
   transport.onMessage(async (chatId, userId, text) => {
     if (text === "/dream") return dreamService.run();
 
-    const history = await db.getChatHistory(chatId, 50) as ChatMessage[];
     const { session: convState } = await db.getConversationState();
+    const history = await db.getSessionTranscript(convState.session_id) as ChatMessage[];
     await db.addChatMessage(chatId, "user", text, convState.session_id);
 
     const result = await agentRunner.run(text, history);
