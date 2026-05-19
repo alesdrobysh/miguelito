@@ -4,6 +4,7 @@ import os from "os";
 import path from "path";
 import { BuddyDb } from "../infrastructure/db.js";
 import { createAnnotateTools } from "./annotate.js";
+import { SpanishLanguage } from "../languages/spanish/index.js";
 import type { ToolContext } from "./index.js";
 
 let db: BuddyDb;
@@ -12,7 +13,11 @@ let ctx: ToolContext;
 
 beforeEach(async () => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "miguelito-ann-test-"));
-  db = await BuddyDb.open(path.join(tmpDir, "test.db"));
+  db = await BuddyDb.open(
+    path.join(tmpDir, "test.db"),
+    SpanishLanguage.errorCategories,
+    SpanishLanguage.morphologyCategories,
+  );
   ctx = { vocab: db, errors: db, profile: db, interests: db, competency: db, session: db, provider: null };
 });
 
@@ -23,7 +28,7 @@ afterEach(() => {
 
 describe("miguelito_turn_annotate mode tracking", () => {
   it("records mode in conversation state when provided", async () => {
-    const [annotate] = createAnnotateTools(ctx);
+    const [annotate] = createAnnotateTools(ctx, SpanishLanguage);
 
     await annotate.execute({
       obligatory: "[]",
@@ -39,7 +44,7 @@ describe("miguelito_turn_annotate mode tracking", () => {
   });
 
   it("does not error when mode is omitted", async () => {
-    const [annotate] = createAnnotateTools(ctx);
+    const [annotate] = createAnnotateTools(ctx, SpanishLanguage);
 
     await expect(
       annotate.execute({

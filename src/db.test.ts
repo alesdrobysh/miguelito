@@ -3,6 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { BuddyDb } from "./infrastructure/db.js";
+import { SpanishLanguage } from "./languages/spanish/index.js";
 import { fsrsInitial, fsrsReview, statusOf } from "./domain/fsrs.js";
 import { getCompetencyVector } from "./domain/competency.js";
 
@@ -13,7 +14,11 @@ let tmpDir: string;
 beforeEach(async () => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "miguelito-test-"));
   dbPath = path.join(tmpDir, "test.db");
-  db = await BuddyDb.open(dbPath);
+  db = await BuddyDb.open(
+    dbPath,
+    SpanishLanguage.errorCategories,
+    SpanishLanguage.morphologyCategories,
+  );
 });
 
 afterEach(async () => {
