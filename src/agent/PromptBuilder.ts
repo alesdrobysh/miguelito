@@ -28,7 +28,8 @@ export class PromptBuilder {
     const { basicProfile, learnerProfile, calibration, userInterests, dreamMemory } =
       await this._buildInjection(dreamMemoryPath);
 
-    let fullSystem = soulContent + basicProfile;
+    const langName = this.lang.name;
+    let fullSystem = `## Language\nYou are a ${langName} tutor. Respond in ${langName} — ALL output must be in ${langName}. The learner is learning ${langName}.\n\n` + soulContent + basicProfile;
     if (dreamMemory) fullSystem += dreamMemory;
     if (learnerProfile) fullSystem += learnerProfile;
     if (calibration) fullSystem += calibration;
