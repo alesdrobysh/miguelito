@@ -27,6 +27,13 @@ async function main() {
   const config = loadConfig();
   const lang = loadLanguage(process.env.LANGUAGE ?? "spanish");
 
+  if (!process.env.DB_PATH) {
+    config.dbPath = `./data/buddy-${lang.id}.db`;
+  }
+  if (!process.env.DREAM_MEMORY_PATH) {
+    config.dreamMemoryPath = `./data/memory/MEMORY-${lang.id}.md`;
+  }
+
   const morningCronPrompt = process.env.MORNING_CRON_PROMPT ?? lang.prompts.morning;
   const eveningCronPrompt = process.env.EVENING_CRON_PROMPT ?? lang.prompts.evening;
 
