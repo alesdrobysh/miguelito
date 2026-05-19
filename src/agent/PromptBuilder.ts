@@ -23,10 +23,10 @@ interface ProfileInjection {
 export class PromptBuilder {
   constructor(private repos: PromptRepos, private lang: LanguageConfig) {}
 
-  async build(dreamMemoryPath?: string): Promise<string> {
+  async build(userMessage?: string, dreamMemoryPath?: string): Promise<string> {
     const soulContent = fs.readFileSync(this.lang.soulPath, "utf-8");
     const { basicProfile, learnerProfile, calibration, userInterests, dreamMemory } =
-      await this._buildInjection(dreamMemoryPath);
+      await this._buildInjection(userMessage, dreamMemoryPath);
 
     const langName = this.lang.name;
     let fullSystem = `## Language\nYou are a ${langName} tutor. Respond in ${langName} — ALL output must be in ${langName}. The learner is learning ${langName}.\n\n` + soulContent + basicProfile;
@@ -46,7 +46,14 @@ Topics touched: ${convState.session.topics_touched}
     return fullSystem;
   }
 
-  private async _buildInjection(dreamMemoryPath?: string): Promise<ProfileInjection> {
+  /**
+   * Returns a short instruction to be placed AFTER the chat history.
+   */
+  buildPostHistoryReminder(): string {
+    return "Reminder: Stay in character as Miguelito, a dedicated language tutoring agent. Do not pretend to be human. Use *system markers* to show state, keep it brief, and focus on the learner's progress.";
+  }
+
+  private async _buildInjection(userMessage?: string, dreamMemoryPath?: string): Promise<ProfileInjection> {
     const profile = await this.repos.profile.getProfile();
 
     const basicProfile = profile
@@ -67,10 +74,23 @@ Topics touched: ${convState.session.topics_touched}
     const hasLearnerData = words.length > 0 || errorInfo != null || weakAreas.length > 0;
     const learnerProfile = hasLearnerData ? formatProfile(words, errorInfo, weakAreas) : null;
 
-    const interests = await this.repos.interests.listInterests(10);
-    const subset = shuffleArray(interests).slice(0, 2);
-    const userInterests = subset.length > 0
-      ? `\n\n## Lo que sé de esta persona\n${subset.join(", ")}`
+    // Dynamic Interest Injection
+    const allInterests = await this.repos.interests.listInterests(100);
+    let selectedInterests: string[] = [];
+
+    if (userMessage) {
+      const lowerMsg = userMessage.toLowerCase();
+      selectedInterests = allInterests.filter(interest => 
+        lowerMsg.includes(interest.toLowerCase())
+      );
+    }
+
+    if (selectedInterests.length === 0) {
+      selectedInterests = shuffleArray(allInterests).slice(0, 2);
+    }
+
+    const userInterests = selectedInterests.length > 0
+      ? `\n\n## Lo que sé de esta persona\n${selectedInterests.join(", ")}`
       : null;
 
     let dreamMemory: string | null = null;

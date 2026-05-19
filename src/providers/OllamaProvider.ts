@@ -41,6 +41,10 @@ export class OllamaProvider implements LLMProvider {
       max_tokens: opts?.maxTokens ?? 1024,
     };
 
+    if (opts?.stop && opts.stop.length > 0) {
+      body.stop = opts.stop;
+    }
+
     if (tools && tools.length > 0) {
       body.tools = tools;
     }

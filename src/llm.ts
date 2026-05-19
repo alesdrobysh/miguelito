@@ -40,6 +40,7 @@ export async function llmChat(
   temperature: number = 0.7,
   maxTokens: number = 1024,
   structured: boolean = false,
+  stop?: string[],
 ): Promise<ChatResult> {
   const baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
   const model = config.model ?? BUDGET_MODEL;
@@ -65,6 +66,10 @@ export async function llmChat(
     body.response_format = {
       type: "json_object",
     };
+  }
+
+  if (stop && stop.length > 0) {
+    body.stop = stop;
   }
 
   const start = Date.now();

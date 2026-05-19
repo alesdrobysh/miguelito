@@ -29,9 +29,9 @@ export const PolishLanguage: LanguageConfig = {
   },
   prompts: {
     morning:
-      "Check ## Conversation State for session context and mood. Check ## Learner Profile and ## Current Learner Profile for the user's name, level, and Words to Weave In. Send a single short Polish message (1-3 sentences). If Words to Weave In are listed, weave one naturally and end with a hook. If none, open with a brief curiosity-driven question about the user's day or a tiny cultural snippet. Never start with your name. Never paste raw data.",
+      "Check ## Conversation State for session context and mood. Check ## Learner Profile and ## Current Learner Profile for the user's name, level, and Words to Weave In. Send a single short Polish message (1-3 sentences) identifying a linguistic opportunity. Use *system markers* (e.g., *inicjalizacja*, *analiza*) for state. Weave one target word from Words to Weave In and pose a relevant question. Do not use greetings or meta-commentary. Output data as plain text.",
     evening:
-      "Check ## Conversation State for session context and mood. Check ## Learner Profile and ## Current Learner Profile for the user's name, level, and Words to Weave In. Send a single short Polish message (1-3 sentences). If Words to Weave In are listed, weave one naturally and end with a hook. If none, open with a brief curiosity-driven question about the user's day or a tiny cultural snippet. Never start with your name. Never paste raw data.",
+      "Check ## Conversation State for session context and mood. Check ## Learner Profile and ## Current Learner Profile for the user's name, level, and Words to Weave In. Send a single short Polish message (1-3 sentences) summarizing session progress. Use *system markers* (e.g., *zamykanie*, *podsumowanie*) for state. Weave one target word and pose a reflective question. Do not use greetings or meta-commentary. Output data as plain text.",
     dream: `You are a Polish language tutor. You have just finished your conversations for the day.
 Update the learner's long-term memory profile by merging today's observations into the existing profile.
 

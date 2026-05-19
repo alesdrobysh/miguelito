@@ -32,12 +32,14 @@ export class AgentRunner {
   async run(userMessage: string, chatHistory: ChatMessage[]): Promise<AgentResult> {
     const { provider, promptBuilder, toolCtx, lang, dreamMemoryPath } = this.deps;
 
-    const fullSystem = await promptBuilder.build(dreamMemoryPath);
+    const fullSystem = await promptBuilder.build(userMessage, dreamMemoryPath);
+    const postHistoryReminder = promptBuilder.buildPostHistoryReminder();
 
     const messages: ChatMessage[] = [
       { role: "system", content: fullSystem },
       ...chatHistory,
       { role: "user", content: userMessage },
+      { role: "system", content: postHistoryReminder },
     ];
 
     const tools = createTools(toolCtx, lang);
@@ -50,7 +52,11 @@ export class AgentRunner {
     for (; i < MAX_TOOL_ITERATIONS; i++) {
       log.debug({ iter: i, maxIters: MAX_TOOL_ITERATIONS, toolCount: openaiTools.length }, 'llm call start');
 
-      const result = await provider.chat(messages, openaiTools, { temperature: 0.7, maxTokens: 4096 });
+      const result = await provider.chat(messages, openaiTools, {
+        temperature: 0.7,
+        maxTokens: 4096,
+        stop: ["\nUser:", "\nLearner:", "\n<|im_start|>", "\n<|im_end|>"],
+      });
 
       if (result.content) {
         totalText += result.content;

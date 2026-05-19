@@ -9,7 +9,7 @@ export class OpenRouterProvider implements LLMProvider {
   }
 
   async chat(messages: ChatMessage[], tools?: object[], opts?: ChatOptions): Promise<ChatResult> {
-    return llmChat(this.config, messages, tools, opts?.temperature, opts?.maxTokens, opts?.structured);
+    return llmChat(this.config, messages, tools, opts?.temperature, opts?.maxTokens, opts?.structured, opts?.stop);
   }
 
   async complete(systemPrompt: string | null, userPrompt: string, opts?: ChatOptions): Promise<string> {

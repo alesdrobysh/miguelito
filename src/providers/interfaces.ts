@@ -6,6 +6,7 @@ export interface ChatOptions {
   temperature?: number;
   maxTokens?: number;
   structured?: boolean;
+  stop?: string[];
 }
 
 export interface ChatResult {
