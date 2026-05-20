@@ -27,11 +27,12 @@ export const PolishLanguage: LanguageConfig = {
     idiomaticityNormal:
       "use natural, idiomatic Polish; native expressions over literal translations.",
   },
+  interestsHeader: "Co wiem o tej osobie",
   prompts: {
     morning:
-      "Check ## Conversation State for session context and mood. Check ## Learner Profile and ## Current Learner Profile for the user's name, level, and Words to Weave In. Send a single short Polish message (1-3 sentences) identifying a linguistic opportunity. Use *system markers* (e.g., *inicjalizacja*, *analiza*) for state. Weave one target word from Words to Weave In and pose a relevant question. Do not use greetings or meta-commentary. Output data as plain text.",
+      "Check ## Learner Profile for the user's name. Check ## Current Learner Profile for Words to Weave In. Send a single short Polish message (1-3 sentences). If Words to Weave In are listed, weave one naturally and end with a hook. If none, open with a curiosity-driven question or cultural snippet. Never output mode names, system markers, or internal state. Only natural Polish text.",
     evening:
-      "Check ## Conversation State for session context and mood. Check ## Learner Profile and ## Current Learner Profile for the user's name, level, and Words to Weave In. Send a single short Polish message (1-3 sentences) summarizing session progress. Use *system markers* (e.g., *zamykanie*, *podsumowanie*) for state. Weave one target word and pose a reflective question. Do not use greetings or meta-commentary. Output data as plain text.",
+      "Check ## Learner Profile for the user's name. Check ## Current Learner Profile for Words to Weave In. Send a single short Polish message (1-3 sentences) with a reflective question. If Words to Weave In are listed, weave one naturally. Never output mode names, system markers, or internal state. Only natural Polish text.",
     dream: `You are a Polish language tutor. You have just finished your conversations for the day.
 Update the learner's long-term memory profile by merging today's observations into the existing profile.
 

@@ -101,6 +101,8 @@ export interface TurnAnnotationInput {
   comprehension: "smooth" | "asked_clarify" | "requested_simpler";
   tunit_length?: number;
   had_subordination?: boolean;
+  lexical_rarity?: number;
+  self_correction?: boolean;
 }
 
 export interface TurnAnnotation {
@@ -113,6 +115,8 @@ export interface TurnAnnotation {
   comprehension: string;
   tunit_length: number;
   had_subordination: number;
+  lexical_rarity: number;
+  self_correction: number;
   created_at: string;
 }
 
@@ -127,5 +131,7 @@ export interface CompetencyVectorRow {
   syntax_window: string;
   reception_ewma: number;
   reception_obs: number;
+  lexical_rarity_ewma: number;
+  self_correction_obs: number;
   created_at: string;
 }

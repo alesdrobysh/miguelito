@@ -15,6 +15,7 @@ export interface LanguageConfig {
     idiomaticityFocus: (pct: number) => string;
     idiomaticityNormal: string;
   };
+  interestsHeader: string;
   prompts: {
     morning: string;
     evening: string;

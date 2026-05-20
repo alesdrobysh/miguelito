@@ -63,6 +63,8 @@ CREATE TABLE IF NOT EXISTS turn_annotations (
     comprehension TEXT NOT NULL DEFAULT 'smooth',
     tunit_length INTEGER NOT NULL DEFAULT 1,
     had_subordination INTEGER NOT NULL DEFAULT 0,
+    lexical_rarity REAL DEFAULT 0.0,
+    self_correction INTEGER NOT NULL DEFAULT 0,
     language TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -79,6 +81,8 @@ CREATE TABLE IF NOT EXISTS competency_vector (
     syntax_window TEXT NOT NULL DEFAULT '[]',
     reception_ewma REAL NOT NULL DEFAULT 0.5,
     reception_obs INTEGER NOT NULL DEFAULT 0,
+    lexical_rarity_ewma REAL NOT NULL DEFAULT 0.0,
+    self_correction_obs INTEGER NOT NULL DEFAULT 0,
     language TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -354,7 +358,21 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
       db.run("ALTER TABLE user_profile_new RENAME TO user_profile");
     }
 
-    db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '9')");
+    // v10: lexical_rarity and self_correction
+    const annInfo = db.exec("PRAGMA table_info(turn_annotations)");
+    const annCols = (annInfo[0]?.values ?? []).map((r) => r[1] as string);
+    if (!annCols.includes("lexical_rarity")) {
+      db.run("ALTER TABLE turn_annotations ADD COLUMN lexical_rarity REAL DEFAULT 0.0");
+      db.run("ALTER TABLE turn_annotations ADD COLUMN self_correction INTEGER NOT NULL DEFAULT 0");
+    }
+    const compInfo = db.exec("PRAGMA table_info(competency_vector)");
+    const compCols = (compInfo[0]?.values ?? []).map((r) => r[1] as string);
+    if (!compCols.includes("lexical_rarity_ewma")) {
+      db.run("ALTER TABLE competency_vector ADD COLUMN lexical_rarity_ewma REAL NOT NULL DEFAULT 0.0");
+      db.run("ALTER TABLE competency_vector ADD COLUMN self_correction_obs INTEGER NOT NULL DEFAULT 0");
+    }
+
+    db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '10')");
 
     // v9: language-scoping for all teaching-related tables
     const tablesToScope = [
@@ -805,6 +823,7 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
   private _updateVectorFromAnnotation(ann: TurnAnnotationInput, since: string): void {
     const DECAY = 0.85;
     const RECEPTION_ALPHA = 0.2;
+    const RARITY_ALPHA = 0.15;
 
     const vec = this.queryRow("SELECT * FROM competency_vector WHERE language = ? ORDER BY id DESC LIMIT 1", [this.languageId]) as CompetencyVectorRow | undefined;
     if (!vec) return;
@@ -849,11 +868,18 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
     const recEwma = RECEPTION_ALPHA * signal + (1 - RECEPTION_ALPHA) * vec.reception_ewma;
     const recObs = vec.reception_obs + 1;
 
+    // 6. Lexical Rarity EWMA
+    const raritySignal = ann.lexical_rarity ?? 0.0;
+    const rarityEwma = RARITY_ALPHA * raritySignal + (1 - RARITY_ALPHA) * vec.lexical_rarity_ewma;
+
+    // 7. Self-Correction Counter
+    const selfCorrectionObs = vec.self_correction_obs + (ann.self_correction ? 1 : 0);
+
     this.db.run(
       `INSERT INTO competency_vector
-        (morph_successes, morph_trials, morph_obs, idiom_successes, idiom_trials, idiom_obs, syntax_window, reception_ewma, reception_obs, language)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [morphS, morphT, morphObs, idiomS, idiomT, idiomObs, JSON.stringify(trimmedWindow), recEwma, recObs, this.languageId]
+        (morph_successes, morph_trials, morph_obs, idiom_successes, idiom_trials, idiom_obs, syntax_window, reception_ewma, reception_obs, lexical_rarity_ewma, self_correction_obs, language)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [morphS, morphT, morphObs, idiomS, idiomT, idiomObs, JSON.stringify(trimmedWindow), recEwma, recObs, rarityEwma, selfCorrectionObs, this.languageId]
     );
   }
 
@@ -861,8 +887,8 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
     const since60s = BuddyDb.utcAgoIso(60);
     this.db.run(
       `INSERT INTO turn_annotations
-        (session_id, turn_number, obligatory_json, used_json, naturalness, comprehension, tunit_length, had_subordination, language)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (session_id, turn_number, obligatory_json, used_json, naturalness, comprehension, tunit_length, had_subordination, lexical_rarity, self_correction, language)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         ann.session_id ?? null,
         ann.turn_number ?? null,
@@ -872,6 +898,8 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
         ann.comprehension,
         ann.tunit_length ?? 1,
         ann.had_subordination ? 1 : 0,
+        ann.lexical_rarity ?? 0.0,
+        ann.self_correction ? 1 : 0,
         this.languageId,
       ]
     );

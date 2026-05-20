@@ -7,6 +7,7 @@ export type Axis = "lexicon" | "syntax" | "morphology" | "idiomaticity";
 export interface CompetencyVector {
   lexicon: {
     activeChunks: number;
+    lexicalRarity: number;
     confidence: Confidence;
   };
   syntax: {
@@ -28,6 +29,9 @@ export interface CompetencyVector {
     level: number;
     obs: number;
     confidence: Confidence;
+  };
+  monitoring: {
+    selfCorrectionObs: number;
   };
 }
 
@@ -66,11 +70,12 @@ export async function getCompetencyVector(repos: {
   const idiomRate = vec.idiom_trials > 0.01 ? vec.idiom_successes / vec.idiom_trials : 0.5;
 
   return {
-    lexicon: { activeChunks, confidence: lexiconConf },
+    lexicon: { activeChunks, lexicalRarity: vec.lexical_rarity_ewma, confidence: lexiconConf },
     syntax: { meanTunitLength, subIndex, confidence: obsToConfidence(n) },
     morphology: { rate: morphRate, obs: vec.morph_obs, confidence: obsToConfidence(vec.morph_obs) },
     idiomaticity: { rate: idiomRate, obs: vec.idiom_obs, confidence: obsToConfidence(vec.idiom_obs) },
     reception: { level: vec.reception_ewma, obs: vec.reception_obs, confidence: obsToConfidence(vec.reception_obs) },
+    monitoring: { selfCorrectionObs: vec.self_correction_obs },
   };
 }
 
@@ -100,7 +105,8 @@ export function renderCalibration(v: CompetencyVector, focus: Axis | null, lang:
   } else if (focus === "lexicon") {
     lines.push("Vocabulary: introduce ~1 mid-frequency word (rank 3,000–8,000) per turn, woven naturally into context — do not stay only in the top-1,000 band.");
   } else {
-    lines.push("Vocabulary: keep mostly within the top-3,000 band; mid-frequency words are fine when they fit naturally.");
+    const rarityLabel = v.lexicon.lexicalRarity > 0.6 ? "sophisticated" : v.lexicon.lexicalRarity > 0.3 ? "mid-frequency" : "common";
+    lines.push(`Vocabulary: learner uses ${rarityLabel} language — respond with matching or slightly higher complexity (lexical rarity signal: ${v.lexicon.lexicalRarity.toFixed(2)}).`);
   }
 
   if (v.syntax.confidence === "low") {
@@ -140,6 +146,10 @@ export function renderCalibration(v: CompetencyVector, focus: Axis | null, lang:
     }
   }
 
+  if (v.monitoring.selfCorrectionObs > 0) {
+    lines.push(`Self-Correction: Learner actively monitors their speech (${v.monitoring.selfCorrectionObs} observations) — respect their self-corrections and focus on higher-level stylistic feedback.`);
+  }
+
   return lines.join("\n");
 }
 
@@ -148,10 +158,11 @@ export function formatVectorForDisplay(v: CompetencyVector): string {
   const conf = (c: string) => (c === "low" ? " (forming)" : "");
 
   return [
-    `Lexicon: ${v.lexicon.activeChunks} active chunks${conf(v.lexicon.confidence)}`,
+    `Lexicon: ${v.lexicon.activeChunks} chunks, rarity ${v.lexicon.lexicalRarity.toFixed(2)}${conf(v.lexicon.confidence)}`,
     `Syntax: T-units ${v.syntax.meanTunitLength.toFixed(1)}, subordination ${pct(v.syntax.subIndex)}${conf(v.syntax.confidence)}`,
     `Morphology: ${pct(v.morphology.rate)} accuracy${conf(v.morphology.confidence)}`,
     `Idiomaticity: ${pct(v.idiomaticity.rate)} naturalness${conf(v.idiomaticity.confidence)}`,
     `Reception: ${pct(v.reception.level)} smooth${conf(v.reception.confidence)}`,
+    `Self-Correction: ${v.monitoring.selfCorrectionObs} obs`,
   ].join(" | ");
 }

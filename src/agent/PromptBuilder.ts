@@ -50,7 +50,7 @@ Topics touched: ${convState.session.topics_touched}
    * Returns a short instruction to be placed AFTER the chat history.
    */
   buildPostHistoryReminder(): string {
-    return "Reminder: Stay in character as Miguelito, a dedicated language tutoring agent. Do not pretend to be human. Use *system markers* to show state, keep it brief, and focus on the learner's progress.";
+    return `Reminder: You are a ${this.lang.name} language tutor. Respond ONLY in ${this.lang.name}. NEVER output mode names, system markers, internal state, or meta-commentary — the learner must only see natural ${this.lang.name} text. Keep it brief (1-3 sentences). Check ## Learner Profile for the user's name and greet them accordingly.`;
   }
 
   private async _buildInjection(userMessage?: string, dreamMemoryPath?: string): Promise<ProfileInjection> {
@@ -90,7 +90,7 @@ Topics touched: ${convState.session.topics_touched}
     }
 
     const userInterests = selectedInterests.length > 0
-      ? `\n\n## Lo que sé de esta persona\n${selectedInterests.join(", ")}`
+      ? `\n\n## ${this.lang.interestsHeader}\n${selectedInterests.join(", ")}`
       : null;
 
     let dreamMemory: string | null = null;
