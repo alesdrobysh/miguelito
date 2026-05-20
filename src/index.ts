@@ -11,6 +11,7 @@ import { TuiTransport } from "./transport/TuiTransport.js";
 import { DreamService } from "./services/DreamService.js";
 import { startScheduler } from "./services/Scheduler.js";
 import { statusOf } from "./domain/fsrs.js";
+import { getCompetencyVector, selectFocusAxis } from "./domain/competency.js";
 import type { ChatMessage } from "./llm.js";
 import type { ProfileRepository } from "./repositories/interfaces.js";
 import type { UserProfile } from "./domain/types.js";
@@ -156,6 +157,92 @@ async function main() {
         return `${icon} **${r.chunk_l2}**${r.anchor ? ` (${r.anchor})` : ""}`;
       });
       return `📚 **Tu Vocabulario (últimos 50)**\n\n${lines.join("\n")}`;
+    }
+    if (text === "/proficiency") {
+      try {
+        const cv = await getCompetencyVector({ competency: db, vocab: db });
+        const focus = selectFocusAxis(cv, lang);
+
+        if (lang.id === "polish") {
+          const focusDesc = focus
+            ? {
+                morphology: "Morfologia (odmiana i końcówki)",
+                idiomaticity: "Idiomatyka (naturalne zwroty i wyrażenia)",
+                lexicon: "Słownictwo (rozszerzanie aktywnego leksykonu)",
+                syntax: "Syntaktyka (budowa zdań złożonych)",
+              }[focus]
+            : "Płynna konwersacja (zbalansowany poziom)";
+
+          const conf = (c: string) => (c === "low" ? " (tworzy się)" : "");
+
+          return `📊 **Twój Poziom Biegłości** 🇵🇱
+
+📚 **Słownictwo (Leksyka):**
+• Aktywne frazy: **${cv.lexicon.activeChunks}**${conf(cv.lexicon.confidence)}
+• Rzadkość słownictwa: **${cv.lexicon.lexicalRarity.toFixed(2)}**
+
+✍️ **Składnia (Budowa zdań):**
+• Średnia długość (T-units): **${cv.syntax.meanTunitLength.toFixed(1)}** wyrazów${conf(cv.syntax.confidence)}
+• Wskaźnik zdań podrzędnych: **${Math.round(cv.syntax.subIndex * 100)}%**
+
+🧬 **Morfologia (Poprawność form):**
+• Dokładność: **${Math.round(cv.morphology.rate * 100)}%**${conf(cv.morphology.confidence)} (próby: ${cv.morphology.obs})
+
+🗣️ **Idiomatyka (Naturalność):**
+• Naturalność wyrażeń: **${Math.round(cv.idiomaticity.rate * 100)}%**${conf(cv.idiomaticity.confidence)} (próby: ${cv.idiomaticity.obs})
+
+👂 **Rozumienie (Recepcja):**
+• Płynność rozumienia: **${Math.round(cv.reception.level * 100)}%**${conf(cv.reception.confidence)}
+
+🔍 **Samokontrola:**
+• Zauważone poprawki własne: **${cv.monitoring.selfCorrectionObs}**
+
+🎯 **Aktualny cel dydaktyczny:**
+• **${focusDesc}**`;
+        } else {
+          // Spanish or fallback
+          const focusDesc = focus
+            ? {
+                morphology: "Morfología (conjugación y concordancia)",
+                idiomaticity: "Idiomaticidad (expresiones naturales y colocaciones)",
+                lexicon: "Vocabulario (ampliación de léxico activo)",
+                syntax: "Sintaxis (estructuras y oraciones subordinadas)",
+              }[focus]
+            : "Conversación fluida (nivel equilibrado)";
+
+          const conf = (c: string) => (c === "low" ? " (en formación)" : "");
+
+          return `📊 **Tu Nivel de Competencia** 🇪🇸
+
+📚 **Vocabulario (Léxico):**
+• Expresiones activas: **${cv.lexicon.activeChunks}**${conf(cv.lexicon.confidence)}
+• Rareza léxica: **${cv.lexicon.lexicalRarity.toFixed(2)}**
+
+✍️ **Sintaxis (Estructura de oraciones):**
+• Longitud media (T-units): **${cv.syntax.meanTunitLength.toFixed(1)}** palabras${conf(cv.syntax.confidence)}
+• Índice de subordinación: **${Math.round(cv.syntax.subIndex * 100)}%**
+
+🧬 **Morfología (Precisión gramatical):**
+• Precisión: **${Math.round(cv.morphology.rate * 100)}%**${conf(cv.morphology.confidence)} (obs: ${cv.morphology.obs})
+
+🗣️ **Idiomaticidad (Naturalidad):**
+• Naturalidad: **${Math.round(cv.idiomaticity.rate * 100)}%**${conf(cv.idiomaticity.confidence)} (obs: ${cv.idiomaticity.obs})
+
+👂 **Comprensión (Recepción):**
+• Fluidez de comprensión: **${Math.round(cv.reception.level * 100)}%**${conf(cv.reception.confidence)}
+
+🔍 **Autocorrección:**
+• Correcciones detectadas: **${cv.monitoring.selfCorrectionObs}**
+
+🎯 **Foco pedagógico actual:**
+• **${focusDesc}**`;
+        }
+      } catch (err) {
+        log.error({ err }, "Error computing proficiency");
+        return lang.id === "polish"
+          ? "Nie udało się pobrać danych o biegłości."
+          : "No se pudo obtener la información de competencia.";
+      }
     }
 
     const { session: convState } = await db.getConversationState();
