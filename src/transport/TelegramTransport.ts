@@ -81,7 +81,7 @@ export class TelegramTransport implements Transport {
   }
 
   private _registerHandlers(): void {
-    const commands = ["start", "progress", "vocabulary"];
+    const commands = ["start", "progress", "vocabulary", "proficiency", "memory"];
     for (const cmd of commands) {
       this.bot.command(cmd, (ctx) =>
         this._dispatch(ctx, `/${cmd}`).catch(this._logError(ctx))

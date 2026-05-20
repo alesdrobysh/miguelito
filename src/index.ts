@@ -1,3 +1,4 @@
+import fs from "fs";
 import { loadConfig } from "./infrastructure/config.js";
 import { loadLanguage } from "./languages/index.js";
 import { BuddyDb } from "./infrastructure/db.js";
@@ -148,6 +149,21 @@ async function main() {
 
   transport.onMessage(async (chatId, userId, text) => {
     if (text === "/dream") return dreamService.run();
+    if (text === "/memory") {
+      try {
+        if (fs.existsSync(config.dreamMemoryPath)) {
+          return fs.readFileSync(config.dreamMemoryPath, "utf-8");
+        }
+        return lang.id === "polish"
+          ? "Brak pliku pamięci."
+          : "No se encontró el archivo de memoria.";
+      } catch (err) {
+        log.error({ err }, "Error reading memory file");
+        return lang.id === "polish"
+          ? "Nie udało się odczytać pamięci."
+          : "No se pudo leer el archivo de memoria.";
+      }
+    }
     if (text === "/vocabulary") {
       const items = await db.listVocab("all", 50);
       if (items.length === 0) return "Tu vocabulario está vacío.";
