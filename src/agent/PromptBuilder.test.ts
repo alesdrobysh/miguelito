@@ -30,7 +30,7 @@ describe("PromptBuilder interest injection", () => {
     }
 
     const builder = new PromptBuilder(
-      { vocab: db, errors: db, profile: db, interests: db, competency: db, session: db },
+      { vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db },
       SpanishLanguage,
     );
     const prompt = await builder.build();
@@ -44,7 +44,7 @@ describe("PromptBuilder interest injection", () => {
     await db.addInterest("programming", "conversation", 0.7);
 
     const builder = new PromptBuilder(
-      { vocab: db, errors: db, profile: db, interests: db, competency: db, session: db },
+      { vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db },
       SpanishLanguage,
     );
     const prompt = await builder.build();

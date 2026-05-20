@@ -19,7 +19,7 @@ beforeEach(async () => {
     SpanishLanguage.errorCategories,
     SpanishLanguage.morphologyCategories,
   );
-  ctx = { vocab: db, errors: db, profile: db, interests: db, competency: db, session: db, provider: null };
+  ctx = { vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, provider: null };
 });
 
 afterEach(() => {

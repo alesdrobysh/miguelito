@@ -28,7 +28,7 @@ afterEach(async () => {
 
 describe("integration: vocab add + score + due cycle", () => {
   it("adds a word, scores it, and verifies it is no longer due", async () => {
-    const tools = createTools({ vocab: db, errors: db, profile: db, interests: db, competency: db, session: db, provider: null }, SpanishLanguage);
+    const tools = createTools({ vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, provider: null }, SpanishLanguage);
     const addTool = tools.get("miguelito_vocab_add")!;
     const scoreTool = tools.get("miguelito_vocab_score")!;
     const progressTool = tools.get("miguelito_progress_summary")!;
@@ -51,7 +51,7 @@ describe("integration: vocab add + score + due cycle", () => {
 
 describe("integration: vocab list with buckets", () => {
   it("filters by bucket after scoring some words", async () => {
-    const tools = createTools({ vocab: db, errors: db, profile: db, interests: db, competency: db, session: db, provider: null }, SpanishLanguage);
+    const tools = createTools({ vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, provider: null }, SpanishLanguage);
     const addTool = tools.get("miguelito_vocab_add")!;
     const scoreTool = tools.get("miguelito_vocab_score")!;
     const listTool = tools.get("miguelito_vocab_list")!;
@@ -80,7 +80,7 @@ describe("integration: vocab list with buckets", () => {
 
 describe("integration: error log + summary cycle", () => {
   it("logs errors and verifies categories in progress summary", async () => {
-    const tools = createTools({ vocab: db, errors: db, profile: db, interests: db, competency: db, session: db, provider: null }, SpanishLanguage);
+    const tools = createTools({ vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, provider: null }, SpanishLanguage);
     const logTool = tools.get("miguelito_error_log")!;
     const progressTool = tools.get("miguelito_progress_summary")!;
 
@@ -97,7 +97,7 @@ describe("integration: error log + summary cycle", () => {
 
 describe("integration: profile set cycle", () => {
   it("sets profile fields and confirms via db", async () => {
-    const tools = createTools({ vocab: db, errors: db, profile: db, interests: db, competency: db, session: db, provider: null }, SpanishLanguage);
+    const tools = createTools({ vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, provider: null }, SpanishLanguage);
     const setTool = tools.get("miguelito_profile_set")!;
 
     const setResult = await setTool.execute({ name: "Alice", goal: "travel" });
@@ -112,7 +112,7 @@ describe("integration: profile set cycle", () => {
   });
 
   it("partial updates preserve existing fields", async () => {
-    const tools = createTools({ vocab: db, errors: db, profile: db, interests: db, competency: db, session: db, provider: null }, SpanishLanguage);
+    const tools = createTools({ vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, provider: null }, SpanishLanguage);
     const setTool = tools.get("miguelito_profile_set")!;
 
     await setTool.execute({ name: "Bob", goal: "travel" });
@@ -126,7 +126,7 @@ describe("integration: profile set cycle", () => {
 
 describe("integration: interest add + list", () => {
   it("adds interests and deduplicates", async () => {
-    const tools = createTools({ vocab: db, errors: db, profile: db, interests: db, competency: db, session: db, provider: null }, SpanishLanguage);
+    const tools = createTools({ vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, provider: null }, SpanishLanguage);
     const addTool = tools.get("miguelito_interest_add")!;
 
     const result1 = await addTool.execute({ interest: "cooking", source: "conversation", confidence: "0.8" });
@@ -148,7 +148,7 @@ describe("integration: interest add + list", () => {
 
 describe("integration: progress summary aggregates", () => {
   it("returns correct counts after adding vocab and errors", async () => {
-    const tools = createTools({ vocab: db, errors: db, profile: db, interests: db, competency: db, session: db, provider: null }, SpanishLanguage);
+    const tools = createTools({ vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, provider: null }, SpanishLanguage);
     const addTool = tools.get("miguelito_vocab_add")!;
     const scoreTool = tools.get("miguelito_vocab_score")!;
     const errorTool = tools.get("miguelito_error_log")!;
@@ -176,7 +176,7 @@ describe("integration: progress summary aggregates", () => {
 
 describe("integration: vocab export produces valid CSV", () => {
   it("exports words as CSV with correct content", async () => {
-    const tools = createTools({ vocab: db, errors: db, profile: db, interests: db, competency: db, session: db, provider: null }, SpanishLanguage);
+    const tools = createTools({ vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, provider: null }, SpanishLanguage);
     const addTool = tools.get("miguelito_vocab_add")!;
     const exportTool = tools.get("miguelito_vocab_export")!;
 
@@ -194,7 +194,7 @@ describe("integration: vocab export produces valid CSV", () => {
 
 describe("integration: tool registry creates all expected tools", () => {
   it("createTools returns all tool names", () => {
-    const tools = createTools({ vocab: db, errors: db, profile: db, interests: db, competency: db, session: db, provider: null }, SpanishLanguage);
+    const tools = createTools({ vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, provider: null }, SpanishLanguage);
 
     const expectedNames = [
       "miguelito_vocab_add",
@@ -219,7 +219,7 @@ describe("integration: tool registry creates all expected tools", () => {
 
 describe("integration: toolsToOpenAI produces valid format", () => {
   it("output has type/function/name structure for each tool", () => {
-    const tools = createTools({ vocab: db, errors: db, profile: db, interests: db, competency: db, session: db, provider: null }, SpanishLanguage);
+    const tools = createTools({ vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, provider: null }, SpanishLanguage);
     const openai = toolsToOpenAI(tools);
 
     expect(Array.isArray(openai)).toBe(true);

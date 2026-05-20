@@ -13,18 +13,22 @@ function profileSet(ctx: ToolContext) {
       },
     },
     execute: async (args: Record<string, string>) => {
-      const fields: Record<string, string> = {};
-      for (const key of [
-        "name", "goal", "correction_style",
-      ]) {
+      const sharedFields: Record<string, string> = {};
+      const langFields: Record<string, string> = {};
+      for (const key of ["name", "correction_style"]) {
         const val = (args[key] ?? "").trim();
-        if (val) fields[key] = val;
+        if (val) sharedFields[key] = val;
       }
-      if (Object.keys(fields).length === 0) {
+      const goalVal = (args["goal"] ?? "").trim();
+      if (goalVal) langFields["goal"] = goalVal;
+
+      if (Object.keys(sharedFields).length === 0 && Object.keys(langFields).length === 0) {
         return { success: false, output: "", error: "no_fields_provided" };
       }
-      const updatedFields = await ctx.profile.setProfile(fields);
-      return { ok: true, updated_fields: updatedFields };
+      const updated: string[] = [];
+      if (Object.keys(sharedFields).length > 0) updated.push(...await ctx.profile.setProfile(sharedFields));
+      if (Object.keys(langFields).length > 0) updated.push(...await ctx.langProfile.setProfile(langFields));
+      return { ok: true, updated_fields: updated };
     },
   };
 }

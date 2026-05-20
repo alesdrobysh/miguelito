@@ -7,6 +7,7 @@ export interface PromptRepos {
   vocab: VocabRepository;
   errors: ErrorRepository;
   profile: ProfileRepository;
+  langProfile: ProfileRepository;
   interests: InterestRepository;
   competency: CompetencyRepository;
   session: SessionRepository;
@@ -54,10 +55,16 @@ Topics touched: ${convState.session.topics_touched}
   }
 
   private async _buildInjection(userMessage?: string, dreamMemoryPath?: string): Promise<ProfileInjection> {
-    const profile = await this.repos.profile.getProfile();
+    const sharedProfile = await this.repos.profile.getProfile();
+    const langProfile = await this.repos.langProfile.getProfile();
 
-    const basicProfile = profile
-      ? `\n\n## Learner Profile\nName: ${profile.name ?? "unknown"} | Goal: ${profile.goal ?? "none"} | Correction style: ${profile.correction_style ?? "inline"}`
+    const name = sharedProfile?.name ?? null;
+    const correctionStyle = sharedProfile?.correction_style ?? null;
+    const goal = langProfile?.goal ?? null;
+    const hasProfile = name || correctionStyle || goal;
+
+    const basicProfile = hasProfile
+      ? `\n\n## Learner Profile\nName: ${name ?? "unknown"} | Goal: ${goal ?? "none"} | Correction style: ${correctionStyle ?? "inline"}`
       : `\n\n## Learner Profile\nNot configured yet — begin onboarding when user sends /start.`;
 
     let calibration: string | null = null;

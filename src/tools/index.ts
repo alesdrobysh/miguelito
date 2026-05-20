@@ -20,6 +20,7 @@ export interface ToolContext {
   vocab: VocabRepository;
   errors: ErrorRepository;
   profile: ProfileRepository;
+  langProfile: ProfileRepository;
   interests: InterestRepository;
   competency: CompetencyRepository;
   session: SessionRepository;
