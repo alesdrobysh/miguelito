@@ -10,6 +10,7 @@ import { TelegramTransport } from "./transport/TelegramTransport.js";
 import { TuiTransport } from "./transport/TuiTransport.js";
 import { DreamService } from "./services/DreamService.js";
 import { startScheduler } from "./services/Scheduler.js";
+import { statusOf } from "./domain/fsrs.js";
 import type { ChatMessage } from "./llm.js";
 import type { ProfileRepository } from "./repositories/interfaces.js";
 import type { UserProfile } from "./domain/types.js";
@@ -146,6 +147,16 @@ async function main() {
 
   transport.onMessage(async (chatId, userId, text) => {
     if (text === "/dream") return dreamService.run();
+    if (text === "/vocabulary") {
+      const items = await db.listVocab("all", 50);
+      if (items.length === 0) return "Tu vocabulario está vacío.";
+      const lines = items.map((r) => {
+        const status = statusOf(r.pro_reps, r.pro_stability);
+        const icon = status === "mastered" ? "✅" : status === "review" ? "⏳" : status === "learning" ? "🌱" : "🆕";
+        return `${icon} **${r.chunk_l2}**${r.anchor ? ` (${r.anchor})` : ""}`;
+      });
+      return `📚 **Tu Vocabulario (últimos 50)**\n\n${lines.join("\n")}`;
+    }
 
     const { session: convState } = await db.getConversationState();
     const history = await db.getSessionTranscript(convState.session_id) as ChatMessage[];
