@@ -5,6 +5,10 @@ import { BelarusianLanguage } from "./belarusian/index.js";
 
 export { SpanishLanguage, PolishLanguage, BelarusianLanguage };
 
+export function listAvailableLanguages(): LanguageConfig[] {
+  return [SpanishLanguage, PolishLanguage, BelarusianLanguage];
+}
+
 export function loadLanguage(id: string): LanguageConfig {
   switch (id) {
     case "spanish": return SpanishLanguage;

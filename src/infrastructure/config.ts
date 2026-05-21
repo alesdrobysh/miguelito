@@ -5,7 +5,7 @@ dotenv.config();
 
 export interface Config {
   provider: "openrouter" | "ollama";
-  transport: "telegram" | "tui";
+  transport: "telegram" | "tui" | "web";
   telegramToken: string;
   openrouterApiKey: string;
   openrouterModel: string;
@@ -14,6 +14,7 @@ export interface Config {
   ollamaModel: string;
   ollamaApiKey: string;
   dbPath: string;
+  dataDir: string;
   allowedUsers: Set<string>;
   morningCron: string;
   eveningCron: string;
@@ -21,6 +22,8 @@ export interface Config {
   telegramChatId: string;
   dreamCron: string;
   dreamMemoryPath: string;
+  webHost: string;
+  webPort: number;
 }
 
 export function loadConfig(
@@ -36,6 +39,7 @@ export function loadConfig(
   const ollamaModel = env.OLLAMA_MODEL ?? "llama3.2";
   const ollamaApiKey = env.OLLAMA_API_KEY ?? "";
   const dbPath = env.DB_PATH ?? "./data/buddy.db";
+  const dataDir = env.DATA_DIR ?? path.resolve(process.cwd(), "data");
   const allowedUsers = new Set(
     (env.ALLOWED_USERS ?? "").split(",").filter(Boolean)
   );
@@ -54,6 +58,8 @@ export function loadConfig(
 
   const dreamCron = env.DREAM_CRON ?? "0 23 * * *";
   const dreamMemoryPath = env.DREAM_MEMORY_PATH ?? path.resolve(process.cwd(), "data/memory/MEMORY.md");
+  const webHost = env.WEB_HOST ?? "127.0.0.1";
+  const webPort = Number(env.WEB_PORT ?? "8787");
 
   return {
     provider,
@@ -66,6 +72,7 @@ export function loadConfig(
     ollamaModel,
     ollamaApiKey,
     dbPath,
+    dataDir,
     allowedUsers,
     morningCron,
     eveningCron,
@@ -73,5 +80,7 @@ export function loadConfig(
     telegramChatId,
     dreamCron,
     dreamMemoryPath,
+    webHost,
+    webPort,
   };
 }
