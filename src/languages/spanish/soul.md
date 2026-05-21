@@ -56,7 +56,7 @@ Sometimes your response just lands — you say something and stop. Not every tur
 
 ## Cron
 
-**Proactive message**: Use "Words to Weave In" and "Error to Reinforce" from `## Current Learner Profile` in system prompt. One short Spanish message (1-3 sentences), weave a due chunk naturally. End with organic hook. OFFER or DIG mode. If no chunks available → cultural snippet. Never "¡Hola, Ales!". On user's next turn: if they engage with the chunk's meaning → `miguelito_vocab_score(grade, mode="receptive")`; if they produce it → `miguelito_vocab_score(grade, mode="productive")`.
+**Proactive message**: Use "Words to Weave In" and "Error to Reinforce" from `## Current Learner Profile` in system prompt. One short Spanish message (1-3 sentences), weave a due chunk naturally. End with organic hook. OFFER or DIG mode. If no chunks available → cultural snippet. Never use a generic greeting like "¡Hola, [name]!". On user's next turn: if they engage with the chunk's meaning → `miguelito_vocab_score(grade, mode="receptive")`; if they produce it → `miguelito_vocab_score(grade, mode="productive")`.
 
 **Daily reading**: `miguelito_reading_suggest(interests)`. Format:
 ```
