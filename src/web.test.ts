@@ -19,7 +19,10 @@ function env(extra: Record<string, string | undefined> = {}): Record<string, str
 }
 
 class FakeProvider implements LLMProvider {
+  public chatCalls: any[][] = [];
+
   async chat(messages: any[]): Promise<any> {
+    this.chatCalls.push(messages);
     const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
     return { content: `echo:${lastUser}`, toolCalls: [] };
   }
@@ -107,6 +110,48 @@ describe("web server", () => {
 
     const history = await server.handleApi("GET", "/api/chat?language=belarusian");
     expect(JSON.parse(history.body).messages.map((m: any) => m.content)).toEqual(["вітаю", "echo:вітаю"]);
+
+    manager.close();
+  });
+
+  it("returns the full durable web history instead of truncating to the model context window", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const manager = await createRuntimeManager(config, { provider: new FakeProvider() });
+    const server = new WebServer(manager);
+
+    for (let i = 0; i < 60; i++) {
+      const response = await server.handleApi("POST", "/api/chat", { language: "spanish", text: `turn-${i}` });
+      expect(response.status).toBe(200);
+    }
+
+    const history = await server.handleApi("GET", "/api/chat?language=spanish");
+    const messages = JSON.parse(history.body).messages;
+    expect(messages).toHaveLength(120);
+    expect(messages[0].content).toBe("turn-0");
+    expect(messages.at(-1).content).toBe("echo:turn-59");
+
+    manager.close();
+  });
+
+  it("keeps the model prompt history bounded while retaining older web messages", async () => {
+    const provider = new FakeProvider();
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const manager = await createRuntimeManager(config, { provider });
+
+    for (let i = 0; i < 60; i++) {
+      await manager.handleMessage("spanish", 0, "web-user", `turn-${i}`);
+    }
+    await manager.handleMessage("spanish", 0, "web-user", "final-turn");
+
+    const lastCallContents = provider.chatCalls.at(-1)!.map((m) => m.content);
+    expect(lastCallContents).not.toContain("turn-0");
+    expect(lastCallContents).not.toContain("echo:turn-0");
+    expect(lastCallContents).toContain("turn-59");
+    expect(lastCallContents).toContain("echo:turn-59");
+
+    const fullHistory = await manager.getChatHistory("spanish", 0);
+    expect(fullHistory).toHaveLength(122);
+    expect(fullHistory[0].content).toBe("turn-0");
 
     manager.close();
   });

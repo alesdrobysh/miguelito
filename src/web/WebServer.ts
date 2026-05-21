@@ -25,7 +25,7 @@ export class WebServer {
     if (url.pathname === "/api/chat" && method === "GET") {
       const language = url.searchParams.get("language") ?? "spanish";
       if (!this.manager.hasLanguage(language)) return json(404, { error: `Unknown language: ${language}` });
-      const messages = await this.manager.getChatHistory(language, WEB_CHAT_ID, 100);
+      const messages = await this.manager.getChatHistory(language, WEB_CHAT_ID);
       return json(200, { language, messages });
     }
 
@@ -36,7 +36,7 @@ export class WebServer {
       if (!this.manager.hasLanguage(language)) return json(404, { error: `Unknown language: ${language}` });
       if (!text) return json(400, { error: "text is required" });
       const reply = await this.manager.handleMessage(language, WEB_CHAT_ID, WEB_USER_ID, text);
-      const messages = await this.manager.getChatHistory(language, WEB_CHAT_ID, 100);
+      const messages = await this.manager.getChatHistory(language, WEB_CHAT_ID);
       return json(200, { language, reply, messages });
     }
 

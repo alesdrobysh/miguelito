@@ -58,6 +58,8 @@ export function createEvaluatorProvider(config: Config): LLMProvider {
   });
 }
 
+const MODEL_HISTORY_LIMIT = 50;
+
 export class RuntimeManager {
   private runtimes = new Map<string, LanguageRuntime>();
 
@@ -141,14 +143,14 @@ export class RuntimeManager {
     }
 
     const { session: convState } = await db.getConversationState();
-    const history = await db.getSessionTranscript(convState.session_id) as ChatMessage[];
+    const history = await db.getSessionTranscript(convState.session_id, MODEL_HISTORY_LIMIT) as ChatMessage[];
     await db.addChatMessage(chatId, "user", text, convState.session_id);
     const result = await agentRunner.run(text, history);
     if (result.text) await db.addChatMessage(chatId, "assistant", result.text, convState.session_id);
     return result.text || null;
   }
 
-  getChatHistory(language: string, chatId: number, limit: number): Promise<{ role: string; content: string }[]> {
+  getChatHistory(language: string, chatId: number, limit?: number): Promise<{ role: string; content: string }[]> {
     return this.runtime(language).db.getChatHistory(chatId, limit);
   }
 

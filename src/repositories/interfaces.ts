@@ -35,8 +35,8 @@ export interface ErrorRepository {
 
 export interface SessionRepository {
   addChatMessage(chatId: number, role: string, content: string, sessionId?: string): Promise<void>;
-  getChatHistory(chatId: number, limit: number): Promise<{ role: string; content: string }[]>;
-  getSessionTranscript(sessionId: string): Promise<{ role: string; content: string; created_at: string }[]>;
+  getChatHistory(chatId: number, limit?: number): Promise<{ role: string; content: string }[]>;
+  getSessionTranscript(sessionId: string, limit?: number): Promise<{ role: string; content: string; created_at: string }[]>;
   getTodaysMessages(date: string): Promise<{ role: string; content: string; created_at: string }[]>;
   getConversationState(): Promise<ConversationStateResult>;
   updateConversationState(mode: string, topic?: string, mood?: string): Promise<UpdateResult>;

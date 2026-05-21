@@ -898,21 +898,34 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
     this.save();
   }
 
-  async getSessionTranscript(sessionId: string): Promise<{ role: string; content: string; created_at: string }[]> {
+  async getSessionTranscript(sessionId: string, limit?: number): Promise<{ role: string; content: string; created_at: string }[]> {
+    if (limit && limit > 0) {
+      return this.queryAll(
+        `SELECT role, content, created_at FROM (
+           SELECT id, role, content, created_at FROM chat_history WHERE session_id = ? ORDER BY id DESC LIMIT ?
+         ) ORDER BY id ASC`,
+        [sessionId, limit]
+      ) as { role: string; content: string; created_at: string }[];
+    }
     return this.queryAll(
       `SELECT role, content, created_at FROM chat_history WHERE session_id = ? ORDER BY id ASC`,
       [sessionId]
     ) as { role: string; content: string; created_at: string }[];
   }
 
-  async getChatHistory(chatId: number, limit: number): Promise<{ role: string; content: string }[]> {
-    const rows = this.queryAll(
-      `SELECT role, content FROM (
-         SELECT id, role, content FROM chat_history WHERE chat_id = ? AND language = ? ORDER BY id DESC LIMIT ?
-       ) ORDER BY id ASC`,
-      [chatId, this.languageId, limit]
+  async getChatHistory(chatId: number, limit?: number): Promise<{ role: string; content: string }[]> {
+    if (limit && limit > 0) {
+      return this.queryAll(
+        `SELECT role, content FROM (
+           SELECT id, role, content FROM chat_history WHERE chat_id = ? AND language = ? ORDER BY id DESC LIMIT ?
+         ) ORDER BY id ASC`,
+        [chatId, this.languageId, limit]
+      ) as { role: string; content: string }[];
+    }
+    return this.queryAll(
+      `SELECT role, content FROM chat_history WHERE chat_id = ? AND language = ? ORDER BY id ASC`,
+      [chatId, this.languageId]
     ) as { role: string; content: string }[];
-    return rows;
   }
 
   async getTodaysMessages(date: string): Promise<{ role: string; content: string; created_at: string }[]> {
