@@ -64,14 +64,33 @@ function App() {
 
   useEffect(() => {
     if (!language) return;
+    let cancelled = false;
+    let intervalId;
     localStorage.setItem('miguelito.language', language);
     setLoading(true);
     setError('');
-    api('/api/chat?language=' + encodeURIComponent(language))
-      .then((data) => setMessages(data.messages ?? []))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, [language]);
+
+    async function loadConversation({ showLoading = false } = {}) {
+      if (showLoading) setLoading(true);
+      try {
+        const data = await api('/api/chat?language=' + encodeURIComponent(language));
+        if (!cancelled) setMessages(data.messages ?? []);
+      } catch (err) {
+        if (!cancelled) setError(err.message);
+      } finally {
+        if (!cancelled && showLoading) setLoading(false);
+      }
+    }
+
+    loadConversation({ showLoading: true });
+    intervalId = window.setInterval(() => {
+      if (!sending) loadConversation();
+    }, 2500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [language, sending]);
 
   useEffect(() => {
     const node = scrollRef.current;

@@ -117,6 +117,27 @@ describe("provider creation", () => {
     expect(provider).toBeInstanceOf(OpenRouterProvider);
   });
 
+  it("passes OpenRouter config to chat and complete calls", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ choices: [{ message: { content: "ok" } }] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = new OpenRouterProvider({
+      apiKey: "sk-openrouter",
+      model: "eval-model",
+      baseUrl: "https://openrouter.test/api/v1",
+    });
+    await provider.complete("system", "user");
+
+    const url = fetchMock.mock.calls[0][0];
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(url).toBe("https://openrouter.test/api/v1/chat/completions");
+    expect(body.model).toBe("eval-model");
+    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe("Bearer sk-openrouter");
+  });
+
   it("passes ollama config to the provider", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

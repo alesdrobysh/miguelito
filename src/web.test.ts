@@ -22,6 +22,14 @@ function env(extra: Record<string, string | undefined> = {}): Record<string, str
   return { ...MIN_ENV, ...extra };
 }
 
+class FakeMirrorTransport {
+  public sent: Array<{ chatId: string | number; text: string }> = [];
+
+  async sendMessage(chatId: string | number, text: string): Promise<void> {
+    this.sent.push({ chatId, text });
+  }
+}
+
 class FakeProvider implements LLMProvider {
   public chatCalls: any[][] = [];
 
@@ -187,6 +195,38 @@ describe("web server", () => {
 
     const history = await server.handleApi("GET", "/api/chat?language=belarusian");
     expect(JSON.parse(history.body).messages.map((m: any) => m.content)).toEqual(["вітаю", "echo:вітаю"]);
+
+    manager.close();
+  });
+
+  it("mirrors WebUI messages into the configured Telegram chat and uses the same history", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir, TELEGRAM_CHAT_ID: "279737838" }));
+    const manager = await createRuntimeManager(config, { provider: new FakeProvider() });
+    await manager.handleMessage("polish", 279737838, "telegram-user", "telegram says cześć");
+    const polishMirror = new FakeMirrorTransport();
+    const server = new WebServer(manager, {
+      chatId: 279737838,
+      mirrorTransports: { polish: polishMirror },
+    });
+
+    const initial = await server.handleApi("GET", "/api/chat?language=polish");
+    expect(JSON.parse(initial.body).messages.map((m: any) => m.content)).toEqual([
+      "telegram says cześć",
+      "echo:telegram says cześć",
+    ]);
+
+    const reply = await server.handleApi("POST", "/api/chat", { language: "polish", text: "web says dzień dobry" });
+    expect(reply.status).toBe(200);
+    expect(polishMirror.sent).toEqual([
+      { chatId: 279737838, text: "🌐 Web: web says dzień dobry" },
+      { chatId: 279737838, text: "echo:web says dzień dobry" },
+    ]);
+    expect(JSON.parse(reply.body).messages.map((m: any) => m.content)).toEqual([
+      "telegram says cześć",
+      "echo:telegram says cześć",
+      "web says dzień dobry",
+      "echo:web says dzień dobry",
+    ]);
 
     manager.close();
   });

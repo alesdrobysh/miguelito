@@ -3,11 +3,18 @@ import fs from "fs";
 import path from "path";
 import { URL } from "url";
 import type { RuntimeManager } from "../runtime.js";
+import type { Transport } from "../transport/Transport.js";
 
 export interface ApiResponse {
   status: number;
   contentType: string;
   body: string;
+}
+
+interface WebServerOptions {
+  chatId?: number;
+  userId?: string;
+  mirrorTransports?: Record<string, Pick<Transport, "sendMessage">>;
 }
 
 const WEB_CHAT_ID = 0;
@@ -16,8 +23,15 @@ const WEB_DIST_DIR = path.join(process.cwd(), "src", "web", "dist");
 
 export class WebServer {
   private server: http.Server | null = null;
+  private chatId: number;
+  private userId: string;
+  private mirrorTransports: Record<string, Pick<Transport, "sendMessage">>;
 
-  constructor(private manager: RuntimeManager) {}
+  constructor(private manager: RuntimeManager, options: WebServerOptions = {}) {
+    this.chatId = options.chatId ?? WEB_CHAT_ID;
+    this.userId = options.userId ?? WEB_USER_ID;
+    this.mirrorTransports = options.mirrorTransports ?? {};
+  }
 
   async handleApi(method: string, rawUrl: string, body?: unknown): Promise<ApiResponse> {
     const url = new URL(rawUrl, "http://localhost");
@@ -28,7 +42,7 @@ export class WebServer {
     if (url.pathname === "/api/chat" && method === "GET") {
       const language = url.searchParams.get("language") ?? "spanish";
       if (!this.manager.hasLanguage(language)) return json(404, { error: `Unknown language: ${language}` });
-      const messages = await this.manager.getChatHistory(language, WEB_CHAT_ID);
+      const messages = await this.manager.getChatHistory(language, this.chatId);
       return json(200, { language, messages });
     }
 
@@ -38,13 +52,18 @@ export class WebServer {
       const text = (payload?.text ?? "").trim();
       if (!this.manager.hasLanguage(language)) return json(404, { error: `Unknown language: ${language}` });
       if (!text) return json(400, { error: "text is required" });
-      const reply = await this.manager.handleMessage(language, WEB_CHAT_ID, WEB_USER_ID, text);
-      const messages = await this.manager.getChatHistory(language, WEB_CHAT_ID);
+      const reply = await this.manager.handleMessage(language, this.chatId, this.userId, text);
+      const mirror = this.mirrorTransports[language];
+      if (mirror) {
+        await mirror.sendMessage(this.chatId, `🌐 Web: ${text}`);
+        if (reply) await mirror.sendMessage(this.chatId, reply);
+      }
+      const messages = await this.manager.getChatHistory(language, this.chatId);
       return json(200, { language, reply, messages });
     }
 
     if (url.pathname === "/api/settings" && method === "GET") {
-      return json(200, { languages: this.manager.languages(), chatId: WEB_CHAT_ID });
+      return json(200, { languages: this.manager.languages(), chatId: this.chatId });
     }
 
     return json(404, { error: "Not found" });

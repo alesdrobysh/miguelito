@@ -1,4 +1,4 @@
-import { llmChat, llmComplete, llmCompleteJson, type LLMConfig } from "../llm.js";
+import { llmChat, type LLMConfig } from "../llm.js";
 import type { LLMProvider, ChatOptions, ChatResult, ChatMessage } from "./interfaces.js";
 
 export class OpenRouterProvider implements LLMProvider {
@@ -13,10 +13,15 @@ export class OpenRouterProvider implements LLMProvider {
   }
 
   async complete(systemPrompt: string | null, userPrompt: string, opts?: ChatOptions): Promise<string> {
-    return llmComplete(this.config.apiKey, systemPrompt, userPrompt, opts?.temperature ?? 0.7, opts?.maxTokens ?? 1024, opts?.structured);
+    const messages: ChatMessage[] = [];
+    if (systemPrompt) messages.push({ role: "system", content: systemPrompt });
+    messages.push({ role: "user", content: userPrompt });
+    const result = await llmChat(this.config, messages, undefined, opts?.temperature ?? 0.7, opts?.maxTokens ?? 1024, opts?.structured);
+    return result.content ?? "";
   }
 
   async completeJson<T>(systemPrompt: string | null, userPrompt: string, opts?: ChatOptions): Promise<T> {
-    return llmCompleteJson<T>(this.config.apiKey, systemPrompt, userPrompt, opts?.temperature ?? 0.7, opts?.maxTokens ?? 1024);
+    const text = await this.complete(systemPrompt, userPrompt, { ...opts, temperature: opts?.temperature ?? 0, structured: true });
+    return JSON.parse(text) as T;
   }
 }

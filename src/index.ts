@@ -36,14 +36,16 @@ async function main() {
   }
 
   if (config.transport === "unified") {
-    new WebServer(manager).start(config.webHost, config.webPort);
     const telegramBots = [
       { language: "polish", token: config.telegramBotTokens.polish! },
       { language: "spanish", token: config.telegramBotTokens.spanish! },
     ];
 
+    const mirrorTransports: Record<string, TelegramTransport> = {};
+
     for (const bot of telegramBots) {
       const transport = new TelegramTransport({ telegramToken: bot.token, allowedUsers: config.allowedUsers });
+      mirrorTransports[bot.language] = transport;
       transport.onMessage((chatId, userId, text) => manager.handleMessage(bot.language, Number(chatId), userId, text));
 
       const rt = manager.runtime(bot.language);
@@ -68,6 +70,10 @@ async function main() {
         allowed_updates: ["message"],
       });
     }
+    new WebServer(manager, {
+      chatId: Number(config.telegramChatId),
+      mirrorTransports,
+    }).start(config.webHost, config.webPort);
     return;
   }
 
