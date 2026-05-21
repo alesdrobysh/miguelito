@@ -22,7 +22,9 @@ export interface LanguageConfig {
     learnerProfileUnconfigured: string;
     conversationState: (turnCount: number, lastModes: string, moodHint: string, topicsTouched: string) => string;
     currentLearnerProfile: (args: {
-      words: string[];
+      words?: string[];
+      receptiveWords?: string[];
+      productiveWords?: string[];
       errorInfo: { user_text: string; correct: string; category: string } | null;
       weakAreas: string[];
     }) => string;

@@ -6,6 +6,7 @@ import type {
   ChunkItem, DueChunkItem, ErrorItem, UserProfile, ConversationStateData,
   ConversationStateResult, FsrsReviewResult, ProgressData, UpdateResult,
   TurnAnnotationInput, TurnAnnotation, CompetencyVectorRow,
+  VocabReviewMode, VocabReviewAttempt, StartVocabReviewAttemptInput, FinishVocabReviewAttemptInput,
 } from "../domain/types.js";
 import type {
   VocabRepository, ErrorRepository, SessionRepository, ProfileRepository,
@@ -125,6 +126,26 @@ CREATE TABLE IF NOT EXISTS chat_history (
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_chat_history_chat_id ON chat_history(chat_id, id);
+
+CREATE TABLE IF NOT EXISTS vocab_review_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vocab_id INTEGER NOT NULL,
+    word TEXT NOT NULL,
+    language TEXT NOT NULL DEFAULT '',
+    mode TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    strategy TEXT,
+    prompt_text TEXT,
+    user_response TEXT,
+    target_used INTEGER NOT NULL DEFAULT 0,
+    accepted_variant TEXT,
+    hint_level INTEGER NOT NULL DEFAULT 0,
+    grade INTEGER,
+    note TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    completed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_vocab_attempts_active ON vocab_review_attempts(language, status, created_at);
 `;
 
 export type { ChunkItem, DueChunkItem, ErrorItem, UserProfile, ConversationStateResult, FsrsReviewResult, ProgressData, UpdateResult, TurnAnnotationInput, TurnAnnotation, CompetencyVectorRow } from "../domain/types.js";
@@ -394,6 +415,26 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
     try {
       db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_vocab_chunk_unique ON vocabulary_items(chunk_l2 COLLATE NOCASE)");
       db.run("CREATE INDEX IF NOT EXISTS idx_vocab_pro_due ON vocabulary_items(pro_due)");
+      db.run("CREATE INDEX IF NOT EXISTS idx_vocab_rec_due ON vocabulary_items(rec_due)");
+      db.run(`CREATE TABLE IF NOT EXISTS vocab_review_attempts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        vocab_id INTEGER NOT NULL,
+        word TEXT NOT NULL,
+        language TEXT NOT NULL DEFAULT '',
+        mode TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'active',
+        strategy TEXT,
+        prompt_text TEXT,
+        user_response TEXT,
+        target_used INTEGER NOT NULL DEFAULT 0,
+        accepted_variant TEXT,
+        hint_level INTEGER NOT NULL DEFAULT 0,
+        grade INTEGER,
+        note TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        completed_at TEXT
+      )`);
+      db.run("CREATE INDEX IF NOT EXISTS idx_vocab_attempts_active ON vocab_review_attempts(language, status, created_at)");
     } catch {}
   }
 
@@ -477,13 +518,17 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
     return filtered.slice(0, limit);
   }
 
-  async dueVocab(limit: number): Promise<DueChunkItem[]> {
+  async dueVocab(limit: number, mode: VocabReviewMode = "productive"): Promise<DueChunkItem[]> {
     const now = nowIso();
+    const prefix = mode === "receptive" ? "rec" : "pro";
     return this.queryAll(
-      `SELECT id, chunk_l2, anchor, pro_stability, pro_reps, pro_due
+      `SELECT id, chunk_l2, anchor,
+              ${prefix}_stability AS pro_stability,
+              ${prefix}_reps AS pro_reps,
+              ${prefix}_due AS pro_due
        FROM vocabulary_items
-       WHERE language = ? AND (pro_due IS NULL OR pro_due <= ?)
-       ORDER BY pro_due ASC
+       WHERE language = ? AND (${prefix}_due IS NULL OR ${prefix}_due <= ?)
+       ORDER BY ${prefix}_due ASC
        LIMIT ?`,
       [this.languageId, now, limit]
     ) as DueChunkItem[];
@@ -539,6 +584,70 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
     this.save();
 
     return { stability: result.stability, difficulty: result.difficulty, reps: result.reps, status: result.status, due };
+  }
+
+  async startVocabReviewAttempt(input: StartVocabReviewAttemptInput): Promise<VocabReviewAttempt> {
+    const word = input.word.trim().toLowerCase();
+    const mode: VocabReviewMode = input.mode === "receptive" ? "receptive" : "productive";
+    const row = this.queryRow(
+      `SELECT id, chunk_l2 FROM vocabulary_items WHERE chunk_l2 = ? COLLATE NOCASE AND language = ?`,
+      [word, this.languageId]
+    ) as { id: number; chunk_l2: string } | undefined;
+    if (!row) throw new Error(`Chunk not found: ${word}`);
+
+    this.db.run(
+      `INSERT INTO vocab_review_attempts
+        (vocab_id, word, language, mode, status, strategy, prompt_text, hint_level)
+       VALUES (?, ?, ?, ?, 'active', ?, ?, ?)`,
+      [
+        row.id,
+        row.chunk_l2,
+        this.languageId,
+        mode,
+        input.strategy?.trim() || null,
+        input.prompt_text?.trim() || null,
+        Math.max(0, Math.round(input.hint_level ?? 0)),
+      ]
+    );
+    const rowidResult = this.db.exec("SELECT last_insert_rowid()");
+    const id = rowidResult[0].values[0][0] as number;
+    this.save();
+    return this.getVocabReviewAttempt(id);
+  }
+
+  async finishVocabReviewAttempt(input: FinishVocabReviewAttemptInput): Promise<VocabReviewAttempt> {
+    const existing = this.getVocabReviewAttempt(input.attempt_id);
+    const grade = Math.max(1, Math.min(3, Math.round(input.grade))) as Grade;
+    const now = nowIso();
+    this.db.run(
+      `UPDATE vocab_review_attempts
+       SET status = 'completed', user_response = ?, target_used = ?, accepted_variant = ?,
+           hint_level = ?, grade = ?, note = ?, completed_at = ?
+       WHERE id = ? AND language = ?`,
+      [
+        input.user_response?.trim() || null,
+        input.target_used ? 1 : 0,
+        input.accepted_variant?.trim() || null,
+        Math.max(0, Math.round(input.hint_level ?? existing.hint_level)),
+        grade,
+        input.note?.trim() || null,
+        now,
+        input.attempt_id,
+        this.languageId,
+      ]
+    );
+    await this.scoreVocab(existing.word, grade, existing.mode);
+    this.save();
+    return this.getVocabReviewAttempt(input.attempt_id);
+  }
+
+  private getVocabReviewAttempt(id: number): VocabReviewAttempt {
+    const row = this.queryRow(
+      `SELECT * FROM vocab_review_attempts WHERE id = ? AND language = ?`,
+      [id, this.languageId]
+    ) as VocabReviewAttempt | undefined;
+    if (!row) throw new Error(`Review attempt not found: ${id}`);
+    return row;
   }
 
   async logError(userText: string, correct: string, category: string, note: string): Promise<number> {

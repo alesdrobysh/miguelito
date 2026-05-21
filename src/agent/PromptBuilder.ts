@@ -73,13 +73,16 @@ export class PromptBuilder {
       calibration = `\n\n${renderCalibration(cv, focus, this.lang)}`;
     } catch {}
 
-    const words = await this._getDueWords(5);
+    const productiveWords = await this._getDueWords(1, "productive");
+    const receptiveWords = (await this._getDueWords(5, "receptive"))
+      .filter((w) => !productiveWords.includes(w))
+      .slice(0, 3);
     const weakAreas = await this._getWeakAreas(3);
     const errorInfo = weakAreas.length > 0 ? await this._getRecentErrorForCategory(weakAreas[0]) : null;
 
-    const hasLearnerData = words.length > 0 || errorInfo != null || weakAreas.length > 0;
+    const hasLearnerData = receptiveWords.length > 0 || productiveWords.length > 0 || errorInfo != null || weakAreas.length > 0;
     const learnerProfile = hasLearnerData
-      ? this.lang.promptText.currentLearnerProfile({ words, errorInfo, weakAreas })
+      ? this.lang.promptText.currentLearnerProfile({ receptiveWords, productiveWords, errorInfo, weakAreas })
       : null;
 
     // Dynamic Interest Injection
@@ -114,9 +117,9 @@ export class PromptBuilder {
     return getCompetencyVector(this.repos);
   }
 
-  private async _getDueWords(limit: number): Promise<string[]> {
+  private async _getDueWords(limit: number, mode: "productive" | "receptive" = "productive"): Promise<string[]> {
     try {
-      const rows = await this.repos.vocab.dueVocab(limit);
+      const rows = await this.repos.vocab.dueVocab(limit, mode);
       return rows.map((r) => r.chunk_l2);
     } catch {
       return [];

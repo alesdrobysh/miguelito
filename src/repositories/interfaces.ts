@@ -10,13 +10,19 @@ import type {
   TurnAnnotation,
   CompetencyVectorRow,
   ProgressData,
+  VocabReviewMode,
+  VocabReviewAttempt,
+  StartVocabReviewAttemptInput,
+  FinishVocabReviewAttemptInput,
 } from "../domain/types.js";
 
 export interface VocabRepository {
   addVocab(chunk_l2: string, capture_context_l2: string, anchor?: string): Promise<number | null>;
   listVocab(bucket: string, limit: number): Promise<ChunkItem[]>;
-  dueVocab(limit: number): Promise<DueChunkItem[]>;
-  scoreVocab(chunk_l2: string, grade: number, mode?: "productive" | "receptive"): Promise<FsrsReviewResult>;
+  dueVocab(limit: number, mode?: VocabReviewMode): Promise<DueChunkItem[]>;
+  scoreVocab(chunk_l2: string, grade: number, mode?: VocabReviewMode): Promise<FsrsReviewResult>;
+  startVocabReviewAttempt(input: StartVocabReviewAttemptInput): Promise<VocabReviewAttempt>;
+  finishVocabReviewAttempt(input: FinishVocabReviewAttemptInput): Promise<VocabReviewAttempt>;
   exportVocab(format: string): Promise<{ count: number; data: string }>;
   progressSummary(): Promise<ProgressData>;
 }

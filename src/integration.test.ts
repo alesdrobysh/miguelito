@@ -201,6 +201,8 @@ describe("integration: tool registry creates all expected tools", () => {
       "miguelito_vocab_list",
       "miguelito_vocab_score",
       "miguelito_vocab_export",
+      "miguelito_vocab_attempt_start",
+      "miguelito_vocab_attempt_finish",
       "miguelito_error_log",
       "miguelito_profile_set",
       "miguelito_read_link",
@@ -210,7 +212,7 @@ describe("integration: tool registry creates all expected tools", () => {
       "miguelito_turn_annotate",
     ];
 
-    expect(tools.size).toBe(11);
+    expect(tools.size).toBe(13);
     for (const name of expectedNames) {
       expect(tools.has(name)).toBe(true);
     }
@@ -223,7 +225,7 @@ describe("integration: toolsToOpenAI produces valid format", () => {
     const openai = toolsToOpenAI(tools);
 
     expect(Array.isArray(openai)).toBe(true);
-    expect(openai).toHaveLength(11);
+    expect(openai).toHaveLength(13);
 
     for (const item of openai as any[]) {
       expect(item.type).toBe("function");

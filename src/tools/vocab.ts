@@ -149,6 +149,73 @@ function vocabExport(ctx: ToolContext) {
   };
 }
 
+function vocabAttemptStart(ctx: ToolContext) {
+  return {
+    name: "miguelito_vocab_attempt_start",
+    description:
+      "Record that you created a concrete vocabulary review opportunity. " +
+      "Use mode='productive' when you create a communicative need for the learner to produce a due chunk; " +
+      "use mode='receptive' when you intentionally integrate a chunk in your own message for comprehension practice. " +
+      "Call before/while sending the prompt that creates the opportunity.",
+    parameters: {
+      type: "object",
+      properties: {
+        word: { type: "string", description: "Exact chunk as stored (chunk_l2)." },
+        mode: { type: "string", enum: ["productive", "receptive"], description: "productive | receptive" },
+        strategy: { type: "string", description: "Elicitation strategy, e.g. personal_question, roleplay, reformulation, cloze, semantic_hint." },
+        prompt_text: { type: "string", description: "The visible tutor prompt or message that created the review opportunity." },
+        hint_level: { type: "string", description: "0=no hint/natural task, 1=task prompt, 2=semantic hint, 3=cloze/first-letter, 4=full model." },
+      },
+      required: ["word", "mode", "strategy", "prompt_text"],
+    },
+    execute: async (args: Record<string, string>) => {
+      const attempt = await ctx.vocab.startVocabReviewAttempt({
+        word: (args.word ?? "").trim().toLowerCase(),
+        mode: args.mode === "receptive" ? "receptive" : "productive",
+        strategy: (args.strategy ?? "").trim(),
+        prompt_text: (args.prompt_text ?? "").trim(),
+        hint_level: parseInt(args.hint_level ?? "0", 10) || 0,
+      });
+      return { ok: true, attempt_id: attempt.id, word: attempt.word, mode: attempt.mode, status: attempt.status };
+    },
+  };
+}
+
+function vocabAttemptFinish(ctx: ToolContext) {
+  return {
+    name: "miguelito_vocab_attempt_finish",
+    description:
+      "Complete a vocabulary review attempt after the learner responds. " +
+      "Grades 1-3 map to FSRS: 1=Again/failed or only full-model repetition, 2=Good/elicited or assisted correct production, 3=Easy/spontaneous fluent use. " +
+      "This also updates the chunk's productive or receptive FSRS schedule according to the attempt mode.",
+    parameters: {
+      type: "object",
+      properties: {
+        attempt_id: { type: "string", description: "ID returned by miguelito_vocab_attempt_start." },
+        user_response: { type: "string", description: "Learner response being graded." },
+        target_used: { type: "string", description: "true if the learner used the target or an accepted variant." },
+        accepted_variant: { type: "string", description: "Actual form the learner used, if any." },
+        hint_level: { type: "string", description: "Minimum hint level needed for success, 0-4." },
+        grade: { type: "string", description: "Integer 1..3." },
+        note: { type: "string", description: "Brief reason for grade." },
+      },
+      required: ["attempt_id", "target_used", "grade"],
+    },
+    execute: async (args: Record<string, string>) => {
+      const attempt = await ctx.vocab.finishVocabReviewAttempt({
+        attempt_id: parseInt(args.attempt_id ?? "0", 10),
+        user_response: (args.user_response ?? "").trim(),
+        target_used: args.target_used === "true" || args.target_used === "1" || args.target_used === "yes",
+        accepted_variant: (args.accepted_variant ?? "").trim(),
+        hint_level: parseInt(args.hint_level ?? "0", 10) || 0,
+        grade: parseInt(args.grade ?? "1", 10) || 1,
+        note: (args.note ?? "").trim(),
+      });
+      return { ok: true, attempt_id: attempt.id, word: attempt.word, mode: attempt.mode, grade: attempt.grade, status: attempt.status };
+    },
+  };
+}
+
 export function createVocabTools(ctx: ToolContext) {
-  return [vocabAdd(ctx), vocabList(ctx), vocabScore(ctx), vocabExport(ctx)];
+  return [vocabAdd(ctx), vocabList(ctx), vocabScore(ctx), vocabExport(ctx), vocabAttemptStart(ctx), vocabAttemptFinish(ctx)];
 }

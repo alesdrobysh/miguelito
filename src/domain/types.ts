@@ -88,6 +88,45 @@ export interface UpdateResult {
   topics_touched: string[];
 }
 
+export type VocabReviewMode = "productive" | "receptive";
+
+export interface VocabReviewAttempt {
+  id: number;
+  vocab_id: number;
+  word: string;
+  language: string;
+  mode: VocabReviewMode;
+  status: "active" | "completed" | "abandoned";
+  strategy: string | null;
+  prompt_text: string | null;
+  user_response: string | null;
+  target_used: number;
+  accepted_variant: string | null;
+  hint_level: number;
+  grade: number | null;
+  note: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface StartVocabReviewAttemptInput {
+  word: string;
+  mode: VocabReviewMode;
+  strategy?: string;
+  prompt_text?: string;
+  hint_level?: number;
+}
+
+export interface FinishVocabReviewAttemptInput {
+  attempt_id: number;
+  user_response?: string;
+  target_used: boolean;
+  accepted_variant?: string;
+  hint_level?: number;
+  grade: number;
+  note?: string;
+}
+
 export interface ObligatoryContext {
   type: string;
 }

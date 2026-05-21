@@ -38,10 +38,13 @@ export const SpanishLanguage: LanguageConfig = {
       "\n\n## Perfil del aprendiz\nAún sin configurar — inicia el onboarding cuando la persona envíe /start.",
     conversationState: (turnCount, lastModes, moodHint, topicsTouched) =>
       `\n\n## Estado de la conversación\nNúmero de turnos: ${turnCount}\nÚltimos modos: ${lastModes}\nPista de ánimo: ${moodHint}\nTemas tocados: ${topicsTouched}\n`,
-    currentLearnerProfile: ({ words, errorInfo, weakAreas }) => {
+    currentLearnerProfile: ({ words, receptiveWords, productiveWords, errorInfo, weakAreas }) => {
+      const rec = receptiveWords ?? words ?? [];
+      const prod = productiveWords ?? [];
       const lines: string[] = ["\n\n## Perfil actual del aprendiz"];
       if (weakAreas.length > 0) lines.push(`**Áreas débiles**: ${weakAreas.join(", ")}`);
-      if (words.length > 0) lines.push(`**Palabras para integrar**: ${words.join(", ")}`);
+      if (rec.length > 0) lines.push(`**Vocabulario receptivo**: Integra tú estas expresiones de forma natural para comprobar comprensión pasiva: ${rec.join(", ")}`);
+      if (prod.length > 0) lines.push(`**Vocabulario productivo**: Crea una necesidad comunicativa para que el aprendiz pueda producir UNA de estas expresiones. No esperes uso espontáneo ni digas "usa esta palabra" salvo como último recurso. Prefiere pregunta personal, roleplay, reformulación o cloze con pistas graduadas: ${prod.join(", ")}`);
       if (errorInfo) lines.push(`**Error que reforzar**: "${errorInfo.user_text}" → "${errorInfo.correct}" (${errorInfo.category})`);
       return lines.join("\n");
     },
@@ -50,9 +53,9 @@ export const SpanishLanguage: LanguageConfig = {
   interestsHeader: "Lo que sé de esta persona",
   prompts: {
     morning:
-      "Revisa `## Perfil del aprendiz` para usar el nombre de la persona. Revisa `## Perfil actual del aprendiz` para ver `Palabras para integrar`. Envía un único mensaje breve en español (1-3 frases). Si hay palabras para integrar, usa una con naturalidad y termina con un gancho. Si no hay ninguna, abre con una pregunta curiosa o una nota cultural. Nunca muestres nombres de modo, marcadores del sistema ni estado interno. Solo texto natural en español.",
+      "Revisa `## Perfil del aprendiz` para usar el nombre de la persona. Revisa `## Perfil actual del aprendiz`: integra como tutor hasta una expresión de `Vocabulario receptivo`; si hay `Vocabulario productivo`, crea una necesidad comunicativa breve para que la persona pueda producir una expresión. Nunca muestres nombres de modo, marcadores del sistema ni estado interno. Solo texto natural en español.",
     evening:
-      "Revisa `## Perfil del aprendiz` para usar el nombre de la persona. Revisa `## Perfil actual del aprendiz` para ver `Palabras para integrar`. Envía un único mensaje breve en español (1-3 frases) con una pregunta reflexiva. Si hay palabras para integrar, usa una con naturalidad. Nunca muestres nombres de modo, marcadores del sistema ni estado interno. Solo texto natural en español.",
+      "Revisa `## Perfil del aprendiz` para usar el nombre de la persona. Revisa `## Perfil actual del aprendiz`: integra como tutor hasta una expresión de `Vocabulario receptivo`; si hay `Vocabulario productivo`, usa una pregunta reflexiva o roleplay breve que invite a producir una expresión. Nunca muestres nombres de modo, marcadores del sistema ni estado interno. Solo texto natural en español.",
     dream: `Eres Miguelito, tutor de español. Acabas de terminar tus conversaciones del día.
 Actualiza el perfil de memoria a largo plazo del aprendiz integrando las observaciones de hoy en el perfil existente.
 

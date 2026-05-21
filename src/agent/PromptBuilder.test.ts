@@ -53,3 +53,26 @@ describe("PromptBuilder interest injection", () => {
     expect(prompt).not.toContain("## User Interests");
   });
 });
+
+
+describe("PromptBuilder vocabulary target injection", () => {
+  it("separates receptive words for bot integration from productive words for learner elicitation", async () => {
+    await db.addVocab("posponer la reunión", "ctx", "posponer");
+    await db.addVocab("echar de menos", "ctx", "echar");
+    await db.scoreVocab("posponer la reunión", 3, "receptive");
+    await db.scoreVocab("echar de menos", 3, "productive");
+
+    const builder = new PromptBuilder(
+      { vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db },
+      SpanishLanguage,
+    );
+    const prompt = await builder.build();
+
+    expect(prompt).toContain("Vocabulario receptivo");
+    expect(prompt).toContain("Vocabulario productivo");
+    expect(prompt).toContain("Integra tú estas expresiones");
+    expect(prompt).toContain("Crea una necesidad comunicativa");
+    expect(prompt).toContain("posponer la reunión");
+    expect(prompt).toContain("echar de menos");
+  });
+});

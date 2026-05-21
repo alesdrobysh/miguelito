@@ -126,6 +126,17 @@ describe("BuddyDb vocabulary (chunk-based)", () => {
     expect(due[0].chunk_l2).toBe("echar de menos");
   });
 
+  it("dueVocab can select receptive due items independently of productive schedule", async () => {
+    await db.addVocab("echar de menos", "ctx");
+    await db.scoreVocab("echar de menos", 3, "receptive");
+
+    const productiveDue = await db.dueVocab(10, "productive");
+    const receptiveDue = await db.dueVocab(10, "receptive");
+
+    expect(productiveDue.map((r) => r.chunk_l2)).toContain("echar de menos");
+    expect(receptiveDue.map((r) => r.chunk_l2)).not.toContain("echar de menos");
+  });
+
   it("scoreVocab defaults to productive mode", async () => {
     await db.addVocab("llevar a cabo", "ctx");
     const r = await db.scoreVocab("llevar a cabo", 3);
@@ -185,6 +196,34 @@ describe("BuddyDb vocabulary (chunk-based)", () => {
     await expect(() => db.scoreVocab("nonexistent chunk", 3)).rejects.toThrow();
   });
 
+  it("records and completes a productive vocabulary review attempt", async () => {
+    await db.addVocab("me cuesta + [inf]", "ctx", "costar");
+    const attempt = await db.startVocabReviewAttempt({
+      word: "me cuesta + [inf]",
+      mode: "productive",
+      strategy: "personal_question",
+      prompt_text: "¿Qué te cuesta hacer por la mañana?",
+      hint_level: 0,
+    });
+
+    expect(attempt.id).toBeGreaterThan(0);
+    expect(attempt.status).toBe("active");
+
+    const completed = await db.finishVocabReviewAttempt({
+      attempt_id: attempt.id,
+      user_response: "Me cuesta levantarme temprano.",
+      target_used: true,
+      accepted_variant: "me cuesta levantarme",
+      hint_level: 0,
+      grade: 3,
+      note: "spontaneous accurate production",
+    });
+
+    expect(completed.status).toBe("completed");
+    expect(completed.grade).toBe(3);
+    const rows = db.db.exec(`SELECT pro_reps, rec_reps FROM vocabulary_items WHERE chunk_l2 = 'me cuesta + [inf]'`);
+    expect(rows[0].values[0]).toEqual([1, 0]);
+  });
 
 });
 

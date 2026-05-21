@@ -38,10 +38,13 @@ export const PolishLanguage: LanguageConfig = {
       "\n\n## Profil ucznia\nJeszcze nieskonfigurowany — rozpocznij onboarding, gdy użytkownik wyśle /start.",
     conversationState: (turnCount, lastModes, moodHint, topicsTouched) =>
       `\n\n## Stan rozmowy\nLiczba tur: ${turnCount}\nOstatnie tryby: ${lastModes}\nWskazówka nastroju: ${moodHint}\nPoruszone tematy: ${topicsTouched}\n`,
-    currentLearnerProfile: ({ words, errorInfo, weakAreas }) => {
+    currentLearnerProfile: ({ words, receptiveWords, productiveWords, errorInfo, weakAreas }) => {
+      const rec = receptiveWords ?? words ?? [];
+      const prod = productiveWords ?? [];
       const lines: string[] = ["\n\n## Aktualny profil ucznia"];
       if (weakAreas.length > 0) lines.push(`**Słabsze obszary**: ${weakAreas.join(", ")}`);
-      if (words.length > 0) lines.push(`**Słowa do wplecenia**: ${words.join(", ")}`);
+      if (rec.length > 0) lines.push(`**Słownictwo receptywne**: Wpleć te wyrażenia naturalnie we własny tekst, żeby sprawdzić rozumienie bierne: ${rec.join(", ")}`);
+      if (prod.length > 0) lines.push(`**Słownictwo produktywne**: Stwórz potrzebę komunikacyjną, żeby uczeń mógł sam użyć JEDNEGO z tych wyrażeń. Nie czekaj na przypadkowe spontaniczne użycie i nie mów "użyj tego słowa", chyba że jako ostatnia podpowiedź. Preferuj pytanie osobiste, roleplay, parafrazę albo cloze ze stopniowanymi wskazówkami: ${prod.join(", ")}`);
       if (errorInfo) lines.push(`**Błąd do utrwalenia**: "${errorInfo.user_text}" → "${errorInfo.correct}" (${errorInfo.category})`);
       return lines.join("\n");
     },
@@ -50,9 +53,9 @@ export const PolishLanguage: LanguageConfig = {
   interestsHeader: "Co wiem o tej osobie",
   prompts: {
     morning:
-      "Sprawdź `## Profil ucznia`, żeby użyć imienia. Sprawdź `## Aktualny profil ucznia` i `Słowa do wplecenia`. Wyślij jedną krótką wiadomość po polsku (1-3 zdania). Jeśli są słowa do wplecenia, użyj jednego naturalnie i zakończ luźnym haczykiem. Jeśli ich nie ma, zacznij od ciekawego pytania albo krótkiej notki kulturowej. Nigdy nie pokazuj nazw trybów, znaczników systemowych ani stanu wewnętrznego. Tylko naturalny tekst po polsku.",
+      "Sprawdź `## Profil ucznia`, żeby użyć imienia. Sprawdź `## Aktualny profil ucznia`: jako tutor naturalnie wpleć najwyżej jedno wyrażenie ze `Słownictwa receptywnego`; jeśli jest `Słownictwo produktywne`, stwórz krótką potrzebę komunikacyjną, żeby osoba mogła wyprodukować jedno wyrażenie. Nigdy nie pokazuj nazw trybów, znaczników systemowych ani stanu wewnętrznego. Tylko naturalny tekst po polsku.",
     evening:
-      "Sprawdź `## Profil ucznia`, żeby użyć imienia. Sprawdź `## Aktualny profil ucznia` i `Słowa do wplecenia`. Wyślij jedną krótką wiadomość po polsku (1-3 zdania) z refleksyjnym pytaniem. Jeśli są słowa do wplecenia, użyj jednego naturalnie. Nigdy nie pokazuj nazw trybów, znaczników systemowych ani stanu wewnętrznego. Tylko naturalny tekst po polsku.",
+      "Sprawdź `## Profil ucznia`, żeby użyć imienia. Sprawdź `## Aktualny profil ucznia`: jako tutor naturalnie wpleć najwyżej jedno wyrażenie ze `Słownictwa receptywnego`; jeśli jest `Słownictwo produktywne`, użyj refleksyjnego pytania albo krótkiego roleplayu, który zachęca do produkcji jednego wyrażenia. Nigdy nie pokazuj nazw trybów, znaczników systemowych ani stanu wewnętrznego. Tylko naturalny tekst po polsku.",
     dream: `Jesteś tutorem języka polskiego. Właśnie zakończyłeś dzisiejsze rozmowy.
 Zaktualizuj długoterminowy profil pamięci ucznia, włączając dzisiejsze obserwacje do istniejącego profilu.
 
