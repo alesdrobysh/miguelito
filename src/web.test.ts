@@ -86,6 +86,9 @@ describe("runtime manager", () => {
 
 describe("web server", () => {
   it("serves a React app shell and compiled Vite assets", async () => {
+    expect(fs.existsSync(path.join(process.cwd(), "PRODUCT.md"))).toBe(true);
+    expect(fs.readFileSync(path.join(process.cwd(), "DESIGN.md"), "utf8")).toContain("Slop guardrails");
+
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const manager = await createRuntimeManager(config, { provider: new FakeProvider() });
     const server = new WebServer(manager);

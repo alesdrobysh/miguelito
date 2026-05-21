@@ -79,6 +79,13 @@ function App() {
     node.scrollTop = node.scrollHeight;
   }, [messages, sending]);
 
+  useEffect(() => {
+    const node = inputRef.current;
+    if (!node) return;
+    node.style.height = 'auto';
+    node.style.height = `${Math.min(node.scrollHeight, 132)}px`;
+  }, [draft]);
+
   async function sendMessage(event) {
     event.preventDefault();
     const text = draft.trim();
@@ -127,7 +134,7 @@ function App() {
           </div>
           <label className="language-chip">
             <span>Language</span>
-            <select value={language} onChange={(e) => { setLanguage(e.target.value); setMenuOpen(false); }}>
+            <select aria-label="Conversation language" value={language} onChange={(e) => { setLanguage(e.target.value); setMenuOpen(false); }}>
               {languages.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}
             </select>
           </label>
@@ -157,6 +164,7 @@ function App() {
         <form className="composer" onSubmit={sendMessage}>
           <textarea
             ref={inputRef}
+            aria-label="Message Miguelito"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={onComposerKeyDown}
