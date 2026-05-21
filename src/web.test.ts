@@ -9,6 +9,10 @@ import { createRuntimeManager } from "./runtime.js";
 import { WebServer } from "./web/WebServer.js";
 import type { LLMProvider } from "./providers/interfaces.js";
 
+function extractAssetPaths(html: string): string[] {
+  return Array.from(html.matchAll(/(?:src|href)="([^"]+)"/g)).map((m) => m[1]).filter((p) => p.startsWith("/assets/"));
+}
+
 const MIN_ENV = {
   PROVIDER: "ollama",
   TRANSPORT: "web",
@@ -81,16 +85,44 @@ describe("runtime manager", () => {
 });
 
 describe("web server", () => {
+  it("serves a React app shell and compiled Vite assets", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const manager = await createRuntimeManager(config, { provider: new FakeProvider() });
+    const server = new WebServer(manager);
+
+    const index = await (server as any).routeRequest({ method: "GET", url: "/chat" });
+
+    expect(index.status).toBe(200);
+    expect(index.body).toContain('<div id="root"></div>');
+    expect(index.body).toContain('type="module"');
+    expect(index.body).not.toContain("function appJs()");
+    const assets = extractAssetPaths(index.body);
+    expect(assets.some((p) => p.endsWith(".js"))).toBe(true);
+    expect(assets.some((p) => p.endsWith(".css"))).toBe(true);
+
+    const jsAsset = await (server as any).routeRequest({ method: "GET", url: assets.find((p) => p.endsWith(".js")) });
+    expect(jsAsset.status).toBe(200);
+    expect(jsAsset.contentType).toContain("application/javascript");
+    expect(() => new vm.Script(jsAsset.body)).not.toThrow();
+
+    const cssAsset = await (server as any).routeRequest({ method: "GET", url: assets.find((p) => p.endsWith(".css")) });
+    expect(cssAsset.status).toBe(200);
+    expect(cssAsset.contentType).toContain("text/css");
+    expect(cssAsset.body).toContain("--surface");
+
+    manager.close();
+  });
+
   it("serves syntactically valid browser JavaScript so the language dropdown initializes", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const manager = await createRuntimeManager(config, { provider: new FakeProvider() });
     const server = new WebServer(manager);
 
-    const app = await (server as any).routeRequest({ method: "GET", url: "/app.js" });
+    const index = await (server as any).routeRequest({ method: "GET", url: "/app.js" });
 
-    expect(app.status).toBe(200);
-    expect(app.contentType).toContain("application/javascript");
-    expect(() => new vm.Script(app.body)).not.toThrow();
+    expect(index.status).toBe(200);
+    expect(index.contentType).toContain("text/html");
+    expect(index.body).toContain('<div id="root"></div>');
 
     manager.close();
   });

@@ -1,4 +1,6 @@
 import http from "http";
+import fs from "fs";
+import path from "path";
 import { URL } from "url";
 import type { RuntimeManager } from "../runtime.js";
 
@@ -10,6 +12,7 @@ export interface ApiResponse {
 
 const WEB_CHAT_ID = 0;
 const WEB_USER_ID = "web-user";
+const WEB_DIST_DIR = path.join(process.cwd(), "src", "web", "dist");
 
 export class WebServer {
   private server: http.Server | null = null;
@@ -80,11 +83,9 @@ export class WebServer {
       return this.handleApi(method, reqUrl, body);
     }
 
-    if (url.pathname === "/" || url.pathname === "/chat") return html(chatHtml());
-    if (url.pathname === "/settings") return html(settingsHtml());
-    if (url.pathname === "/app.js") return js(appJs());
-    if (url.pathname === "/styles.css") return css(stylesCss());
-    return html(chatHtml());
+    if (url.pathname.startsWith("/assets/")) return staticAsset(url.pathname);
+    if (url.pathname === "/" || url.pathname === "/chat" || url.pathname === "/settings") return staticIndex();
+    return staticIndex();
   }
 }
 
@@ -98,6 +99,25 @@ function html(body: string): ApiResponse {
 
 function js(body: string): ApiResponse {
   return { status: 200, contentType: "application/javascript; charset=utf-8", body };
+}
+
+function staticIndex(): ApiResponse {
+  const indexPath = path.join(WEB_DIST_DIR, "index.html");
+  if (!fs.existsSync(indexPath)) {
+    return html('<!doctype html><html><body><div id="root"></div><p>Web UI assets are missing. Run <code>npm run build:web</code>.</p></body></html>');
+  }
+  return html(fs.readFileSync(indexPath, "utf8"));
+}
+
+function staticAsset(urlPath: string): ApiResponse {
+  const relative = decodeURIComponent(urlPath.replace(/^\/assets\//, ""));
+  const assetPath = path.join(WEB_DIST_DIR, "assets", relative);
+  const assetRoot = path.join(WEB_DIST_DIR, "assets");
+  if (!assetPath.startsWith(assetRoot) || !fs.existsSync(assetPath)) return json(404, { error: "Asset not found" });
+  const body = fs.readFileSync(assetPath, "utf8");
+  if (assetPath.endsWith(".css")) return css(body);
+  if (assetPath.endsWith(".js")) return js(body);
+  return { status: 200, contentType: "application/octet-stream", body };
 }
 
 function css(body: string): ApiResponse {

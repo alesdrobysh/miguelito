@@ -1,0 +1,183 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import './styles.css';
+
+const FALLBACK_LANGUAGE = 'spanish';
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;',
+  }[c]));
+}
+
+function inlineMarkdown(value) {
+  let html = escapeHtml(value);
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  return html.replace(/\n/g, '<br />');
+}
+
+function languageLabel(languages, id) {
+  return languages.find((l) => l.id === id)?.name ?? id;
+}
+
+async function api(path, options) {
+  const response = await fetch(path, options);
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
+function App() {
+  const [languages, setLanguages] = useState([]);
+  const [language, setLanguage] = useState(() => localStorage.getItem('miguelito.language') || FALLBACK_LANGUAGE);
+  const [messages, setMessages] = useState([]);
+  const [draft, setDraft] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const scrollRef = useRef(null);
+  const inputRef = useRef(null);
+
+  const currentLanguageName = useMemo(() => languageLabel(languages, language), [languages, language]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api('/api/languages')
+      .then((data) => {
+        if (cancelled) return;
+        const nextLanguages = data.languages ?? [];
+        const nextLanguage = nextLanguages.some((l) => l.id === language) ? language : (nextLanguages[0]?.id || FALLBACK_LANGUAGE);
+        setLanguages(nextLanguages);
+        setLanguage(nextLanguage);
+      })
+      .catch((err) => setError(err.message));
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!language) return;
+    localStorage.setItem('miguelito.language', language);
+    setLoading(true);
+    setError('');
+    api('/api/chat?language=' + encodeURIComponent(language))
+      .then((data) => setMessages(data.messages ?? []))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [language]);
+
+  useEffect(() => {
+    const node = scrollRef.current;
+    if (!node) return;
+    node.scrollTop = node.scrollHeight;
+  }, [messages, sending]);
+
+  async function sendMessage(event) {
+    event.preventDefault();
+    const text = draft.trim();
+    if (!text || sending) return;
+    setDraft('');
+    setSending(true);
+    setError('');
+    setMessages((items) => [...items, { role: 'user', content: text }, { role: 'assistant', content: '…', pending: true }]);
+    try {
+      const data = await api('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ language, text }),
+      });
+      setMessages(data.messages ?? []);
+    } catch (err) {
+      setError(err.message);
+      setMessages((items) => items.filter((m) => !m.pending));
+    } finally {
+      setSending(false);
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  }
+
+  function onComposerKeyDown(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      event.currentTarget.form?.requestSubmit();
+    }
+  }
+
+  return (
+    <main className="app-shell">
+      <section className="phone-frame" aria-label="Miguelito chat">
+        <header className="chat-header">
+          <button className="icon-button ghost" type="button" aria-label="Open menu" onClick={() => setMenuOpen((v) => !v)}>
+            <span />
+            <span />
+          </button>
+          <div className="identity">
+            <div className="avatar" aria-hidden="true">M</div>
+            <div>
+              <div className="title-row"><h1>Miguelito</h1><span className="online-dot" /></div>
+              <p>{currentLanguageName} tutor</p>
+            </div>
+          </div>
+          <label className="language-chip">
+            <span>Language</span>
+            <select value={language} onChange={(e) => { setLanguage(e.target.value); setMenuOpen(false); }}>
+              {languages.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}
+            </select>
+          </label>
+        </header>
+
+        <div className={menuOpen ? 'drawer open' : 'drawer'}>
+          <div className="drawer-card">
+            <p className="drawer-kicker">Local web UI</p>
+            <p className="drawer-copy">A focused mobile-first chat. History stays available here; model context remains bounded for cost.</p>
+          </div>
+        </div>
+
+        <section className="messages" ref={scrollRef} aria-live="polite">
+          {loading && <div className="empty-card">Loading conversation…</div>}
+          {!loading && messages.length === 0 && (
+            <div className="welcome-card">
+              <p className="eyebrow">Start gently</p>
+              <h2>Write one sentence in {currentLanguageName}.</h2>
+              <p>Miguelito will keep the conversation natural and adapt vocabulary practice in the background.</p>
+            </div>
+          )}
+          {messages.map((message, index) => <MessageBubble message={message} key={`${index}-${message.role}-${message.content}`} />)}
+        </section>
+
+        {error && <div className="error-banner" role="alert">{error}</div>}
+
+        <form className="composer" onSubmit={sendMessage}>
+          <textarea
+            ref={inputRef}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={onComposerKeyDown}
+            rows={1}
+            placeholder={`Message in ${currentLanguageName}…`}
+            disabled={sending}
+          />
+          <button type="submit" disabled={sending || !draft.trim()}>{sending ? '…' : 'Send'}</button>
+        </form>
+      </section>
+    </main>
+  );
+}
+
+function MessageBubble({ message }) {
+  const mine = message.role === 'user';
+  return (
+    <article className={`bubble ${mine ? 'mine' : 'theirs'} ${message.pending ? 'pending' : ''}`}>
+      <div className="bubble-content" dangerouslySetInnerHTML={{ __html: inlineMarkdown(message.content) }} />
+    </article>
+  );
+}
+
+createRoot(document.getElementById('root')).render(<App />);
