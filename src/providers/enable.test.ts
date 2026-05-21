@@ -54,6 +54,17 @@ describe("config provider field", () => {
     expect(config.ollamaApiKey).toBe("sk-ollama");
   });
 
+  it("supports a separate evaluator model for deterministic post-turn checks", () => {
+    const config = loadConfig(env({ OPENROUTER_MODEL: "main-model", EVALUATOR_MODEL: "eval-model" }));
+    expect(config.openrouterModel).toBe("main-model");
+    expect(config.evaluatorModel).toBe("eval-model");
+  });
+
+  it("defaults evaluator model to the main OpenRouter model", () => {
+    const config = loadConfig(env({ OPENROUTER_MODEL: "main-model" }));
+    expect(config.evaluatorModel).toBe("main-model");
+  });
+
   it("defaults ollamaApiKey to empty string", () => {
     const config = loadConfig(env({ PROVIDER: "ollama" }));
     expect(config.ollamaApiKey).toBe("");

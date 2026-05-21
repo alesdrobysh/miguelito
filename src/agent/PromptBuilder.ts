@@ -2,6 +2,7 @@ import fs from "fs";
 import type { LanguageConfig } from "../languages/LanguageConfig.js";
 import type { VocabRepository, ErrorRepository, ProfileRepository, InterestRepository, CompetencyRepository, SessionRepository } from "../repositories/interfaces.js";
 import { getCompetencyVector, selectFocusAxis, renderCalibration } from "../domain/competency.js";
+import { VocabularyReviewPlanner } from "./VocabularyReviewPlanner.js";
 
 export interface PromptRepos {
   vocab: VocabRepository;
@@ -73,10 +74,9 @@ export class PromptBuilder {
       calibration = `\n\n${renderCalibration(cv, focus, this.lang)}`;
     } catch {}
 
-    const productiveWords = await this._getDueWords(1, "productive");
-    const receptiveWords = (await this._getDueWords(5, "receptive"))
-      .filter((w) => !productiveWords.includes(w))
-      .slice(0, 3);
+    const reviewPlan = await new VocabularyReviewPlanner(this.repos.vocab).select();
+    const productiveWords = reviewPlan.productiveWords;
+    const receptiveWords = reviewPlan.receptiveWords;
     const weakAreas = await this._getWeakAreas(3);
     const errorInfo = weakAreas.length > 0 ? await this._getRecentErrorForCategory(weakAreas[0]) : null;
 
@@ -115,15 +115,6 @@ export class PromptBuilder {
 
   private async _buildCompetencyVector() {
     return getCompetencyVector(this.repos);
-  }
-
-  private async _getDueWords(limit: number, mode: "productive" | "receptive" = "productive"): Promise<string[]> {
-    try {
-      const rows = await this.repos.vocab.dueVocab(limit, mode);
-      return rows.map((r) => r.chunk_l2);
-    } catch {
-      return [];
-    }
   }
 
   private async _getWeakAreas(limit: number): Promise<string[]> {

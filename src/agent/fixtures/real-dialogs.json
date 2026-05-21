@@ -1,0 +1,46 @@
+[
+  {
+    "name": "spanish-error-and-chunk-capture",
+    "history": [
+      { "role": "assistant", "content": "Cuéntame algo difícil de tu mañana." }
+    ],
+    "userMessage": "Yo es muy cansado y me cuesta levantarme temprano.",
+    "assistantText": "Dirías: estoy muy cansado. Y sí, levantarse temprano cuesta.",
+    "evaluation": {
+      "annotation": {
+        "obligatory": [{ "type": "verb_conjugation" }],
+        "used": ["me cuesta + infinitivo"],
+        "naturalness": 0.72,
+        "comprehension": "smooth",
+        "tunit_length": 2,
+        "had_subordination": false
+      },
+      "mode": "TEACH",
+      "errors": [{ "user_text": "Yo es muy cansado", "correct": "Estoy muy cansado", "category": "verb_conjugation", "note": "estar for state" }],
+      "vocabulary": [{ "word": "me cuesta + [inf]", "context": "me cuesta levantarme temprano", "anchor": "costar" }],
+      "reviews": []
+    }
+  },
+  {
+    "name": "spanish-productive-review-success",
+    "history": [
+      { "role": "assistant", "content": "¿A quién echas de menos cuando viajas?" }
+    ],
+    "userMessage": "Echo de menos a mi hermana.",
+    "assistantText": "Qué bonito. ¿La llamas a menudo?",
+    "evaluation": {
+      "annotation": {
+        "obligatory": [],
+        "used": ["echar de menos"],
+        "naturalness": 1,
+        "comprehension": "smooth",
+        "tunit_length": 1,
+        "had_subordination": false
+      },
+      "mode": "DIG",
+      "errors": [],
+      "vocabulary": [],
+      "reviews": [{ "word": "echar de menos", "mode": "productive", "user_response": "Echo de menos a mi hermana.", "target_used": true, "accepted_variant": "echo de menos", "hint_level": 0, "grade": 3, "note": "spontaneous correct use" }]
+    }
+  }
+]

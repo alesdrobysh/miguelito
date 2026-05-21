@@ -9,6 +9,7 @@ export interface Config {
   telegramToken: string;
   openrouterApiKey: string;
   openrouterModel: string;
+  evaluatorModel: string;
   openrouterBaseUrl: string;
   ollamaBaseUrl: string;
   ollamaModel: string;
@@ -34,6 +35,7 @@ export function loadConfig(
   const telegramToken = env.TELEGRAM_BOT_TOKEN ?? "";
   const openrouterApiKey = env.OPENROUTER_API_KEY ?? "";
   const openrouterModel = env.OPENROUTER_MODEL ?? "google/gemini-2.0-flash-lite";
+  const evaluatorModel = env.EVALUATOR_MODEL ?? openrouterModel;
   const openrouterBaseUrl = env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1";
   const ollamaBaseUrl = env.OLLAMA_BASE_URL ?? "http://localhost:11434/v1";
   const ollamaModel = env.OLLAMA_MODEL ?? "llama3.2";
@@ -67,6 +69,7 @@ export function loadConfig(
     telegramToken,
     openrouterApiKey,
     openrouterModel,
+    evaluatorModel,
     openrouterBaseUrl,
     ollamaBaseUrl,
     ollamaModel,

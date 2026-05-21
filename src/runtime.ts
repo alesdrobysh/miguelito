@@ -16,6 +16,7 @@ import type { ChatMessage } from "./llm.js";
 
 export interface RuntimeDeps {
   provider?: LLMProvider;
+  evaluatorProvider?: LLMProvider;
 }
 
 export interface LanguageRuntime {
@@ -42,10 +43,25 @@ export function createProvider(config: Config): LLMProvider {
   });
 }
 
+export function createEvaluatorProvider(config: Config): LLMProvider {
+  if (config.provider === "ollama") {
+    return new OllamaProvider({
+      baseUrl: config.ollamaBaseUrl,
+      model: config.ollamaModel,
+      apiKey: config.ollamaApiKey || undefined,
+    });
+  }
+  return new OpenRouterProvider({
+    apiKey: config.openrouterApiKey,
+    model: config.evaluatorModel,
+    baseUrl: config.openrouterBaseUrl,
+  });
+}
+
 export class RuntimeManager {
   private runtimes = new Map<string, LanguageRuntime>();
 
-  constructor(private config: Config, private provider: LLMProvider, private sharedDb: BuddyDb) {}
+  constructor(private config: Config, private provider: LLMProvider, private evaluatorProvider: LLMProvider, private sharedDb: BuddyDb) {}
 
   languages(): Array<{ id: string; name: string }> {
     return listAvailableLanguages().map((lang) => ({ id: lang.id, name: lang.name }));
@@ -76,7 +92,7 @@ export class RuntimeManager {
       { vocab: db, errors: db, profile: this.sharedDb, langProfile: db, interests: this.sharedDb, competency: db, session: db },
       lang,
     );
-    const agentRunner = new AgentRunner({ provider: this.provider, session: db, promptBuilder, toolCtx, lang, dreamMemoryPath });
+    const agentRunner = new AgentRunner({ provider: this.provider, evaluatorProvider: this.evaluatorProvider, session: db, promptBuilder, toolCtx, lang, dreamMemoryPath });
     const dreamService = new DreamService(db, db, db, this.provider, {
       timezone: this.config.timezone,
       dreamMemoryPath,
@@ -146,8 +162,9 @@ export async function createRuntimeManager(config: Config, deps: RuntimeDeps = {
   fs.mkdirSync(config.dataDir, { recursive: true });
   fs.mkdirSync(path.join(config.dataDir, "memory"), { recursive: true });
   const provider = deps.provider ?? createProvider(config);
+  const evaluatorProvider = deps.evaluatorProvider ?? createEvaluatorProvider(config);
   const sharedDb = await BuddyDb.open(path.join(config.dataDir, "buddy-shared.db"), "shared", [], []);
-  const manager = new RuntimeManager(config, provider, sharedDb);
+  const manager = new RuntimeManager(config, provider, evaluatorProvider, sharedDb);
   const languageIds = config.transport === "web"
     ? listAvailableLanguages().map((lang) => lang.id)
     : [process.env.LANGUAGE ?? "spanish"];
