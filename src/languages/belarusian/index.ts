@@ -15,34 +15,54 @@ export const BelarusianLanguage: LanguageConfig = {
   },
   calibrationText: {
     morphologyLow:
-      "use common forms freely; introduce case variation as it arises naturally.",
+      "свабодна выкарыстоўвай частыя формы; уводзь склонавыя варыянты, калі яны натуральна ўзнікаюць.",
     morphologyFocus: (pct) =>
-      `learner accuracy ${pct}% on obligatory contexts — model correct case endings, aspect selection, and agreement prominently; use contrasting aspect pairs to expose the patterns.`,
+      `дакладнасць навучэнца ў абавязковых кантэкстах: ${pct}% — выразна мадэлюй правільныя канчаткі склонаў, выбар трывання і дапасаванне; выкарыстоўвай кантрасныя пары трывання, каб паказваць узоры.`,
     morphologyNormal:
-      "use nominative, accusative, and genitive cases freely; introduce instrumental and locative contextually.",
+      "свабодна выкарыстоўвай назоўны, вінавальны і родны склоны; уводзь творны і месны кантэкстуальна.",
     idiomaticityLow:
-      "use natural Belarusian; avoid word-for-word translations from Russian or English.",
+      "выкарыстоўвай натуральную беларускую мову; пазбягай даслоўных перакладаў з рускай або англійскай.",
     idiomaticityFocus: (pct) =>
-      `naturalness score ${pct}% — prefer idiomatic Belarusian expressions; model native phrasing prominently and gently flag calques from Russian or English.`,
+      `натуральнасць: ${pct}% — аддавай перавагу ідыяматычным беларускім выразам; выразна мадэлюй натуральнае гучанне і мякка адзначай калькі з рускай або англійскай.`,
     idiomaticityNormal:
-      "use natural, idiomatic Belarusian; native expressions over literal translations or russianisms.",
+      "выкарыстоўвай натуральную, ідыяматычную беларускую мову; родныя выразы лепшыя за даслоўныя пераклады і русізмы.",
+  },
+  promptText: {
+    languageBlock:
+      "## Мова\nТы т’ютар беларускай мовы. Адказвай па-беларуску: УВЕСЬ бачны вывад павінен быць па-беларуску. Чалавек вывучае беларускую мову.\n\n",
+    postHistoryReminder:
+      "Напамін: ты т’ютар беларускай мовы. Адказвай ТОЛЬКІ па-беларуску. НІКОЛІ не выводзь назвы рэжымаў, сістэмныя маркеры, унутраны стан або метакаментары — навучэнец павінен бачыць толькі натуральны беларускі тэкст. Коратка (1-3 сказы). Правер `## Профіль навучэнца`, каб дарэчна выкарыстаць імя.",
+    learnerProfileConfigured: (name, goal, correctionStyle) =>
+      `\n\n## Профіль навучэнца\nІмя: ${name} | Мэта: ${goal} | Стыль выпраўлення: ${correctionStyle}`,
+    learnerProfileUnconfigured:
+      "\n\n## Профіль навучэнца\nЯшчэ не наладжаны — пачні onboarding, калі карыстальнік адправіць /start.",
+    conversationState: (turnCount, lastModes, moodHint, topicsTouched) =>
+      `\n\n## Стан размовы\nКолькасць хадоў: ${turnCount}\nАпошнія рэжымы: ${lastModes}\nПадказка настрою: ${moodHint}\nЗакранутыя тэмы: ${topicsTouched}\n`,
+    currentLearnerProfile: ({ words, errorInfo, weakAreas }) => {
+      const lines: string[] = ["\n\n## Бягучы профіль навучэнца"];
+      if (weakAreas.length > 0) lines.push(`**Слабыя зоны**: ${weakAreas.join(", ")}`);
+      if (words.length > 0) lines.push(`**Словы для ўпляцення**: ${words.join(", ")}`);
+      if (errorInfo) lines.push(`**Памылка для замацавання**: "${errorInfo.user_text}" → "${errorInfo.correct}" (${errorInfo.category})`);
+      return lines.join("\n");
+    },
+    dreamMemory: (content) => `\n\n## Памяць са сну\n${content}`,
   },
   prompts: {
     morning:
-      "Check ## Conversation State for session context and mood. Check ## Learner Profile and ## Current Learner Profile for the user's name, level, and Words to Weave In. Send a single short Belarusian message (1-3 sentences) identifying a linguistic opportunity. Use *system markers* (e.g., *ініцыялізацыя*, *аналіз*) for state. Weave one target word from Words to Weave In and pose a relevant question. Do not use greetings or meta-commentary. Output data as plain text.",
+      "Правер `## Стан размовы`, каб улічыць кантэкст і настрой. Правер `## Профіль навучэнца` і `## Бягучы профіль навучэнца`, каб убачыць імя, узровень і `Словы для ўпляцення`. Адпраў адзін кароткі беларускі тэкст (1-3 сказы), які паказвае моўную магчымасць. Упляці адно мэтавае слова са спісу і пастаў дарэчнае пытанне. Не выкарыстоўвай прывітанні і метакаментары. Выводзь дадзеныя як просты тэкст.",
     evening:
-      "Check ## Conversation State for session context and mood. Check ## Learner Profile and ## Current Learner Profile for the user's name, level, and Words to Weave In. Send a single short Belarusian message (1-3 sentences) summarizing session progress. Use *system markers* (e.g., *завяршэнне*, *падагульненне*) for state. Weave one target word and pose a reflective question. Do not use greetings or meta-commentary. Output data as plain text.",
-    dream: `You are a Belarusian language tutor. You have just finished your conversations for the day.
-Update the learner's long-term memory profile by merging today's observations into the existing profile.
+      "Правер `## Стан размовы`, каб улічыць кантэкст і настрой. Правер `## Профіль навучэнца` і `## Бягучы профіль навучэнца`, каб убачыць імя, узровень і `Словы для ўпляцення`. Адпраў адзін кароткі беларускі тэкст (1-3 сказы), які падсумоўвае прагрэс сесіі. Упляці адно мэтавае слова і пастаў рэфлексіўнае пытанне. Не выкарыстоўвай прывітанні і метакаментары. Выводзь дадзеныя як просты тэкст.",
+    dream: `Ты т’ютар беларускай мовы. Ты толькі што завяршыў сённяшнія размовы.
+Абнаві доўгатэрміновы профіль памяці навучэнца, уліўшы сённяшнія назіранні ў існы профіль.
 
-Rules:
-1. Deduplicate — if a fact already appears, reinforce or refine rather than repeat it.
-2. Update stale facts when new information contradicts them.
-3. Keep the output ≤400 words total.
-4. Write in compact, factual prose — no headers, no bullet points.
-5. If today added nothing new, return the existing profile unchanged.
+Правілы:
+1. Дэдуплікуй — калі факт ужо ёсць, умацуй або ўдакладні яго замест паўтору.
+2. Абнаўляй састарэлыя факты, калі новая інфармацыя ім супярэчыць.
+3. Увесь вынік павінен быць не больш за 400 слоў.
+4. Пішы сціслай, фактычнай прозай — без загалоўкаў і маркіраваных спісаў.
+5. Калі сёння нічога новага не дадалося, вярні існы профіль без зменаў.
 
-Focus on: vocabulary progress, persistent error patterns (especially case and aspect), strengths, topics of interest, effective teaching approaches, and learner personality/preferences.`,
+Засяродзься на: прагрэсе ў лексіцы, устойлівых узорах памылак (асабліва склон і трыванне), моцных баках, тэмах зацікаўлення, эфектыўных падыходах да навучання і асобе/перавагах навучэнца.`,
     readLink: (title, text) =>
       `Ты асістэнт па вывучэнні беларускай мовы.\n\nАртыкул: "${title}"\n\nТэкст: ${text}\n\nЗаданні:\n1. Напішы рэзюмэ з 3-5 сказаў на простай, зразумелай беларускай мове.\n2. Вылучы 3-5 цікавых беларускіх слоў або выразаў з тэксту. Для кожнага дай кароткае тлумачэнне па-беларуску (1 сказ).\n\nАдкажы ТОЛЬКІ ў JSON:\n{"summary": "...", "words": [{"word": "...", "explanation": "..."}]}`,
     readingSuggest: (title, text) =>

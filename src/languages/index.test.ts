@@ -44,4 +44,44 @@ describe("loadLanguage", () => {
       expect(promptText).not.toMatch(forbiddenPersonalNames);
     }
   });
+
+  it("keeps each language's prompt assets in that target language", () => {
+    const englishPromptPhrases = [
+      "You are",
+      "Respond in",
+      "The learner is learning",
+      "Call tools BEFORE",
+      "Every user turn",
+      "New Spanish construction",
+      "New Belarusian word",
+      "Check ## Learner Profile",
+      "Send a single short",
+      "Never output mode names",
+      "You have just finished",
+      "Update the learner",
+      "Rules:",
+      "Focus on:",
+      "Return the existing profile unchanged",
+    ];
+
+    for (const lang of listAvailableLanguages()) {
+      const soul = fs.readFileSync(lang.soulPath, "utf8");
+      const promptText = [
+        ...Object.values(lang.prompts).map((prompt) =>
+          typeof prompt === "string" ? prompt : prompt("Example title", "Example body"),
+        ),
+        lang.calibrationText.morphologyLow,
+        lang.calibrationText.morphologyFocus(80),
+        lang.calibrationText.morphologyNormal,
+        lang.calibrationText.idiomaticityLow,
+        lang.calibrationText.idiomaticityFocus(80),
+        lang.calibrationText.idiomaticityNormal,
+      ].join("\n");
+
+      for (const phrase of englishPromptPhrases) {
+        expect(soul, `${lang.id} soul.md contains English phrase: ${phrase}`).not.toContain(phrase);
+        expect(promptText, `${lang.id} prompts contain English phrase: ${phrase}`).not.toContain(phrase);
+      }
+    }
+  });
 });

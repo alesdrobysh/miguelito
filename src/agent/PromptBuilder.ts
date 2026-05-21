@@ -29,20 +29,19 @@ export class PromptBuilder {
     const { basicProfile, learnerProfile, calibration, userInterests, dreamMemory } =
       await this._buildInjection(userMessage, dreamMemoryPath);
 
-    const langName = this.lang.name;
-    let fullSystem = `## Language\nYou are a ${langName} tutor. Respond in ${langName} — ALL output must be in ${langName}. The learner is learning ${langName}.\n\n` + soulContent + basicProfile;
+    let fullSystem = this.lang.promptText.languageBlock + soulContent + basicProfile;
     if (dreamMemory) fullSystem += dreamMemory;
     if (learnerProfile) fullSystem += learnerProfile;
     if (calibration) fullSystem += calibration;
     if (userInterests) fullSystem += userInterests;
 
     const convState = await this.repos.session.getConversationState();
-    fullSystem += `\n\n## Conversation State
-Turn count: ${convState.session.turn_count}
-Last modes: ${convState.session.last_two_modes}
-Mood hint: ${convState.session.mood_hint ?? "neutral"}
-Topics touched: ${convState.session.topics_touched}
-`;
+    fullSystem += this.lang.promptText.conversationState(
+      convState.session.turn_count,
+      convState.session.last_two_modes,
+      convState.session.mood_hint ?? "neutral",
+      convState.session.topics_touched,
+    );
 
     return fullSystem;
   }
@@ -51,7 +50,7 @@ Topics touched: ${convState.session.topics_touched}
    * Returns a short instruction to be placed AFTER the chat history.
    */
   buildPostHistoryReminder(): string {
-    return `Reminder: You are a ${this.lang.name} language tutor. Respond ONLY in ${this.lang.name}. NEVER output mode names, system markers, internal state, or meta-commentary — the learner must only see natural ${this.lang.name} text. Keep it brief (1-3 sentences). Check ## Learner Profile for the user's name and greet them accordingly.`;
+    return this.lang.promptText.postHistoryReminder;
   }
 
   private async _buildInjection(userMessage?: string, dreamMemoryPath?: string): Promise<ProfileInjection> {
@@ -64,8 +63,8 @@ Topics touched: ${convState.session.topics_touched}
     const hasProfile = name || correctionStyle || goal;
 
     const basicProfile = hasProfile
-      ? `\n\n## Learner Profile\nName: ${name ?? "unknown"} | Goal: ${goal ?? "none"} | Correction style: ${correctionStyle ?? "inline"}`
-      : `\n\n## Learner Profile\nNot configured yet — begin onboarding when user sends /start.`;
+      ? this.lang.promptText.learnerProfileConfigured(name ?? "—", goal ?? "—", correctionStyle ?? "inline")
+      : this.lang.promptText.learnerProfileUnconfigured;
 
     let calibration: string | null = null;
     try {
@@ -79,7 +78,9 @@ Topics touched: ${convState.session.topics_touched}
     const errorInfo = weakAreas.length > 0 ? await this._getRecentErrorForCategory(weakAreas[0]) : null;
 
     const hasLearnerData = words.length > 0 || errorInfo != null || weakAreas.length > 0;
-    const learnerProfile = hasLearnerData ? formatProfile(words, errorInfo, weakAreas) : null;
+    const learnerProfile = hasLearnerData
+      ? this.lang.promptText.currentLearnerProfile({ words, errorInfo, weakAreas })
+      : null;
 
     // Dynamic Interest Injection
     const allInterests = await this.repos.interests.listInterests(100);
@@ -103,7 +104,7 @@ Topics touched: ${convState.session.topics_touched}
     let dreamMemory: string | null = null;
     if (dreamMemoryPath && fs.existsSync(dreamMemoryPath)) {
       const content = fs.readFileSync(dreamMemoryPath, "utf8").trim();
-      if (content) dreamMemory = `\n\n## Dream Memory\n${content}`;
+      if (content) dreamMemory = this.lang.promptText.dreamMemory(content);
     }
 
     return { basicProfile, learnerProfile, calibration, userInterests, dreamMemory };
@@ -159,16 +160,4 @@ function shuffleArray<T>(arr: T[]): T[] {
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
-}
-
-function formatProfile(
-  words: string[],
-  errorInfo: { user_text: string; correct: string; category: string } | null,
-  weakAreas: string[],
-): string {
-  const lines: string[] = ["\n\n## Current Learner Profile"];
-  if (weakAreas.length > 0) lines.push(`**Weak Areas**: ${weakAreas.join(", ")}`);
-  if (words.length > 0) lines.push(`**Words to Weave In**: ${words.join(", ")}`);
-  if (errorInfo) lines.push(`**Error to Reinforce**: "${errorInfo.user_text}" → "${errorInfo.correct}" (${errorInfo.category})`);
-  return lines.join("\n");
 }
