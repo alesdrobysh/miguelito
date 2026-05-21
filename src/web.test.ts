@@ -59,12 +59,54 @@ describe("web config", () => {
     expect(config.webHost).toBe("127.0.0.1");
   });
 
+  it("accepts TRANSPORT=unified with separate Telegram bot tokens for Polish and Spanish", () => {
+    const config = loadConfig(env({
+      TRANSPORT: "unified",
+      TELEGRAM_BOT_TOKEN: undefined,
+      TELEGRAM_POLISH_BOT_TOKEN: "pl-token",
+      TELEGRAM_SPANISH_BOT_TOKEN: "es-token",
+      TELEGRAM_CHAT_ID: "279737838",
+      WEB_HOST: "0.0.0.0",
+    }));
+
+    expect(config.transport).toBe("unified");
+    expect(config.webHost).toBe("0.0.0.0");
+    expect(config.telegramBotTokens).toEqual({ polish: "pl-token", spanish: "es-token" });
+  });
+
+  it("rejects TRANSPORT=unified when either language bot token is missing", () => {
+    expect(() => loadConfig(env({
+      TRANSPORT: "unified",
+      TELEGRAM_BOT_TOKEN: undefined,
+      TELEGRAM_POLISH_BOT_TOKEN: "pl-token",
+      TELEGRAM_SPANISH_BOT_TOKEN: undefined,
+      TELEGRAM_CHAT_ID: "279737838",
+    }))).toThrow(/TELEGRAM_SPANISH_BOT_TOKEN/);
+  });
+
   it("lists all bundled languages for the UI", () => {
     expect(listAvailableLanguages().map((l) => l.id)).toEqual(["spanish", "polish", "belarusian"]);
   });
 });
 
 describe("runtime manager", () => {
+  it("loads all languages for unified transport so Telegram bots and WebUI share one DB instance per language", async () => {
+    const config = loadConfig(env({
+      TRANSPORT: "unified",
+      DATA_DIR: tmpDir,
+      TELEGRAM_POLISH_BOT_TOKEN: "pl-token",
+      TELEGRAM_SPANISH_BOT_TOKEN: "es-token",
+      TELEGRAM_CHAT_ID: "279737838",
+    }));
+    const manager = await createRuntimeManager(config, { provider: new FakeProvider() });
+
+    expect(manager.hasLanguage("spanish")).toBe(true);
+    expect(manager.hasLanguage("polish")).toBe(true);
+    expect(manager.hasLanguage("belarusian")).toBe(true);
+
+    manager.close();
+  });
+
   it("handles multiple languages in one process with isolated chat histories", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const manager = await createRuntimeManager(config, { provider: new FakeProvider() });

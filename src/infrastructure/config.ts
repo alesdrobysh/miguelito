@@ -5,8 +5,9 @@ dotenv.config();
 
 export interface Config {
   provider: "openrouter" | "ollama";
-  transport: "telegram" | "tui" | "web";
+  transport: "telegram" | "tui" | "web" | "unified";
   telegramToken: string;
+  telegramBotTokens: Partial<Record<"polish" | "spanish", string>>;
   openrouterApiKey: string;
   openrouterModel: string;
   evaluatorModel: string;
@@ -33,6 +34,10 @@ export function loadConfig(
   const provider = (env.PROVIDER ?? "openrouter") as Config["provider"];
   const transport = (env.TRANSPORT ?? "telegram") as Config["transport"];
   const telegramToken = env.TELEGRAM_BOT_TOKEN ?? "";
+  const telegramBotTokens: Config["telegramBotTokens"] = {
+    polish: env.TELEGRAM_POLISH_BOT_TOKEN ?? undefined,
+    spanish: env.TELEGRAM_SPANISH_BOT_TOKEN ?? undefined,
+  };
   const openrouterApiKey = env.OPENROUTER_API_KEY ?? "";
   const openrouterModel = env.OPENROUTER_MODEL ?? "google/gemini-2.0-flash-lite";
   const evaluatorModel = env.EVALUATOR_MODEL ?? openrouterModel;
@@ -57,6 +62,11 @@ export function loadConfig(
     if (!telegramToken) throw new Error("TELEGRAM_BOT_TOKEN is required when TRANSPORT=telegram");
     if (!telegramChatId) throw new Error("TELEGRAM_CHAT_ID is required when TRANSPORT=telegram");
   }
+  if (transport === "unified") {
+    if (!telegramBotTokens.polish) throw new Error("TELEGRAM_POLISH_BOT_TOKEN is required when TRANSPORT=unified");
+    if (!telegramBotTokens.spanish) throw new Error("TELEGRAM_SPANISH_BOT_TOKEN is required when TRANSPORT=unified");
+    if (!telegramChatId) throw new Error("TELEGRAM_CHAT_ID is required when TRANSPORT=unified");
+  }
 
   const dreamCron = env.DREAM_CRON ?? "0 23 * * *";
   const dreamMemoryPath = env.DREAM_MEMORY_PATH ?? path.resolve(process.cwd(), "data/memory/MEMORY.md");
@@ -67,6 +77,7 @@ export function loadConfig(
     provider,
     transport,
     telegramToken,
+    telegramBotTokens,
     openrouterApiKey,
     openrouterModel,
     evaluatorModel,

@@ -167,7 +167,7 @@ export async function createRuntimeManager(config: Config, deps: RuntimeDeps = {
   const evaluatorProvider = deps.evaluatorProvider ?? createEvaluatorProvider(config);
   const sharedDb = await BuddyDb.open(path.join(config.dataDir, "buddy-shared.db"), "shared", [], []);
   const manager = new RuntimeManager(config, provider, evaluatorProvider, sharedDb);
-  const languageIds = config.transport === "web"
+  const languageIds = config.transport === "web" || config.transport === "unified"
     ? listAvailableLanguages().map((lang) => lang.id)
     : [process.env.LANGUAGE ?? "spanish"];
   for (const id of languageIds) await manager.addLanguage(id);

@@ -35,6 +35,42 @@ async function main() {
     return;
   }
 
+  if (config.transport === "unified") {
+    new WebServer(manager).start(config.webHost, config.webPort);
+    const telegramBots = [
+      { language: "polish", token: config.telegramBotTokens.polish! },
+      { language: "spanish", token: config.telegramBotTokens.spanish! },
+    ];
+
+    for (const bot of telegramBots) {
+      const transport = new TelegramTransport({ telegramToken: bot.token, allowedUsers: config.allowedUsers });
+      transport.onMessage((chatId, userId, text) => manager.handleMessage(bot.language, Number(chatId), userId, text));
+
+      const rt = manager.runtime(bot.language);
+      const morningCronPrompt = process.env.MORNING_CRON_PROMPT ?? rt.lang.prompts.morning;
+      const eveningCronPrompt = process.env.EVENING_CRON_PROMPT ?? rt.lang.prompts.evening;
+      startScheduler(
+        {
+          morningCron: config.morningCron,
+          eveningCron: config.eveningCron,
+          dreamCron: config.dreamCron,
+          timezone: config.timezone,
+          telegramChatId: config.telegramChatId,
+          morningCronPrompt,
+          eveningCronPrompt,
+        },
+        (prompt) => rt.agentRunner.run(prompt, []),
+        rt.dreamService,
+        transport,
+      );
+      transport.start({
+        onStart: (info: { username: string }) => log.info({ username: info.username, language: bot.language }, "bot started"),
+        allowed_updates: ["message"],
+      });
+    }
+    return;
+  }
+
   const transport = config.transport === "tui"
     ? new TuiTransport()
     : new TelegramTransport({ telegramToken: config.telegramToken, allowedUsers: config.allowedUsers });
