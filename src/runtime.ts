@@ -35,6 +35,7 @@ export function createProvider(config: Config): LLMProvider {
       apiKey: config.openaiCodexApiKey,
       model: config.openaiCodexModel,
       baseUrl: config.openaiCodexBaseUrl,
+      authFile: config.openaiCodexAuthFile,
     });
   }
   if (config.provider === "ollama") {
@@ -57,6 +58,7 @@ export function createEvaluatorProvider(config: Config): LLMProvider {
       apiKey: config.openaiCodexApiKey,
       model: config.openaiCodexEvaluatorModel,
       baseUrl: config.openaiCodexBaseUrl,
+      authFile: config.openaiCodexAuthFile,
     });
   }
   if (config.provider === "ollama") {

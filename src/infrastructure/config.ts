@@ -19,6 +19,7 @@ export interface Config {
   openaiCodexModel: string;
   openaiCodexEvaluatorModel: string;
   openaiCodexBaseUrl: string;
+  openaiCodexAuthFile: string;
   dbPath: string;
   dataDir: string;
   allowedUsers: Set<string>;
@@ -52,7 +53,8 @@ export function loadConfig(
   const openaiCodexApiKey = env.OPENAI_CODEX_API_KEY ?? env.OPENAI_API_KEY ?? "";
   const openaiCodexModel = env.OPENAI_CODEX_MODEL ?? "gpt-5.1-codex-mini";
   const openaiCodexEvaluatorModel = env.OPENAI_CODEX_EVALUATOR_MODEL ?? openaiCodexModel;
-  const openaiCodexBaseUrl = env.OPENAI_CODEX_BASE_URL ?? env.OPENAI_BASE_URL ?? "https://api.openai.com/v1";
+  const openaiCodexAuthFile = env.OPENAI_CODEX_AUTH_FILE ?? "";
+  const openaiCodexBaseUrl = env.OPENAI_CODEX_BASE_URL ?? env.OPENAI_BASE_URL ?? (openaiCodexApiKey ? "https://api.openai.com/v1" : "https://chatgpt.com/backend-api/codex");
   const dbPath = env.DB_PATH ?? "./data/buddy.db";
   const dataDir = env.DATA_DIR ?? path.resolve(process.cwd(), "data");
   const allowedUsers = new Set(
@@ -66,8 +68,9 @@ export function loadConfig(
   if (provider === "openrouter" && !openrouterApiKey) {
     throw new Error("OPENROUTER_API_KEY is required when PROVIDER=openrouter");
   }
-  if (provider === "openai-codex" && !openaiCodexApiKey) {
-    throw new Error("OPENAI_CODEX_API_KEY or OPENAI_API_KEY is required when PROVIDER=openai-codex");
+  if (provider === "openai-codex" && !openaiCodexApiKey && !openaiCodexAuthFile) {
+    // No manual API key is required: OpenAICodexProvider can read OAuth tokens
+    // from the default Hermes/Codex login files at runtime.
   }
   if (transport === "telegram") {
     if (!telegramToken) throw new Error("TELEGRAM_BOT_TOKEN is required when TRANSPORT=telegram");
@@ -100,6 +103,7 @@ export function loadConfig(
     openaiCodexModel,
     openaiCodexEvaluatorModel,
     openaiCodexBaseUrl,
+    openaiCodexAuthFile,
     dbPath,
     dataDir,
     allowedUsers,

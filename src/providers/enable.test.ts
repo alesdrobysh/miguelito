@@ -1,3 +1,6 @@
+import fs from "fs";
+import os from "os";
+import path from "path";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { loadConfig } from "../infrastructure/config.js";
 import { createEvaluatorProvider, createProvider } from "../runtime.js";
@@ -91,6 +94,17 @@ describe("config provider field", () => {
     expect(config.openaiCodexBaseUrl).toBe("https://openai.test/v1");
   });
 
+  it("allows PROVIDER=openai-codex without a manual key and defaults to Codex OAuth backend", () => {
+    const config = loadConfig(env({ PROVIDER: "openai-codex", OPENAI_CODEX_API_KEY: undefined, OPENAI_API_KEY: undefined }));
+    expect(config.openaiCodexApiKey).toBe("");
+    expect(config.openaiCodexBaseUrl).toBe("https://chatgpt.com/backend-api/codex");
+  });
+
+  it("reads an explicit OpenAI Codex auth file path", () => {
+    const config = loadConfig(env({ PROVIDER: "openai-codex", OPENAI_CODEX_AUTH_FILE: "/tmp/codex-auth.json" }));
+    expect(config.openaiCodexAuthFile).toBe("/tmp/codex-auth.json");
+  });
+
   it("does not require OPENROUTER_API_KEY when PROVIDER=ollama", () => {
     expect(() =>
       loadConfig(env({ PROVIDER: "ollama", OPENROUTER_API_KEY: undefined }))
@@ -109,10 +123,10 @@ describe("config provider field", () => {
     ).toThrow("OPENROUTER_API_KEY");
   });
 
-  it("requires an OpenAI key for the openai-codex provider", () => {
+  it("does not require a manual OpenAI key for the openai-codex provider", () => {
     expect(() =>
       loadConfig(env({ PROVIDER: "openai-codex", OPENAI_CODEX_API_KEY: undefined, OPENAI_API_KEY: undefined }))
-    ).toThrow("OPENAI_CODEX_API_KEY or OPENAI_API_KEY");
+    ).not.toThrow();
   });
 });
 
@@ -205,5 +219,67 @@ describe("provider creation", () => {
     expect(body.response_format).toEqual({ type: "json_object" });
     expect(body.max_tokens).toBe(99);
     expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe("Bearer sk-codex");
+  });
+
+  it("uses Codex OAuth login from Hermes auth file without a manual API key", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "miguelito-codex-auth-"));
+    const authFile = path.join(dir, "auth.json");
+    fs.writeFileSync(authFile, JSON.stringify({
+      credential_pool: {
+        "openai-codex": [{ auth_type: "oauth", access_token: "oauth-access-token" }],
+      },
+    }));
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ output: [{ type: "message", content: [{ type: "output_text", text: "ok" }] }] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = new OpenAICodexProvider({
+      authFile,
+      model: "gpt-5.1-codex-mini",
+    });
+    const result = await provider.chat([{ role: "system", content: "sys" }, { role: "user", content: "hi" }], undefined, { structured: true });
+
+    expect(result.content).toBe("ok");
+    const url = fetchMock.mock.calls[0][0];
+    const init = fetchMock.mock.calls[0][1];
+    const body = JSON.parse(init.body);
+    expect(url).toBe("https://chatgpt.com/backend-api/codex/responses");
+    expect(init.headers.Authorization).toBe("Bearer oauth-access-token");
+    expect(init.headers.originator).toBe("codex_cli_rs");
+    expect(body.instructions).toBe("sys");
+    expect(body.input).toEqual([{ role: "user", content: "hi" }]);
+    expect(body.text).toEqual({ format: { type: "json_object" } });
+  });
+
+  it("maps OpenAI-style tool calls to Codex Responses function_call items", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "miguelito-codex-auth-"));
+    const authFile = path.join(dir, "auth.json");
+    fs.writeFileSync(authFile, JSON.stringify({
+      credential_pool: {
+        "openai-codex": [{ auth_type: "oauth", access_token: "oauth-access-token" }],
+      },
+    }));
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ output: [{ type: "function_call", call_id: "call_1", name: "lookup", arguments: "{\"q\":\"hola\"}" }] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = new OpenAICodexProvider({ authFile, model: "gpt-5.1-codex-mini" });
+    const result = await provider.chat([
+      { role: "user", content: "hi" },
+      { role: "assistant", content: "", tool_calls: [{ id: "call_prev", type: "function", function: { name: "lookup", arguments: "{\"q\":\"prev\"}" } }] },
+      { role: "tool", tool_call_id: "call_prev", content: "done" },
+    ], [{ type: "function", function: { name: "lookup", description: "Lookup", parameters: { type: "object" } } }]);
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.input).toContainEqual({ type: "function_call", call_id: "call_prev", name: "lookup", arguments: "{\"q\":\"prev\"}" });
+    expect(body.input).toContainEqual({ type: "function_call_output", call_id: "call_prev", output: "done" });
+    expect(body.tools).toEqual([{ type: "function", name: "lookup", description: "Lookup", parameters: { type: "object" } }]);
+    expect(result.toolCalls).toEqual([{ id: "call_1", type: "function", function: { name: "lookup", arguments: "{\"q\":\"hola\"}" } }]);
   });
 });
