@@ -15,7 +15,7 @@ export interface OpenAICodexConfig {
 
 const DEFAULT_CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex";
 const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
-const DEFAULT_MODEL = "gpt-5.1-codex-mini";
+const DEFAULT_MODEL = "gpt-5.4-mini";
 
 type TokenSource = "api_key" | "hermes_auth" | "codex_auth";
 
@@ -150,6 +150,80 @@ function convertTools(tools?: object[]): object[] | undefined {
 
 function deterministicCallId(name: string, args: string, index: number): string {
   return `call_${Buffer.from(`${name}:${args}:${index}`).toString("base64url").slice(0, 16)}`;
+}
+
+function parseSseDataBlocks(raw: string): unknown[] {
+  const events: unknown[] = [];
+  for (const block of raw.split(/\r?\n\r?\n/)) {
+    const dataLines = block
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith("data:"))
+      .map((line) => line.slice(5).trimStart());
+    if (dataLines.length === 0) continue;
+    const data = dataLines.join("\n").trim();
+    if (!data || data === "[DONE]") continue;
+    try {
+      events.push(JSON.parse(data) as unknown);
+    } catch {
+      log.debug({ preview: data.slice(0, 120) }, "ignored malformed SSE data block");
+    }
+  }
+  return events;
+}
+
+function normalizeCodexStream(raw: string): Record<string, unknown> {
+  const outputItems = new Map<string, Record<string, unknown>>();
+  const textParts: string[] = [];
+
+  for (const event of parseSseDataBlocks(raw)) {
+    if (!isObject(event)) continue;
+    const type = stringValue(event.type);
+
+    if (type === "response.output_text.delta") {
+      const delta = stringValue(event.delta);
+      if (delta) textParts.push(delta);
+      continue;
+    }
+
+    const item = event.item;
+    if (isObject(item)) {
+      const id = stringValue(item.id) || stringValue(item.call_id) || `item_${outputItems.size}`;
+      outputItems.set(id, item);
+      if (item.type === "message") {
+        const text = responseContentText(item);
+        if (text) textParts.push(text);
+      }
+      continue;
+    }
+
+    const response = event.response;
+    if (isObject(response)) {
+      const responseOutput = response.output;
+      if (Array.isArray(responseOutput)) {
+        for (const out of responseOutput) {
+          if (!isObject(out)) continue;
+          const id = stringValue(out.id) || stringValue(out.call_id) || `item_${outputItems.size}`;
+          outputItems.set(id, out);
+        }
+      }
+      const outputText = stringValue(response.output_text);
+      if (outputText) textParts.push(outputText);
+    }
+
+    if (type === "response.failed" || type === "response.cancelled") {
+      const response = isObject(event.response) ? event.response : undefined;
+      const error = response && isObject(response.error) ? response.error : undefined;
+      const message = error ? stringValue(error.message) || JSON.stringify(error) : JSON.stringify(event);
+      throw new Error(`openai_codex_stream_${type}: ${message}`);
+    }
+  }
+
+  const output = Array.from(outputItems.values());
+  const outputText = textParts.join("").trim();
+  if (output.length === 0 && outputText) {
+    output.push({ type: "message", content: [{ type: "output_text", text: outputText }] });
+  }
+  return { output, output_text: outputText };
 }
 
 export class OpenAICodexProvider implements LLMProvider {
@@ -291,7 +365,9 @@ export class OpenAICodexProvider implements LLMProvider {
     if (opts?.structured) {
       body.text = { format: { type: "json_object" } };
     }
-    // The Codex backend rejects temperature/max_output_tokens/stop in some model combinations.
+    // The Codex backend requires streaming responses.
+    body.stream = true;
+    // It also rejects temperature/max_output_tokens/stop in some model combinations.
     // Let the model defaults apply for OAuth-backed Codex sessions.
 
     const data = await this.postJson(`${this.baseUrl}/responses`, accessToken, body, true);
@@ -342,6 +418,10 @@ export class OpenAICodexProvider implements LLMProvider {
     }
 
     log.debug({ status: resp.status, latencyMs: Date.now() - start }, "http response");
+    if (codexBackend) {
+      const text = await resp.text();
+      return normalizeCodexStream(text);
+    }
     return (await resp.json()) as Record<string, unknown>;
   }
 

@@ -232,13 +232,13 @@ describe("provider creation", () => {
 
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ output: [{ type: "message", content: [{ type: "output_text", text: "ok" }] }] }),
+      text: () => Promise.resolve('event: response.output_text.delta\ndata: {"type":"response.output_text.delta","delta":"ok"}\n\n'),
     });
     vi.stubGlobal("fetch", fetchMock);
 
     const provider = new OpenAICodexProvider({
       authFile,
-      model: "gpt-5.1-codex-mini",
+      model: "gpt-5.4-mini",
     });
     const result = await provider.chat([{ role: "system", content: "sys" }, { role: "user", content: "hi" }], undefined, { structured: true });
 
@@ -265,11 +265,11 @@ describe("provider creation", () => {
 
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ output: [{ type: "function_call", call_id: "call_1", name: "lookup", arguments: "{\"q\":\"hola\"}" }] }),
+      text: () => Promise.resolve('event: response.output_item.done\ndata: {"type":"response.output_item.done","item":{"type":"function_call","call_id":"call_1","name":"lookup","arguments":"{\\"q\\":\\"hola\\"}"}}\n\n'),
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const provider = new OpenAICodexProvider({ authFile, model: "gpt-5.1-codex-mini" });
+    const provider = new OpenAICodexProvider({ authFile, model: "gpt-5.4-mini" });
     const result = await provider.chat([
       { role: "user", content: "hi" },
       { role: "assistant", content: "", tool_calls: [{ id: "call_prev", type: "function", function: { name: "lookup", arguments: "{\"q\":\"prev\"}" } }] },

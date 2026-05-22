@@ -51,7 +51,7 @@ export function loadConfig(
   const ollamaModel = env.OLLAMA_MODEL ?? "llama3.2";
   const ollamaApiKey = env.OLLAMA_API_KEY ?? "";
   const openaiCodexApiKey = env.OPENAI_CODEX_API_KEY ?? env.OPENAI_API_KEY ?? "";
-  const openaiCodexModel = env.OPENAI_CODEX_MODEL ?? "gpt-5.1-codex-mini";
+  const openaiCodexModel = env.OPENAI_CODEX_MODEL ?? "gpt-5.4-mini";
   const openaiCodexEvaluatorModel = env.OPENAI_CODEX_EVALUATOR_MODEL ?? openaiCodexModel;
   const openaiCodexAuthFile = env.OPENAI_CODEX_AUTH_FILE ?? "";
   const openaiCodexBaseUrl = env.OPENAI_CODEX_BASE_URL ?? env.OPENAI_BASE_URL ?? (openaiCodexApiKey ? "https://api.openai.com/v1" : "https://chatgpt.com/backend-api/codex");
