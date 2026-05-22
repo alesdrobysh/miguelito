@@ -7,6 +7,7 @@ import type {
   ConversationStateResult, FsrsReviewResult, ProgressData, UpdateResult,
   TurnAnnotationInput, TurnAnnotation, CompetencyVectorRow,
   VocabReviewMode, VocabReviewAttempt, StartVocabReviewAttemptInput, FinishVocabReviewAttemptInput,
+  VocabCandidateItem,
 } from "../domain/types.js";
 import type {
   VocabRepository, ErrorRepository, SessionRepository, ProfileRepository,
@@ -30,9 +31,41 @@ CREATE TABLE IF NOT EXISTS vocabulary_items (
     rec_difficulty REAL DEFAULT 5.0,
     rec_due DATETIME,
     rec_last_review DATETIME,
-    rec_reps INTEGER DEFAULT 0
+    rec_reps INTEGER DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'active',
+    source_type TEXT,
+    source_candidate_id INTEGER,
+    meaning_l1 TEXT,
+    topic_tags_json TEXT NOT NULL DEFAULT '[]',
+    acceptable_variants_json TEXT NOT NULL DEFAULT '[]',
+    elicitation_cues_json TEXT NOT NULL DEFAULT '[]',
+    promotion_reason TEXT,
+    last_seen_in_chat_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS vocabulary_candidates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chunk_l2 TEXT NOT NULL,
+    anchor TEXT,
+    meaning_l1 TEXT,
+    capture_context_l2 TEXT,
+    language TEXT NOT NULL DEFAULT '',
+    source_type TEXT NOT NULL DEFAULT 'conversation',
+    source_message_id INTEGER,
+    evidence_snippet TEXT,
+    proposed_by TEXT NOT NULL DEFAULT 'evaluator',
+    priority REAL NOT NULL DEFAULT 0.5,
+    status TEXT NOT NULL DEFAULT 'candidate',
+    duplicate_of INTEGER,
+    topic_tags_json TEXT NOT NULL DEFAULT '[]',
+    acceptable_variants_json TEXT NOT NULL DEFAULT '[]',
+    elicitation_cues_json TEXT NOT NULL DEFAULT '[]',
+    promotion_reason TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    reviewed_at TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_vocab_candidates_language_chunk_unique ON vocabulary_candidates(language, chunk_l2 COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS idx_vocab_candidates_status_priority ON vocabulary_candidates(language, status, priority DESC, created_at);
 CREATE TABLE IF NOT EXISTS error_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_text TEXT NOT NULL,
@@ -239,9 +272,11 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
       db.run("CREATE INDEX idx_vocab_pro_due ON vocabulary_items(pro_due)");
     }
 
-    // v4: drop dead columns (status, user_profile.interests/setup_step, conversation_state.corrections_this_session)
+    // v4: drop obsolete legacy status column from pre-language, pre-FSRS vocabulary schema.
+    // Modern Miguelito intentionally uses vocabulary_items.status for active/suspended/retired,
+    // so only rebuild very old tables that have status but do not yet have language scoping.
     const vocabColsNow = (db.exec("PRAGMA table_info(vocabulary_items)")[0]?.values ?? []).map((r) => r[1] as string);
-    if (vocabColsNow.includes("status")) {
+    if (vocabColsNow.includes("status") && !vocabColsNow.includes("language")) {
       db.run(`
         CREATE TABLE vocabulary_items_new (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -418,9 +453,43 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
 
     try {
       db.run("DROP INDEX IF EXISTS idx_vocab_chunk_unique");
+      const vocabColsNow = (db.exec("PRAGMA table_info(vocabulary_items)")[0]?.values ?? []).map((r) => r[1] as string);
+      const addVocabCol = (name: string, ddl: string) => { if (!vocabColsNow.includes(name)) db.run(`ALTER TABLE vocabulary_items ADD COLUMN ${ddl}`); };
+      addVocabCol("status", "status TEXT NOT NULL DEFAULT 'active'");
+      addVocabCol("source_type", "source_type TEXT");
+      addVocabCol("source_candidate_id", "source_candidate_id INTEGER");
+      addVocabCol("meaning_l1", "meaning_l1 TEXT");
+      addVocabCol("topic_tags_json", "topic_tags_json TEXT NOT NULL DEFAULT '[]'");
+      addVocabCol("acceptable_variants_json", "acceptable_variants_json TEXT NOT NULL DEFAULT '[]'");
+      addVocabCol("elicitation_cues_json", "elicitation_cues_json TEXT NOT NULL DEFAULT '[]'");
+      addVocabCol("promotion_reason", "promotion_reason TEXT");
+      addVocabCol("last_seen_in_chat_at", "last_seen_in_chat_at TEXT");
       db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_vocab_language_chunk_unique ON vocabulary_items(language, chunk_l2 COLLATE NOCASE)");
       db.run("CREATE INDEX IF NOT EXISTS idx_vocab_pro_due ON vocabulary_items(language, pro_due)");
       db.run("CREATE INDEX IF NOT EXISTS idx_vocab_rec_due ON vocabulary_items(language, rec_due)");
+      db.run(`CREATE TABLE IF NOT EXISTS vocabulary_candidates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chunk_l2 TEXT NOT NULL,
+        anchor TEXT,
+        meaning_l1 TEXT,
+        capture_context_l2 TEXT,
+        language TEXT NOT NULL DEFAULT '',
+        source_type TEXT NOT NULL DEFAULT 'conversation',
+        source_message_id INTEGER,
+        evidence_snippet TEXT,
+        proposed_by TEXT NOT NULL DEFAULT 'evaluator',
+        priority REAL NOT NULL DEFAULT 0.5,
+        status TEXT NOT NULL DEFAULT 'candidate',
+        duplicate_of INTEGER,
+        topic_tags_json TEXT NOT NULL DEFAULT '[]',
+        acceptable_variants_json TEXT NOT NULL DEFAULT '[]',
+        elicitation_cues_json TEXT NOT NULL DEFAULT '[]',
+        promotion_reason TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        reviewed_at TEXT
+      )`);
+      db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_vocab_candidates_language_chunk_unique ON vocabulary_candidates(language, chunk_l2 COLLATE NOCASE)");
+      db.run("CREATE INDEX IF NOT EXISTS idx_vocab_candidates_status_priority ON vocabulary_candidates(language, status, priority DESC, created_at)");
       db.run(`CREATE TABLE IF NOT EXISTS vocab_review_attempts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         vocab_id INTEGER NOT NULL,
@@ -504,7 +573,7 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
   async addVocab(chunk_l2: string, capture_context_l2: string, anchor?: string): Promise<number | null> {
     const now = nowIso();
     this.db.run(
-      `INSERT OR IGNORE INTO vocabulary_items (chunk_l2, capture_context_l2, anchor, language, first_seen_at) VALUES (?, ?, ?, ?, ?)`,
+      `INSERT OR IGNORE INTO vocabulary_items (chunk_l2, capture_context_l2, anchor, language, first_seen_at, status) VALUES (?, ?, ?, ?, ?, 'active')`,
       [chunk_l2.trim().toLowerCase(), capture_context_l2, anchor?.trim().toLowerCase() ?? null, this.languageId, now]
     );
     if (this.db.getRowsModified() === 0) return null;
@@ -514,11 +583,155 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
     return id;
   }
 
+  async addVocabCandidate(input: {
+    chunk_l2: string;
+    anchor?: string;
+    meaning_l1?: string;
+    capture_context_l2?: string;
+    source_type?: string;
+    source_message_id?: number;
+    evidence_snippet?: string;
+    proposed_by?: string;
+    priority?: number;
+    topic_tags?: string[];
+    acceptable_variants?: string[];
+    elicitation_cues?: string[];
+    promotion_reason?: string;
+  }): Promise<number | null> {
+    const chunk = input.chunk_l2.trim().toLowerCase();
+    if (!chunk) return null;
+    const active = this.queryRow(
+      `SELECT id FROM vocabulary_items WHERE language = ? AND chunk_l2 = ? COLLATE NOCASE`,
+      [this.languageId, chunk]
+    );
+    if (active) return null;
+    this.db.run(
+      `INSERT OR IGNORE INTO vocabulary_candidates
+       (chunk_l2, anchor, meaning_l1, capture_context_l2, language, source_type, source_message_id,
+        evidence_snippet, proposed_by, priority, status, topic_tags_json, acceptable_variants_json,
+        elicitation_cues_json, promotion_reason)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'candidate', ?, ?, ?, ?)`,
+      [
+        chunk,
+        input.anchor?.trim().toLowerCase() || null,
+        input.meaning_l1?.trim() || null,
+        input.capture_context_l2?.trim() || null,
+        this.languageId,
+        input.source_type?.trim() || "conversation",
+        input.source_message_id ?? null,
+        input.evidence_snippet?.trim() || null,
+        input.proposed_by?.trim() || "evaluator",
+        Math.max(0, Math.min(1, Number(input.priority ?? 0.5) || 0.5)),
+        JSON.stringify(input.topic_tags ?? []),
+        JSON.stringify(input.acceptable_variants ?? []),
+        JSON.stringify(input.elicitation_cues ?? []),
+        input.promotion_reason?.trim() || null,
+      ]
+    );
+    if (this.db.getRowsModified() === 0) return null;
+    const rowidResult = this.db.exec("SELECT last_insert_rowid()");
+    const id = rowidResult[0].values[0][0] as number;
+    this.save();
+    return id;
+  }
+
+  async listVocabCandidates(status: string, limit: number): Promise<VocabCandidateItem[]> {
+    const capped = Math.max(1, Math.min(200, Math.round(limit || 50)));
+    if (status === "all") {
+      return this.queryAll(
+        `SELECT * FROM vocabulary_candidates WHERE language = ? ORDER BY created_at DESC, id DESC LIMIT ?`,
+        [this.languageId, capped]
+      ) as VocabCandidateItem[];
+    }
+    return this.queryAll(
+      `SELECT * FROM vocabulary_candidates WHERE language = ? AND status = ? ORDER BY priority DESC, created_at ASC LIMIT ?`,
+      [this.languageId, status, capped]
+    ) as VocabCandidateItem[];
+  }
+
+  async promoteVocabCandidates(options: { maxPromotions?: number; minPriority?: number; maxActiveLearningItems?: number } = {}): Promise<ChunkItem[]> {
+    const maxPromotions = Math.max(0, Math.min(10, Math.round(options.maxPromotions ?? 2)));
+    const minPriority = Math.max(0, Math.min(1, Number(options.minPriority ?? 0.75) || 0.75));
+    const maxActiveLearningItems = Math.max(0, Math.round(options.maxActiveLearningItems ?? 40));
+    const activeLearning = this.queryRow(
+      `SELECT COUNT(*) AS count FROM vocabulary_items WHERE language = ? AND status = 'active' AND pro_reps < 3`,
+      [this.languageId]
+    ) as { count: number };
+    let room = Math.max(0, maxActiveLearningItems - Number(activeLearning?.count ?? 0));
+    const limit = Math.min(maxPromotions, room);
+    if (limit <= 0) return [];
+    const candidates = this.queryAll(
+      `SELECT * FROM vocabulary_candidates
+       WHERE language = ? AND status = 'candidate' AND priority >= ?
+       ORDER BY priority DESC, created_at ASC, id ASC
+       LIMIT ?`,
+      [this.languageId, minPriority, limit]
+    ) as VocabCandidateItem[];
+    const promoted: ChunkItem[] = [];
+    for (const c of candidates) {
+      if (room <= 0) break;
+      const id = await this.addVocab(c.chunk_l2, c.capture_context_l2 ?? "", c.anchor ?? undefined);
+      const vocabId = id ?? (this.queryRow(
+        `SELECT id FROM vocabulary_items WHERE language = ? AND chunk_l2 = ? COLLATE NOCASE`,
+        [this.languageId, c.chunk_l2]
+      ) as { id: number } | undefined)?.id;
+      if (!vocabId) continue;
+      this.db.run(
+        `UPDATE vocabulary_items
+         SET source_type = ?, source_candidate_id = ?, meaning_l1 = ?, topic_tags_json = ?,
+             acceptable_variants_json = ?, elicitation_cues_json = ?, promotion_reason = ?
+         WHERE id = ?`,
+        [c.source_type, c.id, c.meaning_l1, c.topic_tags_json, c.acceptable_variants_json, c.elicitation_cues_json, c.promotion_reason, vocabId]
+      );
+      this.db.run(`UPDATE vocabulary_candidates SET status = 'accepted', reviewed_at = ? WHERE id = ?`, [nowIso(), c.id]);
+      const row = this.queryRow(`SELECT * FROM vocabulary_items WHERE id = ?`, [vocabId]) as ChunkItem;
+      promoted.push(row);
+      room--;
+    }
+    this.save();
+    return promoted;
+  }
+
+  async promoteSpecificVocabCandidate(candidateId: number): Promise<ChunkItem | null> {
+    const c = this.queryRow(
+      `SELECT * FROM vocabulary_candidates WHERE language = ? AND id = ? AND status = 'candidate'`,
+      [this.languageId, candidateId]
+    ) as VocabCandidateItem | undefined;
+    if (!c) return null;
+    const id = await this.addVocab(c.chunk_l2, c.capture_context_l2 ?? "", c.anchor ?? undefined);
+    const vocabId = id ?? (this.queryRow(
+      `SELECT id FROM vocabulary_items WHERE language = ? AND chunk_l2 = ? COLLATE NOCASE`,
+      [this.languageId, c.chunk_l2]
+    ) as { id: number } | undefined)?.id;
+    if (!vocabId) return null;
+    this.db.run(
+      `UPDATE vocabulary_items
+       SET source_type = ?, source_candidate_id = ?, meaning_l1 = ?, topic_tags_json = ?,
+           acceptable_variants_json = ?, elicitation_cues_json = ?, promotion_reason = ?
+       WHERE id = ?`,
+      [c.source_type, c.id, c.meaning_l1, c.topic_tags_json, c.acceptable_variants_json, c.elicitation_cues_json, c.promotion_reason, vocabId]
+    );
+    this.db.run(`UPDATE vocabulary_candidates SET status = 'accepted', reviewed_at = ? WHERE id = ?`, [nowIso(), c.id]);
+    this.save();
+    return this.queryRow(`SELECT * FROM vocabulary_items WHERE id = ?`, [vocabId]) as ChunkItem;
+  }
+
+  async updateVocabCandidateStatus(candidateId: number, status: string): Promise<boolean> {
+    const normalized = ["candidate", "accepted", "rejected", "merged"].includes(status) ? status : "rejected";
+    this.db.run(
+      `UPDATE vocabulary_candidates SET status = ?, reviewed_at = ? WHERE language = ? AND id = ?`,
+      [normalized, nowIso(), this.languageId, candidateId]
+    );
+    const changed = this.db.getRowsModified() > 0;
+    if (changed) this.save();
+    return changed;
+  }
+
   async listVocab(bucket: string, limit: number): Promise<ChunkItem[]> {
     if (bucket === "all") {
-      return this.queryAll(`SELECT * FROM vocabulary_items WHERE language = ? ORDER BY id DESC LIMIT ?`, [this.languageId, limit]) as ChunkItem[];
+      return this.queryAll(`SELECT * FROM vocabulary_items WHERE language = ? AND status = 'active' ORDER BY id DESC LIMIT ?`, [this.languageId, limit]) as ChunkItem[];
     }
-    const rows = this.queryAll(`SELECT * FROM vocabulary_items WHERE language = ?`, [this.languageId]) as ChunkItem[];
+    const rows = this.queryAll(`SELECT * FROM vocabulary_items WHERE language = ? AND status = 'active'`, [this.languageId]) as ChunkItem[];
     const filtered = rows.filter((r) => statusOf(r.pro_reps, r.pro_stability) === bucket);
     return filtered.slice(0, limit);
   }
@@ -532,7 +745,7 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
               ${prefix}_reps AS pro_reps,
               ${prefix}_due AS pro_due
        FROM vocabulary_items
-       WHERE language = ? AND (${prefix}_due IS NULL OR ${prefix}_due <= ?)
+       WHERE language = ? AND status = 'active' AND (${prefix}_due IS NULL OR ${prefix}_due <= ?)
        ORDER BY ${prefix}_due ASC
        LIMIT ?`,
       [this.languageId, now, limit]

@@ -196,6 +196,60 @@ describe("BuddyDb vocabulary (chunk-based)", () => {
     await expect(() => db.scoreVocab("nonexistent chunk", 3)).rejects.toThrow();
   });
 
+  it("stages evaluator vocabulary as candidates before active SRS promotion", async () => {
+    const id = await db.addVocabCandidate({
+      chunk_l2: "despejar la mente",
+      anchor: "despejar",
+      capture_context_l2: "Necesito despejar la mente.",
+      source_type: "conversation",
+      evidence_snippet: "learner asked what it means",
+      priority: 0.88,
+      promotion_reason: "personally relevant and conversationally useful",
+    });
+
+    expect(id).toBeTypeOf("number");
+    expect(await db.listVocab("all", 10)).toHaveLength(0);
+    const candidates = await db.listVocabCandidates("candidate", 10);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({ chunk_l2: "despejar la mente", status: "candidate", source_type: "conversation" });
+  });
+
+  it("dedupes candidates against active vocabulary and existing candidates", async () => {
+    await db.addVocab("desconectar de verdad", "ctx", "desconectar");
+    const activeDup = await db.addVocabCandidate({ chunk_l2: "Desconectar De Verdad", source_type: "conversation", priority: 0.9 });
+    const first = await db.addVocabCandidate({ chunk_l2: "aprovechar el trayecto", source_type: "conversation", priority: 0.8 });
+    const second = await db.addVocabCandidate({ chunk_l2: "APROVECHAR EL TRAYECTO", source_type: "conversation", priority: 0.9 });
+
+    expect(activeDup).toBeNull();
+    expect(first).toBeTypeOf("number");
+    expect(second).toBeNull();
+    expect(await db.listVocabCandidates("candidate", 10)).toHaveLength(1);
+  });
+
+  it("promotes a bounded number of high-priority candidates to active vocabulary", async () => {
+    await db.addVocabCandidate({ chunk_l2: "chunk low", source_type: "conversation", priority: 0.2 });
+    await db.addVocabCandidate({ chunk_l2: "chunk high one", anchor: "one", capture_context_l2: "ctx1", source_type: "correction", priority: 0.95 });
+    await db.addVocabCandidate({ chunk_l2: "chunk high two", anchor: "two", capture_context_l2: "ctx2", source_type: "conversation", priority: 0.9 });
+
+    const promoted = await db.promoteVocabCandidates({ maxPromotions: 1, minPriority: 0.75, maxActiveLearningItems: 40 });
+
+    expect(promoted.map((p) => p.chunk_l2)).toEqual(["chunk high one"]);
+    expect((await db.listVocab("all", 10)).map((v) => v.chunk_l2)).toEqual(["chunk high one"]);
+    const candidates = await db.listVocabCandidates("all", 10);
+    expect(candidates.find((c) => c.chunk_l2 === "chunk high one")?.status).toBe("accepted");
+    expect(candidates.find((c) => c.chunk_l2 === "chunk high two")?.status).toBe("candidate");
+  });
+
+  it("does not promote candidates when the active learning backlog is full", async () => {
+    await db.addVocab("already active", "ctx");
+    await db.addVocabCandidate({ chunk_l2: "good candidate", source_type: "conversation", priority: 0.99 });
+
+    const promoted = await db.promoteVocabCandidates({ maxPromotions: 3, minPriority: 0.75, maxActiveLearningItems: 1 });
+
+    expect(promoted).toHaveLength(0);
+    expect((await db.listVocab("all", 10)).map((v) => v.chunk_l2)).toEqual(["already active"]);
+  });
+
   it("records and completes a productive vocabulary review attempt", async () => {
     await db.addVocab("me cuesta + [inf]", "ctx", "costar");
     const attempt = await db.startVocabReviewAttempt({

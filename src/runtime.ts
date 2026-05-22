@@ -145,6 +145,30 @@ export class RuntimeManager {
         return `${icon} ${r.chunk_l2}${r.anchor ? ` (${r.anchor})` : ""}`;
       }).join("\n");
     }
+    if (text === "/vocab-candidates") {
+      const items = await db.listVocabCandidates("candidate", 20);
+      if (items.length === 0) return lang.id === "polish" ? "Brak kandydatów słownictwa." : "No vocabulary candidates.";
+      return items.map((r) => `⭐ #${r.id} ${r.chunk_l2}${r.anchor ? ` (${r.anchor})` : ""} — ${Math.round(r.priority * 100)}%${r.promotion_reason ? `; ${r.promotion_reason}` : ""}`).join("\n");
+    }
+    if (text === "/promote-vocab") {
+      const promoted = await db.promoteVocabCandidates({ maxPromotions: 3, minPriority: 0.75, maxActiveLearningItems: 40 });
+      if (promoted.length === 0) return lang.id === "polish" ? "Nic nie awansowało: brak mocnych kandydatów albo pełna kolejka." : "Nothing promoted: no strong candidates or active queue is full.";
+      return promoted.map((r) => `✅ ${r.chunk_l2}${r.anchor ? ` (${r.anchor})` : ""}`).join("\n");
+    }
+    if (text.startsWith("/accept-vocab ")) {
+      const id = Number(text.split(/\s+/)[1]);
+      if (!Number.isFinite(id) || id <= 0) return "Usage: /accept-vocab <candidate_id>";
+      const candidate = (await db.listVocabCandidates("all", 200)).find((c) => c.id === id && c.status === "candidate");
+      if (!candidate) return `Candidate #${id} not found.`;
+      const promoted = await db.promoteSpecificVocabCandidate(id);
+      return promoted ? `✅ ${promoted.chunk_l2}` : `Could not promote #${id}.`;
+    }
+    if (text.startsWith("/reject-vocab ")) {
+      const id = Number(text.split(/\s+/)[1]);
+      if (!Number.isFinite(id) || id <= 0) return "Usage: /reject-vocab <candidate_id>";
+      const ok = await db.updateVocabCandidateStatus(id, "rejected");
+      return ok ? `🗑️ rejected #${id}` : `Candidate #${id} not found.`;
+    }
     if (text === "/proficiency") {
       const cv = await getCompetencyVector({ competency: db, vocab: db });
       const focus = selectFocusAxis(cv, lang) ?? "balanced";

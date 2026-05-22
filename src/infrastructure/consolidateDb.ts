@@ -6,6 +6,7 @@ import { BuddyDb } from "./db.js";
 
 const SCOPED_TABLES = new Set([
   "vocabulary_items",
+  "vocabulary_candidates",
   "error_log",
   "turn_annotations",
   "competency_vector",

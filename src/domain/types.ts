@@ -14,6 +14,39 @@ export interface ChunkItem {
   rec_due: string | null;
   rec_last_review: string | null;
   rec_reps: number;
+  status?: string;
+  source_type?: string | null;
+  source_candidate_id?: number | null;
+  meaning_l1?: string | null;
+  topic_tags_json?: string;
+  acceptable_variants_json?: string;
+  elicitation_cues_json?: string;
+  promotion_reason?: string | null;
+  last_seen_in_chat_at?: string | null;
+}
+
+export type VocabCandidateStatus = "candidate" | "accepted" | "rejected" | "merged";
+
+export interface VocabCandidateItem {
+  id: number;
+  chunk_l2: string;
+  anchor: string | null;
+  meaning_l1: string | null;
+  capture_context_l2: string | null;
+  language: string;
+  source_type: string;
+  source_message_id: number | null;
+  evidence_snippet: string | null;
+  proposed_by: string;
+  priority: number;
+  status: VocabCandidateStatus;
+  duplicate_of: number | null;
+  topic_tags_json: string;
+  acceptable_variants_json: string;
+  elicitation_cues_json: string;
+  promotion_reason: string | null;
+  created_at: string;
+  reviewed_at: string | null;
 }
 
 export interface DueChunkItem {

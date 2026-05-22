@@ -68,23 +68,26 @@ describe("PostTurnProcessor", () => {
     expect(session.last_mode).toBe("DIG");
   });
 
-  it("forces vocabulary and error extraction outside the chat model tool loop", async () => {
+  it("stages evaluator vocabulary as candidates instead of directly growing active SRS", async () => {
     const provider = new JsonProvider({
       annotation: { obligatory: [], used: [], naturalness: 1, comprehension: "smooth" },
       mode: "REACT",
       errors: [{ user_text: "yo es", correct: "yo soy", category: "verb_conjugation", note: "ser conjugation" }],
-      vocabulary: [{ word: "me cuesta + [inf]", context: "Me cuesta levantarme temprano", anchor: "costar" }],
+      vocabulary: [{ word: "me cuesta + [inf]", context: "Me cuesta levantarme temprano", anchor: "costar", reason: "corrective chunk", priority: 0.8 }],
       reviews: [],
     });
 
     const processor = new PostTurnProcessor({ provider, vocab: db, errors: db, competency: db, session: db, lang: SpanishLanguage });
-    await processor.process({ userMessage: "yo es cansado", assistantText: "Dirías: yo estoy cansado.", chatHistory: [] });
+    const result = await processor.process({ userMessage: "yo es cansado", assistantText: "Dirías: yo estoy cansado.", chatHistory: [] });
 
     const errors = await db.listErrors("verb_conjugation", 10);
     expect(errors).toHaveLength(1);
     expect(errors[0].correct_form).toBe("yo soy");
-    const vocab = await db.listVocab("all", 10);
-    expect(vocab.map((v) => v.chunk_l2)).toContain("me cuesta + [inf]");
+    expect(result.vocabAdded).toBe(0);
+    expect(result.vocabCandidatesAdded).toBe(1);
+    expect(await db.listVocab("all", 10)).toHaveLength(0);
+    const candidates = await db.listVocabCandidates("candidate", 10);
+    expect(candidates.map((v) => v.chunk_l2)).toContain("me cuesta + [inf]");
   });
 
   it("finishes scheduled review attempts from evaluator output and advances the right FSRS lane", async () => {

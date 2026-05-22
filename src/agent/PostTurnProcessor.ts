@@ -33,6 +33,12 @@ interface EvaluatedVocab {
   word?: string;
   context?: string;
   anchor?: string;
+  reason?: string;
+  priority?: number | string;
+  meaning?: string;
+  topic_tags?: string[];
+  acceptable_variants?: string[];
+  elicitation_cues?: string[];
 }
 
 interface EvaluatedReview {
@@ -59,6 +65,7 @@ export interface PostTurnProcessResult {
   ok: boolean;
   errorsLogged: number;
   vocabAdded: number;
+  vocabCandidatesAdded: number;
   reviewsCompleted: number;
   annotationInserted: boolean;
 }
@@ -93,7 +100,16 @@ export class PostTurnProcessor {
         },
         mode: "REACT|DIG|OFFER|TEACH|PLAY",
         errors: [{ user_text: "wrong learner text", correct: "correct form", category: "category", note: "short note" }],
-        vocabulary: [{ word: "collocational chunk", context: "L2 context", anchor: "optional lemma" }],
+        vocabulary: [{
+          word: "candidate collocational chunk",
+          context: "L2 context",
+          anchor: "optional lemma",
+          reason: "why it is useful",
+          priority: 0.8,
+          topic_tags: ["optional topic"],
+          acceptable_variants: ["optional variant"],
+          elicitation_cues: ["optional production cue"]
+        }],
         reviews: [{ attempt_id: 1, user_response: "learner answer", target_used: true, accepted_variant: "actual form", hint_level: 0, grade: 3, note: "why" }],
       }),
       "Use empty arrays when there is nothing to extract. Grade reviews 1..3 only.",
@@ -124,6 +140,7 @@ export class PostTurnProcessor {
   private async apply(evaluation: PostTurnEvaluation, _input: PostTurnProcessInput): Promise<PostTurnProcessResult> {
     let errorsLogged = 0;
     let vocabAdded = 0;
+    let vocabCandidatesAdded = 0;
     let reviewsCompleted = 0;
     let annotationInserted = false;
 
@@ -148,9 +165,25 @@ export class PostTurnProcessor {
     for (const item of evaluation.vocabulary ?? []) {
       const word = this.clean(item.word).toLowerCase();
       if (!word) continue;
-      const id = await this.deps.vocab.addVocab(word, this.clean(item.context), this.clean(item.anchor).toLowerCase() || undefined);
-      if (id !== null) vocabAdded++;
+      const id = await this.deps.vocab.addVocabCandidate({
+        chunk_l2: word,
+        capture_context_l2: this.clean(item.context),
+        anchor: this.clean(item.anchor).toLowerCase() || undefined,
+        meaning_l1: this.clean(item.meaning) || undefined,
+        source_type: evaluation.errors?.length ? "correction" : "conversation",
+        evidence_snippet: this.clean(item.context) || _input.userMessage,
+        proposed_by: "post_turn_evaluator",
+        priority: Math.max(0, Math.min(1, Number(item.priority ?? 0.6) || 0.6)),
+        topic_tags: Array.isArray(item.topic_tags) ? item.topic_tags.map((x) => String(x)).filter(Boolean) : [],
+        acceptable_variants: Array.isArray(item.acceptable_variants) ? item.acceptable_variants.map((x) => String(x)).filter(Boolean) : [],
+        elicitation_cues: Array.isArray(item.elicitation_cues) ? item.elicitation_cues.map((x) => String(x)).filter(Boolean) : [],
+        promotion_reason: this.clean(item.reason) || undefined,
+      });
+      if (id !== null) vocabCandidatesAdded++;
     }
+
+    const promoted = await this.deps.vocab.promoteVocabCandidates({ maxPromotions: 2, minPriority: 0.85, maxActiveLearningItems: 40 });
+    vocabAdded += promoted.length;
 
     for (const item of evaluation.reviews ?? []) {
       const grade = this.grade(item.grade);
@@ -191,7 +224,7 @@ export class PostTurnProcessor {
       }
     }
 
-    return { ok: true, errorsLogged, vocabAdded, reviewsCompleted, annotationInserted };
+    return { ok: true, errorsLogged, vocabAdded, vocabCandidatesAdded, reviewsCompleted, annotationInserted };
   }
 
   private normalizeAnnotation(raw?: Partial<TurnAnnotationInput>): TurnAnnotationInput {
