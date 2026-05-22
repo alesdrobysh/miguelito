@@ -24,7 +24,7 @@ afterEach(() => {
 });
 
 describe("PromptBuilder interest injection", () => {
-  it("injects at most 2 interests even when more are stored", async () => {
+  it("does not inject stale interests when the current message does not mention them", async () => {
     for (const i of ["programming", "hiking", "karkonosze", "cooking", "music"]) {
       await db.addInterest(i, "conversation", 0.7);
     }
@@ -33,11 +33,31 @@ describe("PromptBuilder interest injection", () => {
       { vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db },
       SpanishLanguage,
     );
-    const prompt = await builder.build();
+    const prompt = await builder.build("Hoy estoy pensando en el tiempo y en mis planes.");
 
-    const stored = ["programming", "hiking", "karkonosze", "cooking", "music"];
-    const found = stored.filter((i) => prompt.toLowerCase().includes(i));
-    expect(found.length).toBeLessThanOrEqual(2);
+    expect(prompt).not.toContain("\n\n## Lo que sé de esta persona\n");
+    for (const stored of ["programming", "hiking", "karkonosze", "cooking", "music"]) {
+      expect(prompt.toLowerCase()).not.toContain(stored);
+    }
+  });
+
+  it("injects only interests that are already relevant to the current message", async () => {
+    for (const i of ["books", "music", "cooking"]) {
+      await db.addInterest(i, "conversation", 0.7);
+    }
+
+    const builder = new PromptBuilder(
+      { vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db },
+      SpanishLanguage,
+    );
+    const prompt = await builder.build("Estoy leyendo books antes de dormir.");
+
+    expect(prompt).toContain("Lo que sé de esta persona");
+    expect(prompt).toContain("books");
+    expect(prompt).not.toContain("music");
+    expect(prompt).not.toContain("cooking");
+    expect(prompt).toContain("optional background");
+    expect(prompt).toContain("Do not keep returning to the same interest");
   });
 
   it("uses the renamed section header", async () => {
@@ -47,7 +67,7 @@ describe("PromptBuilder interest injection", () => {
       { vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db },
       SpanishLanguage,
     );
-    const prompt = await builder.build();
+    const prompt = await builder.build("programming");
 
     expect(prompt).toContain("Lo que sé de esta persona");
     expect(prompt).not.toContain("## User Interests");

@@ -86,22 +86,21 @@ export class PromptBuilder {
       : null;
 
     // Dynamic Interest Injection
+    // Interests are background context, not an agenda. Only surface interests that
+    // are already relevant to the current user message; otherwise let the latest
+    // turn lead so the bot does not keep dragging the chat back to old topics.
     const allInterests = await this.repos.interests.listInterests(100);
     let selectedInterests: string[] = [];
 
     if (userMessage) {
       const lowerMsg = userMessage.toLowerCase();
-      selectedInterests = allInterests.filter(interest => 
-        lowerMsg.includes(interest.toLowerCase())
-      );
-    }
-
-    if (selectedInterests.length === 0) {
-      selectedInterests = shuffleArray(allInterests).slice(0, 2);
+      selectedInterests = allInterests
+        .filter((interest) => lowerMsg.includes(interest.toLowerCase()))
+        .slice(0, 2);
     }
 
     const userInterests = selectedInterests.length > 0
-      ? `\n\n## ${this.lang.interestsHeader}\n${selectedInterests.join(", ")}`
+      ? `\n\n## ${this.lang.interestsHeader}\n${selectedInterests.join(", ")}\nUse these only as optional background for this turn. Do not steer the conversation toward these interests unless the user's latest message naturally invites it. Do not keep returning to the same interest across turns; vary topics and let the user's latest message lead.`
       : null;
 
     let dreamMemory: string | null = null;
@@ -145,13 +144,4 @@ export class PromptBuilder {
       return null;
     }
   }
-}
-
-function shuffleArray<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
 }
