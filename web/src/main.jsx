@@ -34,9 +34,16 @@ async function api(path, options) {
   return data;
 }
 
+function getInitialTheme() {
+  const saved = localStorage.getItem('miguelito.theme');
+  if (saved === 'dark' || saved === 'light') return saved;
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
 function App() {
   const [languages, setLanguages] = useState([]);
   const [language, setLanguage] = useState(() => localStorage.getItem('miguelito.language') || FALLBACK_LANGUAGE);
+  const [theme, setTheme] = useState(getInitialTheme);
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(true);
@@ -47,6 +54,14 @@ function App() {
   const inputRef = useRef(null);
 
   const currentLanguageName = useMemo(() => languageLabel(languages, language), [languages, language]);
+  const nextThemeLabel = theme === 'dark' ? 'Light mode' : 'Dark mode';
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem('miguelito.theme', theme);
+    const themeColor = theme === 'dark' ? '#08111f' : '#eaf4ff';
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', themeColor);
+  }, [theme]);
 
   useEffect(() => {
     let cancelled = false;
@@ -157,6 +172,15 @@ function App() {
               {languages.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}
             </select>
           </label>
+          <button
+            className="theme-toggle"
+            type="button"
+            aria-label={nextThemeLabel}
+            title={nextThemeLabel}
+            onClick={() => setTheme((value) => value === 'dark' ? 'light' : 'dark')}
+          >
+            <span aria-hidden="true">{theme === 'dark' ? '☀' : '☾'}</span>
+          </button>
         </header>
 
         <div className={menuOpen ? 'drawer open' : 'drawer'}>
