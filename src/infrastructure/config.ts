@@ -4,7 +4,7 @@ import path from "path";
 dotenv.config();
 
 export interface Config {
-  provider: "openrouter" | "ollama";
+  provider: "openrouter" | "ollama" | "openai-codex";
   transport: "telegram" | "tui" | "web" | "unified";
   telegramToken: string;
   telegramBotTokens: Partial<Record<"polish" | "spanish", string>>;
@@ -15,6 +15,10 @@ export interface Config {
   ollamaBaseUrl: string;
   ollamaModel: string;
   ollamaApiKey: string;
+  openaiCodexApiKey: string;
+  openaiCodexModel: string;
+  openaiCodexEvaluatorModel: string;
+  openaiCodexBaseUrl: string;
   dbPath: string;
   dataDir: string;
   allowedUsers: Set<string>;
@@ -45,6 +49,10 @@ export function loadConfig(
   const ollamaBaseUrl = env.OLLAMA_BASE_URL ?? "http://localhost:11434/v1";
   const ollamaModel = env.OLLAMA_MODEL ?? "llama3.2";
   const ollamaApiKey = env.OLLAMA_API_KEY ?? "";
+  const openaiCodexApiKey = env.OPENAI_CODEX_API_KEY ?? env.OPENAI_API_KEY ?? "";
+  const openaiCodexModel = env.OPENAI_CODEX_MODEL ?? "gpt-5.1-codex-mini";
+  const openaiCodexEvaluatorModel = env.OPENAI_CODEX_EVALUATOR_MODEL ?? openaiCodexModel;
+  const openaiCodexBaseUrl = env.OPENAI_CODEX_BASE_URL ?? env.OPENAI_BASE_URL ?? "https://api.openai.com/v1";
   const dbPath = env.DB_PATH ?? "./data/buddy.db";
   const dataDir = env.DATA_DIR ?? path.resolve(process.cwd(), "data");
   const allowedUsers = new Set(
@@ -57,6 +65,9 @@ export function loadConfig(
 
   if (provider === "openrouter" && !openrouterApiKey) {
     throw new Error("OPENROUTER_API_KEY is required when PROVIDER=openrouter");
+  }
+  if (provider === "openai-codex" && !openaiCodexApiKey) {
+    throw new Error("OPENAI_CODEX_API_KEY or OPENAI_API_KEY is required when PROVIDER=openai-codex");
   }
   if (transport === "telegram") {
     if (!telegramToken) throw new Error("TELEGRAM_BOT_TOKEN is required when TRANSPORT=telegram");
@@ -85,6 +96,10 @@ export function loadConfig(
     ollamaBaseUrl,
     ollamaModel,
     ollamaApiKey,
+    openaiCodexApiKey,
+    openaiCodexModel,
+    openaiCodexEvaluatorModel,
+    openaiCodexBaseUrl,
     dbPath,
     dataDir,
     allowedUsers,

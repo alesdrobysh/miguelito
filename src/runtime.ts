@@ -6,6 +6,7 @@ import { listAvailableLanguages, loadLanguage } from "./languages/index.js";
 import type { LanguageConfig } from "./languages/LanguageConfig.js";
 import { OpenRouterProvider } from "./providers/OpenRouterProvider.js";
 import { OllamaProvider } from "./providers/OllamaProvider.js";
+import { OpenAICodexProvider } from "./providers/OpenAICodexProvider.js";
 import type { LLMProvider } from "./providers/interfaces.js";
 import { PromptBuilder } from "./agent/PromptBuilder.js";
 import { AgentRunner } from "./agent/AgentRunner.js";
@@ -29,6 +30,13 @@ export interface LanguageRuntime {
 }
 
 export function createProvider(config: Config): LLMProvider {
+  if (config.provider === "openai-codex") {
+    return new OpenAICodexProvider({
+      apiKey: config.openaiCodexApiKey,
+      model: config.openaiCodexModel,
+      baseUrl: config.openaiCodexBaseUrl,
+    });
+  }
   if (config.provider === "ollama") {
     return new OllamaProvider({
       baseUrl: config.ollamaBaseUrl,
@@ -44,6 +52,13 @@ export function createProvider(config: Config): LLMProvider {
 }
 
 export function createEvaluatorProvider(config: Config): LLMProvider {
+  if (config.provider === "openai-codex") {
+    return new OpenAICodexProvider({
+      apiKey: config.openaiCodexApiKey,
+      model: config.openaiCodexEvaluatorModel,
+      baseUrl: config.openaiCodexBaseUrl,
+    });
+  }
   if (config.provider === "ollama") {
     return new OllamaProvider({
       baseUrl: config.ollamaBaseUrl,
