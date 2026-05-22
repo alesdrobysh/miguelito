@@ -43,8 +43,8 @@ export const SpanishLanguage: LanguageConfig = {
       const prod = productiveWords ?? [];
       const lines: string[] = ["\n\n## Perfil actual del aprendiz"];
       if (weakAreas.length > 0) lines.push(`**Áreas débiles**: ${weakAreas.join(", ")}`);
-      if (rec.length > 0) lines.push(`**Vocabulario receptivo**: Integra tú estas expresiones de forma natural para comprobar comprensión pasiva: ${rec.join(", ")}`);
-      if (prod.length > 0) lines.push(`**Vocabulario productivo**: Crea una necesidad comunicativa para que el aprendiz pueda producir UNA de estas expresiones. No esperes uso espontáneo ni digas "usa esta palabra" salvo como último recurso. Prefiere pregunta personal, roleplay, reformulación o cloze con pistas graduadas: ${prod.join(", ")}`);
+      if (rec.length > 0) lines.push(`**Vocabulario receptivo**: Contexto opcional, no agenda de conversación. Integra como máximo una expresión de forma natural solo si encaja con la última respuesta; no vuelvas al mismo tema solo por esta lista: ${rec.join(", ")}`);
+      if (prod.length > 0) lines.push(`**Vocabulario productivo**: Contexto opcional, no agenda de conversación. Si encaja con el flujo actual, crea una necesidad comunicativa breve para que el aprendiz pueda producir UNA expresión; no fuerces siempre la misma palabra ni el mismo tema, y no digas "usa esta palabra" salvo como último recurso. Prefiere pregunta personal, roleplay, reformulación o cloze con pistas graduadas: ${prod.join(", ")}`);
       if (errorInfo) lines.push(`**Error que reforzar**: "${errorInfo.user_text}" → "${errorInfo.correct}" (${errorInfo.category})`);
       return lines.join("\n");
     },

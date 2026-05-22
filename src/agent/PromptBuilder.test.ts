@@ -79,6 +79,7 @@ describe("PromptBuilder vocabulary target injection", () => {
   it("separates receptive words for bot integration from productive words for learner elicitation", async () => {
     await db.addVocab("posponer la reunión", "ctx", "posponer");
     await db.addVocab("echar de menos", "ctx", "echar");
+    await db.addVocab("me cuesta + [inf]", "ctx", "costar");
     await db.scoreVocab("posponer la reunión", 3, "receptive");
     await db.scoreVocab("echar de menos", 3, "productive");
 
@@ -90,9 +91,23 @@ describe("PromptBuilder vocabulary target injection", () => {
 
     expect(prompt).toContain("Vocabulario receptivo");
     expect(prompt).toContain("Vocabulario productivo");
-    expect(prompt).toContain("Integra tú estas expresiones");
-    expect(prompt).toContain("Crea una necesidad comunicativa");
+    expect(prompt).toContain("Contexto opcional, no agenda de conversación");
+    expect(prompt).toContain("no fuerces siempre la misma palabra");
     expect(prompt).toContain("posponer la reunión");
     expect(prompt).toContain("echar de menos");
+  });
+
+  it("does not inject the same tiny vocabulary list on every consecutive turn", async () => {
+    await db.addVocab("echar de menos", "ctx", "echar");
+    await db.updateConversationState("chat", "general");
+
+    const builder = new PromptBuilder(
+      { vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db },
+      SpanishLanguage,
+    );
+    const prompt = await builder.build();
+
+    expect(prompt).not.toContain("## Perfil actual del aprendiz\n**Vocabulario productivo**");
+    expect(prompt).not.toContain("echar de menos");
   });
 });

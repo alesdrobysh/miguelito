@@ -32,4 +32,38 @@ describe("VocabularyReviewPlanner", () => {
     expect(plan.receptiveWords).toEqual(["posponer la reunión", "me cuesta + [inf]"]);
     expect(plan.receptiveWords).not.toContain(plan.productiveWords[0]);
   });
+
+  it("spaces out a tiny due vocabulary pool so the tutor does not repeat the same word every turn", async () => {
+    await db.addVocab("echar de menos", "ctx", "echar");
+
+    const planner = new VocabularyReviewPlanner(db);
+
+    expect(await planner.select({ turnCount: 0 })).toEqual({
+      productiveWords: ["echar de menos"],
+      receptiveWords: [],
+    });
+    expect(await planner.select({ turnCount: 1 })).toEqual({
+      productiveWords: [],
+      receptiveWords: [],
+    });
+    expect(await planner.select({ turnCount: 2 })).toEqual({
+      productiveWords: [],
+      receptiveWords: [],
+    });
+    expect(await planner.select({ turnCount: 3 })).toEqual({
+      productiveWords: ["echar de menos"],
+      receptiveWords: [],
+    });
+  });
+
+  it("keeps normal review selection active when there is enough due vocabulary to vary", async () => {
+    await db.addVocab("echar de menos", "ctx", "echar");
+    await db.addVocab("posponer la reunión", "ctx", "posponer");
+    await db.addVocab("me cuesta + [inf]", "ctx", "costar");
+
+    const plan = await new VocabularyReviewPlanner(db).select({ turnCount: 1 });
+
+    expect(plan.productiveWords).toEqual(["echar de menos"]);
+    expect(plan.receptiveWords).toEqual(["posponer la reunión", "me cuesta + [inf]"]);
+  });
 });

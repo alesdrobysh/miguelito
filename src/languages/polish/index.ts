@@ -43,8 +43,8 @@ export const PolishLanguage: LanguageConfig = {
       const prod = productiveWords ?? [];
       const lines: string[] = ["\n\n## Aktualny profil ucznia"];
       if (weakAreas.length > 0) lines.push(`**Słabsze obszary**: ${weakAreas.join(", ")}`);
-      if (rec.length > 0) lines.push(`**Słownictwo receptywne**: Wpleć te wyrażenia naturalnie we własny tekst, żeby sprawdzić rozumienie bierne: ${rec.join(", ")}`);
-      if (prod.length > 0) lines.push(`**Słownictwo produktywne**: Stwórz potrzebę komunikacyjną, żeby uczeń mógł sam użyć JEDNEGO z tych wyrażeń. Nie czekaj na przypadkowe spontaniczne użycie i nie mów "użyj tego słowa", chyba że jako ostatnia podpowiedź. Preferuj pytanie osobiste, roleplay, parafrazę albo cloze ze stopniowanymi wskazówkami: ${prod.join(", ")}`);
+      if (rec.length > 0) lines.push(`**Słownictwo receptywne**: Kontekst opcjonalny, nie plan rozmowy. Wpleć najwyżej jedno wyrażenie naturalnie tylko wtedy, gdy pasuje do ostatniej odpowiedzi; nie wracaj do tego samego tematu tylko przez tę listę: ${rec.join(", ")}`);
+      if (prod.length > 0) lines.push(`**Słownictwo produktywne**: Kontekst opcjonalny, nie plan rozmowy. Jeśli pasuje do obecnego toku, stwórz krótką potrzebę komunikacyjną, żeby uczeń mógł sam użyć JEDNEGO wyrażenia; nie wymuszaj ciągle tego samego słowa ani tematu i nie mów "użyj tego słowa", chyba że jako ostatnia podpowiedź. Preferuj pytanie osobiste, roleplay, parafrazę albo cloze ze stopniowanymi wskazówkami: ${prod.join(", ")}`);
       if (errorInfo) lines.push(`**Błąd do utrwalenia**: "${errorInfo.user_text}" → "${errorInfo.correct}" (${errorInfo.category})`);
       return lines.join("\n");
     },

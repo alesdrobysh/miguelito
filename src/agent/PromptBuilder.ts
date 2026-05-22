@@ -1,6 +1,7 @@
 import fs from "fs";
 import type { LanguageConfig } from "../languages/LanguageConfig.js";
 import type { VocabRepository, ErrorRepository, ProfileRepository, InterestRepository, CompetencyRepository, SessionRepository } from "../repositories/interfaces.js";
+import type { ConversationStateResult } from "../domain/types.js";
 import { getCompetencyVector, selectFocusAxis, renderCalibration } from "../domain/competency.js";
 import { VocabularyReviewPlanner } from "./VocabularyReviewPlanner.js";
 
@@ -27,8 +28,9 @@ export class PromptBuilder {
 
   async build(userMessage?: string, dreamMemoryPath?: string): Promise<string> {
     const soulContent = fs.readFileSync(this.lang.soulPath, "utf-8");
+    const convState = await this.repos.session.getConversationState();
     const { basicProfile, learnerProfile, calibration, userInterests, dreamMemory } =
-      await this._buildInjection(userMessage, dreamMemoryPath);
+      await this._buildInjection(userMessage, dreamMemoryPath, convState);
 
     let fullSystem = this.lang.promptText.languageBlock + soulContent + basicProfile;
     if (dreamMemory) fullSystem += dreamMemory;
@@ -36,7 +38,6 @@ export class PromptBuilder {
     if (calibration) fullSystem += calibration;
     if (userInterests) fullSystem += userInterests;
 
-    const convState = await this.repos.session.getConversationState();
     fullSystem += this.lang.promptText.conversationState(
       convState.session.turn_count,
       convState.session.last_two_modes,
@@ -54,7 +55,11 @@ export class PromptBuilder {
     return this.lang.promptText.postHistoryReminder;
   }
 
-  private async _buildInjection(userMessage?: string, dreamMemoryPath?: string): Promise<ProfileInjection> {
+  private async _buildInjection(
+    userMessage?: string,
+    dreamMemoryPath?: string,
+    convState?: ConversationStateResult,
+  ): Promise<ProfileInjection> {
     const sharedProfile = await this.repos.profile.getProfile();
     const langProfile = await this.repos.langProfile.getProfile();
 
@@ -74,7 +79,9 @@ export class PromptBuilder {
       calibration = `\n\n${renderCalibration(cv, focus, this.lang)}`;
     } catch {}
 
-    const reviewPlan = await new VocabularyReviewPlanner(this.repos.vocab).select();
+    const reviewPlan = await new VocabularyReviewPlanner(this.repos.vocab).select({
+      turnCount: convState?.session.turn_count ?? 0,
+    });
     const productiveWords = reviewPlan.productiveWords;
     const receptiveWords = reviewPlan.receptiveWords;
     const weakAreas = await this._getWeakAreas(3);
