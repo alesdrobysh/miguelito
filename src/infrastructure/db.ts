@@ -189,6 +189,10 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
     this.morphologyTypes = new Set(morphologyCategories);
   }
 
+  withLanguage(languageId: string, errorCategories: readonly string[], morphologyCategories: readonly string[]): BuddyDb {
+    return new BuddyDb(this.db, this.dbPath, languageId, errorCategories, morphologyCategories);
+  }
+
   private static runMigrations(db: Database): void {
     // v1: chat_history.session_id
     const chatInfo = db.exec("PRAGMA table_info(chat_history)");
@@ -413,9 +417,10 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
     }
 
     try {
-      db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_vocab_chunk_unique ON vocabulary_items(chunk_l2 COLLATE NOCASE)");
-      db.run("CREATE INDEX IF NOT EXISTS idx_vocab_pro_due ON vocabulary_items(pro_due)");
-      db.run("CREATE INDEX IF NOT EXISTS idx_vocab_rec_due ON vocabulary_items(rec_due)");
+      db.run("DROP INDEX IF EXISTS idx_vocab_chunk_unique");
+      db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_vocab_language_chunk_unique ON vocabulary_items(language, chunk_l2 COLLATE NOCASE)");
+      db.run("CREATE INDEX IF NOT EXISTS idx_vocab_pro_due ON vocabulary_items(language, pro_due)");
+      db.run("CREATE INDEX IF NOT EXISTS idx_vocab_rec_due ON vocabulary_items(language, rec_due)");
       db.run(`CREATE TABLE IF NOT EXISTS vocab_review_attempts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         vocab_id INTEGER NOT NULL,

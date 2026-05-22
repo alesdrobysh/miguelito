@@ -76,9 +76,8 @@ export class RuntimeManager {
   async addLanguage(language: string): Promise<void> {
     if (this.runtimes.has(language)) return;
     const lang = loadLanguage(language);
-    const dbPath = path.join(this.config.dataDir, `buddy-${lang.id}.db`);
     const dreamMemoryPath = path.join(this.config.dataDir, "memory", `MEMORY-${lang.id}.md`);
-    const db = await BuddyDb.open(dbPath, lang.id, lang.errorCategories, lang.morphologyCategories);
+    const db = this.sharedDb.withLanguage(lang.id, lang.errorCategories, lang.morphologyCategories);
 
     const toolCtx = {
       vocab: db,
@@ -166,7 +165,6 @@ export class RuntimeManager {
   }
 
   close(): void {
-    for (const rt of this.runtimes.values()) rt.db.close();
     this.sharedDb.close();
   }
 }
@@ -176,7 +174,7 @@ export async function createRuntimeManager(config: Config, deps: RuntimeDeps = {
   fs.mkdirSync(path.join(config.dataDir, "memory"), { recursive: true });
   const provider = deps.provider ?? createProvider(config);
   const evaluatorProvider = deps.evaluatorProvider ?? createEvaluatorProvider(config);
-  const sharedDb = await BuddyDb.open(path.join(config.dataDir, "buddy-shared.db"), "shared", [], []);
+  const sharedDb = await BuddyDb.open(path.join(config.dataDir, "buddy.db"), "shared", [], []);
   const manager = new RuntimeManager(config, provider, evaluatorProvider, sharedDb);
   const languageIds = config.transport === "web" || config.transport === "unified"
     ? listAvailableLanguages().map((lang) => lang.id)

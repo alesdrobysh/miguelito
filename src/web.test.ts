@@ -111,8 +111,10 @@ describe("runtime manager", () => {
     expect(manager.hasLanguage("spanish")).toBe(true);
     expect(manager.hasLanguage("polish")).toBe(true);
     expect(manager.hasLanguage("belarusian")).toBe(true);
-
     manager.close();
+    expect(fs.existsSync(path.join(tmpDir, "buddy.db"))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, "buddy-spanish.db"))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, "buddy-polish.db"))).toBe(false);
   });
 
   it("handles multiple languages in one process with isolated chat histories", async () => {
