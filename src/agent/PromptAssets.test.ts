@@ -17,12 +17,40 @@ const postTurnOwnedToolNames = [
   "miguelito_vocab_attempt_finish",
 ];
 
+const nonHumanIdentityPhrases = [
+  { path: "src/languages/spanish/soul.md", phrase: "No finjas ser una persona" },
+  { path: "src/languages/polish/soul.md", phrase: "Nie udawaj osoby" },
+  { path: "src/languages/belarusian/soul.md", phrase: "Не ўдавай чалавека" },
+];
+
+const configIdentityPhrases = [
+  { path: "src/languages/spanish/index.ts", phrases: ["tutor de español por software", "No finjas ser una persona", "No finjas vida humana propia"] },
+  { path: "src/languages/polish/index.ts", phrases: ["programowym tutorem języka polskiego", "Nie udawaj osoby", "Nie udawaj własnego ludzkiego życia"] },
+  { path: "src/languages/belarusian/index.ts", phrases: ["праграмны т’ютар беларускай мовы", "Не ўдавай чалавека", "Не ўдавай уласнае чалавечае жыццё"] },
+];
+
 describe("language prompt assets", () => {
   it("do not instruct the chat model to call post-turn evaluator-owned tools", () => {
     for (const soulPath of soulPaths) {
       const content = fs.readFileSync(soulPath, "utf8");
       for (const toolName of postTurnOwnedToolNames) {
         expect(content, `${path.relative(projectRoot, soulPath)} should not mention ${toolName}`).not.toContain(toolName);
+      }
+    }
+  });
+
+  it("keeps non-human tutor identity guardrails in each soul prompt", () => {
+    for (const { path: relativePath, phrase } of nonHumanIdentityPhrases) {
+      const content = fs.readFileSync(path.join(projectRoot, relativePath), "utf8");
+      expect(content, `${relativePath} should forbid human impersonation`).toContain(phrase);
+    }
+  });
+
+  it("repeats non-human identity guardrails in language blocks and cron prompts", () => {
+    for (const { path: relativePath, phrases } of configIdentityPhrases) {
+      const content = fs.readFileSync(path.join(projectRoot, relativePath), "utf8");
+      for (const phrase of phrases) {
+        expect(content, `${relativePath} should contain ${phrase}`).toContain(phrase);
       }
     }
   });
