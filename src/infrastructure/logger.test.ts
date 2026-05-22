@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { logger } from './logger.js';
+import { logger, logPaths } from './logger.js';
 
 describe('logger', () => {
   it('exports a pino logger with standard methods', () => {
@@ -13,5 +13,12 @@ describe('logger', () => {
   it('creates a child logger', () => {
     const child = logger.child({ ctx: 'test' });
     expect(typeof child.info).toBe('function');
+  });
+
+  it('keeps test runs out of production runtime log files', () => {
+    expect(process.env.NODE_ENV).toBe('test');
+    expect(logPaths.json).toContain('test.json.log');
+    expect(logPaths.pretty).toContain('test.pretty.log');
+    expect(logPaths.json).not.toContain('app.json.log');
   });
 });

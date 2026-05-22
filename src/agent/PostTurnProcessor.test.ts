@@ -109,4 +109,23 @@ describe("PostTurnProcessor", () => {
     const row = db.db.exec("SELECT pro_reps, rec_reps FROM vocabulary_items WHERE chunk_l2 = 'echar de menos'")[0].values[0];
     expect(row).toEqual([1, 0]);
   });
+
+  it("records an audit row when evaluator scores a review by word without an attempt id", async () => {
+    await db.addVocab("pasar el fin de semana", "ctx", "pasar");
+    const provider = new JsonProvider({
+      annotation: { obligatory: [], used: ["pasar el fin de semana"], naturalness: 1, comprehension: "smooth" },
+      mode: "REACT",
+      errors: [],
+      vocabulary: [],
+      reviews: [{ word: "pasar el fin de semana", mode: "productive", user_response: "Voy a pasar el fin de semana tranquilo", target_used: true, accepted_variant: "pasar el fin de semana", hint_level: 0, grade: 3, note: "spontaneous" }],
+    });
+
+    const processor = new PostTurnProcessor({ provider, vocab: db, errors: db, competency: db, session: db, lang: SpanishLanguage });
+    await processor.process({ userMessage: "Voy a pasar el fin de semana tranquilo", assistantText: "Perfecto.", chatHistory: [] });
+
+    const attempts = db.db.exec("SELECT word, mode, status, user_response, target_used, accepted_variant, grade, note FROM vocab_review_attempts")[0].values;
+    expect(attempts).toEqual([["pasar el fin de semana", "productive", "completed", "Voy a pasar el fin de semana tranquilo", 1, "pasar el fin de semana", 3, "spontaneous"]]);
+    const row = db.db.exec("SELECT pro_reps, rec_reps FROM vocabulary_items WHERE chunk_l2 = 'pasar el fin de semana'")[0].values[0];
+    expect(row).toEqual([1, 0]);
+  });
 });

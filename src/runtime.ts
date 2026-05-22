@@ -113,8 +113,25 @@ export class RuntimeManager {
 
   async handleMessage(language: string, chatId: number, _userId: string, text: string): Promise<string | null> {
     const rt = this.runtime(language);
-    const { db, lang, agentRunner, dreamService, dreamMemoryPath } = rt;
+    const { db, agentRunner } = rt;
 
+    const { session: convState } = await db.getConversationState();
+    const history = await db.getSessionTranscript(convState.session_id, MODEL_HISTORY_LIMIT) as ChatMessage[];
+    await db.addChatMessage(chatId, "user", text, convState.session_id);
+
+    const commandReply = await this.handleCommand(rt, text);
+    if (commandReply !== undefined) {
+      if (commandReply) await db.addChatMessage(chatId, "assistant", commandReply, convState.session_id);
+      return commandReply || null;
+    }
+
+    const result = await agentRunner.run(text, history);
+    if (result.text) await db.addChatMessage(chatId, "assistant", result.text, convState.session_id);
+    return result.text || null;
+  }
+
+  private async handleCommand(rt: LanguageRuntime, text: string): Promise<string | undefined> {
+    const { db, lang, dreamService, dreamMemoryPath } = rt;
     if (text === "/dream") return dreamService.run();
     if (text === "/memory") {
       if (fs.existsSync(dreamMemoryPath)) return fs.readFileSync(dreamMemoryPath, "utf-8");
@@ -141,13 +158,7 @@ export class RuntimeManager {
         `Focus: ${focus}`,
       ].join("\n");
     }
-
-    const { session: convState } = await db.getConversationState();
-    const history = await db.getSessionTranscript(convState.session_id, MODEL_HISTORY_LIMIT) as ChatMessage[];
-    await db.addChatMessage(chatId, "user", text, convState.session_id);
-    const result = await agentRunner.run(text, history);
-    if (result.text) await db.addChatMessage(chatId, "assistant", result.text, convState.session_id);
-    return result.text || null;
+    return undefined;
   }
 
   getChatHistory(language: string, chatId: number, limit?: number): Promise<{ role: string; content: string }[]> {

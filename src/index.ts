@@ -44,7 +44,12 @@ async function main() {
     const mirrorTransports: Record<string, TelegramTransport> = {};
 
     for (const bot of telegramBots) {
-      const transport = new TelegramTransport({ telegramToken: bot.token, allowedUsers: config.allowedUsers });
+      const transport = new TelegramTransport({
+        telegramToken: bot.token,
+        allowedUsers: config.allowedUsers,
+        language: bot.language,
+        botLabel: `${bot.language}-telegram`,
+      });
       mirrorTransports[bot.language] = transport;
       transport.onMessage((chatId, userId, text) => manager.handleMessage(bot.language, Number(chatId), userId, text));
 
@@ -79,7 +84,12 @@ async function main() {
 
   const transport = config.transport === "tui"
     ? new TuiTransport()
-    : new TelegramTransport({ telegramToken: config.telegramToken, allowedUsers: config.allowedUsers });
+    : new TelegramTransport({
+      telegramToken: config.telegramToken,
+      allowedUsers: config.allowedUsers,
+      language: defaultLanguage,
+      botLabel: `${defaultLanguage}-telegram`,
+    });
 
   transport.onMessage((chatId, userId, text) => manager.handleMessage(defaultLanguage, Number(chatId), userId, text));
 

@@ -231,6 +231,30 @@ describe("web server", () => {
     manager.close();
   });
 
+  it("persists command turns so WebUI and Telegram share command history", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir, TELEGRAM_CHAT_ID: "279737838" }));
+    const manager = await createRuntimeManager(config, { provider: new FakeProvider() });
+    await manager.runtime("polish").db.addVocab("wrzód", "ctx");
+    const polishMirror = new FakeMirrorTransport();
+    const server = new WebServer(manager, {
+      chatId: 279737838,
+      mirrorTransports: { polish: polishMirror },
+    });
+
+    const reply = await server.handleApi("POST", "/api/chat", { language: "polish", text: "/vocabulary" });
+
+    expect(reply.status).toBe(200);
+    const body = JSON.parse(reply.body);
+    expect(body.reply).toContain("wrzód");
+    expect(body.messages.map((m: any) => m.content)).toEqual(["/vocabulary", body.reply]);
+    expect(polishMirror.sent).toEqual([
+      { chatId: 279737838, text: "🌐 Web: /vocabulary" },
+      { chatId: 279737838, text: body.reply },
+    ]);
+
+    manager.close();
+  });
+
   it("returns the full durable web history instead of truncating to the model context window", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const manager = await createRuntimeManager(config, { provider: new FakeProvider() });

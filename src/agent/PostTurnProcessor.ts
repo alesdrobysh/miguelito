@@ -168,7 +168,22 @@ export class PostTurnProcessor {
           });
           reviewsCompleted++;
         } else if (this.clean(item.word)) {
-          await this.deps.vocab.scoreVocab(this.clean(item.word).toLowerCase(), grade, item.mode === "receptive" ? "receptive" : "productive");
+          const attempt = await this.deps.vocab.startVocabReviewAttempt({
+            word: this.clean(item.word),
+            mode: item.mode === "receptive" ? "receptive" : "productive",
+            strategy: "post_turn_evaluator",
+            prompt_text: _input.assistantText,
+            hint_level: this.nonNegativeInt(item.hint_level),
+          });
+          await this.deps.vocab.finishVocabReviewAttempt({
+            attempt_id: attempt.id,
+            user_response: this.clean(item.user_response) || _input.userMessage,
+            target_used: this.bool(item.target_used),
+            accepted_variant: this.clean(item.accepted_variant),
+            hint_level: this.nonNegativeInt(item.hint_level),
+            grade,
+            note: this.clean(item.note),
+          });
           reviewsCompleted++;
         }
       } catch (err) {

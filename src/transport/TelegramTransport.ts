@@ -8,16 +8,20 @@ const log = logger.child({ ctx: 'telegram' });
 interface TelegramTransportConfig {
   telegramToken: string;
   allowedUsers: Set<string>;
+  language?: string;
+  botLabel?: string;
 }
 
 export class TelegramTransport implements Transport {
   private bot: Bot;
   private allowedUsers: Set<string>;
   private handler: MessageHandler | null = null;
+  private logFields: { language?: string; botLabel?: string };
 
   constructor(config: TelegramTransportConfig) {
     this.bot = new Bot(config.telegramToken);
     this.allowedUsers = config.allowedUsers;
+    this.logFields = { language: config.language, botLabel: config.botLabel };
     this._registerHandlers();
   }
 
@@ -35,7 +39,7 @@ export class TelegramTransport implements Transport {
 
   start(opts?: Record<string, unknown>): void {
     this.bot.start(opts as any).catch((e) => {
-      log.error({ err: e }, 'Telegram bot start error');
+      log.error({ ...this.logFields, err: e }, 'Telegram bot start error');
     });
   }
 
@@ -48,7 +52,7 @@ export class TelegramTransport implements Transport {
 
   private async _dispatch(ctx: Context, text: string): Promise<void> {
     if (!this._isAllowed(ctx)) {
-      log.warn({ userId: ctx.from?.id?.toString()?.slice(0, 6) }, 'unauthorized user attempt');
+      log.warn({ ...this.logFields, userId: ctx.from?.id?.toString()?.slice(0, 6) }, 'unauthorized user attempt');
       return;
     }
     if (!this.handler) return;
@@ -56,7 +60,7 @@ export class TelegramTransport implements Transport {
     const chatId = ctx.chat!.id;
     const userId = ctx.from?.id?.toString() ?? "";
 
-    log.info({ chatId, userId: userId.slice(0, 6) }, 'message received');
+    log.info({ ...this.logFields, chatId, userId: userId.slice(0, 6) }, 'message received');
 
     await ctx.api.sendChatAction(chatId, "typing");
 
@@ -64,10 +68,10 @@ export class TelegramTransport implements Transport {
       const reply = await this.handler(chatId, userId, text);
       if (reply) {
         await this._send(ctx, reply);
-        log.info({ chatId }, 'reply sent');
+        log.info({ ...this.logFields, chatId }, 'reply sent');
       }
     } catch (e: any) {
-      log.error({ updateId: ctx.update?.update_id, message: (e.message ?? String(e)).slice(0, 200) }, 'handler error');
+      log.error({ ...this.logFields, updateId: ctx.update?.update_id, message: (e.message ?? String(e)).slice(0, 200) }, 'handler error');
       await ctx.reply("Error: " + (e.message ?? String(e)).slice(0, 200));
     }
   }
@@ -90,7 +94,7 @@ export class TelegramTransport implements Transport {
 
     this.bot.command("dream", async (ctx) => {
       if (!this._isAllowed(ctx)) {
-        log.warn({ userId: ctx.from?.id?.toString()?.slice(0, 6) }, 'unauthorized user attempt');
+        log.warn({ ...this.logFields, userId: ctx.from?.id?.toString()?.slice(0, 6) }, 'unauthorized user attempt');
         return;
       }
       if (!this.handler) return;
@@ -98,24 +102,24 @@ export class TelegramTransport implements Transport {
       const chatId = ctx.chat!.id;
       const userId = ctx.from?.id?.toString() ?? "";
 
-      log.info({ chatId, userId: userId.slice(0, 6) }, 'message received');
+      log.info({ ...this.logFields, chatId, userId: userId.slice(0, 6) }, 'message received');
 
       await ctx.reply("Dreaming...");
       try {
         const reply = await this.handler(chatId, userId, "/dream");
         if (reply) {
           await this._send(ctx, reply);
-          log.info({ chatId }, 'reply sent');
+          log.info({ ...this.logFields, chatId }, 'reply sent');
         }
       } catch (e: any) {
-        log.error({ updateId: ctx.update?.update_id, message: (e.message ?? String(e)).slice(0, 200) }, 'handler error');
+        log.error({ ...this.logFields, updateId: ctx.update?.update_id, message: (e.message ?? String(e)).slice(0, 200) }, 'handler error');
         await ctx.reply("Dream failed: " + (e.message ?? String(e)).slice(0, 200));
       }
     });
 
     this.bot.on("message:text", async (ctx) => {
       if (!this._isAllowed(ctx)) {
-        log.warn({ userId: ctx.from?.id?.toString()?.slice(0, 6) }, 'unauthorized user attempt');
+        log.warn({ ...this.logFields, userId: ctx.from?.id?.toString()?.slice(0, 6) }, 'unauthorized user attempt');
         return;
       }
       const text = ctx.message?.text;
@@ -130,14 +134,14 @@ export class TelegramTransport implements Transport {
       const ctx = (err as any).ctx;
       const msg = (err as any).error?.message ?? (err as any).message ?? "unknown";
       const updateId = ctx?.update?.update_id ?? "?";
-      log.error({ updateId, message: msg.slice(0, 200) }, 'handler error');
+      log.error({ ...this.logFields, updateId, message: msg.slice(0, 200) }, 'handler error');
     });
   }
 
   private _logError(ctx: Context) {
     return (e: any): void => {
       const msg = e?.message ?? String(e);
-      log.error({ updateId: ctx.update?.update_id, message: msg.slice(0, 200) }, 'handler error');
+      log.error({ ...this.logFields, updateId: ctx.update?.update_id, message: msg.slice(0, 200) }, 'handler error');
     };
   }
 }
