@@ -60,6 +60,14 @@ export function createEvaluatorProvider(config: Config): LLMProvider {
 
 const MODEL_HISTORY_LIMIT = 50;
 
+function normalizeCommandText(text: string): string {
+  if (text.startsWith("/vocab_candidates")) return text.replace("/vocab_candidates", "/vocab-candidates");
+  if (text.startsWith("/promote_vocab")) return text.replace("/promote_vocab", "/promote-vocab");
+  if (text.startsWith("/accept_vocab")) return text.replace("/accept_vocab", "/accept-vocab");
+  if (text.startsWith("/reject_vocab")) return text.replace("/reject_vocab", "/reject-vocab");
+  return text;
+}
+
 export class RuntimeManager {
   private runtimes = new Map<string, LanguageRuntime>();
 
@@ -130,6 +138,7 @@ export class RuntimeManager {
   }
 
   private async handleCommand(rt: LanguageRuntime, text: string): Promise<string | undefined> {
+    text = normalizeCommandText(text);
     const { db, lang, dreamService, dreamMemoryPath } = rt;
     if (text === "/dream") return dreamService.run();
     if (text === "/memory") {
@@ -155,7 +164,7 @@ export class RuntimeManager {
       if (promoted.length === 0) return lang.id === "polish" ? "Nic nie awansowało: brak mocnych kandydatów albo pełna kolejka." : "Nothing promoted: no strong candidates or active queue is full.";
       return promoted.map((r) => `✅ ${r.chunk_l2}${r.anchor ? ` (${r.anchor})` : ""}`).join("\n");
     }
-    if (text.startsWith("/accept-vocab ")) {
+    if (text === "/accept-vocab" || text.startsWith("/accept-vocab ")) {
       const id = Number(text.split(/\s+/)[1]);
       if (!Number.isFinite(id) || id <= 0) return "Usage: /accept-vocab <candidate_id>";
       const candidate = (await db.listVocabCandidates("all", 200)).find((c) => c.id === id && c.status === "candidate");
@@ -163,7 +172,7 @@ export class RuntimeManager {
       const promoted = await db.promoteSpecificVocabCandidate(id);
       return promoted ? `✅ ${promoted.chunk_l2}` : `Could not promote #${id}.`;
     }
-    if (text.startsWith("/reject-vocab ")) {
+    if (text === "/reject-vocab" || text.startsWith("/reject-vocab ")) {
       const id = Number(text.split(/\s+/)[1]);
       if (!Number.isFinite(id) || id <= 0) return "Usage: /reject-vocab <candidate_id>";
       const ok = await db.updateVocabCandidateStatus(id, "rejected");

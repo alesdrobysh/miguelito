@@ -7,6 +7,7 @@ import { loadConfig } from "./infrastructure/config.js";
 import { listAvailableLanguages } from "./languages/index.js";
 import { createRuntimeManager } from "./runtime.js";
 import { WebServer } from "./web/WebServer.js";
+import { TELEGRAM_COMMANDS } from "./transport/TelegramTransport.js";
 import type { LLMProvider } from "./providers/interfaces.js";
 
 function extractAssetPaths(html: string): string[] {
@@ -98,6 +99,26 @@ describe("web config", () => {
 });
 
 describe("runtime manager", () => {
+  it("exposes every supported slash command as a valid Telegram menu command", () => {
+    expect(TELEGRAM_COMMANDS.map((c) => c.command)).toEqual([
+      "start",
+      "progress",
+      "vocabulary",
+      "vocab_candidates",
+      "promote_vocab",
+      "accept_vocab",
+      "reject_vocab",
+      "proficiency",
+      "memory",
+      "dream",
+    ]);
+    for (const item of TELEGRAM_COMMANDS) {
+      expect(item.command).toMatch(/^[a-z0-9_]{1,32}$/);
+      expect(item.description.length).toBeGreaterThan(0);
+      expect(item.description.length).toBeLessThanOrEqual(256);
+    }
+  });
+
   it("loads all languages for unified transport so Telegram bots and WebUI share one DB instance per language", async () => {
     const config = loadConfig(env({
       TRANSPORT: "unified",
@@ -131,6 +152,26 @@ describe("runtime manager", () => {
     const plHistory = await manager.getChatHistory("polish", 777, 10);
     expect(esHistory.map((m) => m.content)).toEqual(["hola", "echo:hola"]);
     expect(plHistory.map((m) => m.content)).toEqual(["cześć", "echo:cześć"]);
+
+    manager.close();
+  });
+
+  it("supports Telegram-menu underscore aliases for vocabulary candidate commands", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const manager = await createRuntimeManager(config, { provider: new FakeProvider() });
+    const db = manager.runtime("spanish").db;
+    const candidateId = await db.addVocabCandidate({
+      chunk_l2: "aprovechar el trayecto",
+      source_type: "conversation",
+      priority: 0.9,
+    });
+
+    const listed = await manager.handleMessage("spanish", 777, "telegram-user", "/vocab_candidates");
+    expect(listed).toContain(`#${candidateId}`);
+    await expect(manager.handleMessage("spanish", 777, "telegram-user", "/accept_vocab")).resolves.toBe("Usage: /accept-vocab <candidate_id>");
+
+    const rejected = await manager.handleMessage("spanish", 777, "telegram-user", `/reject_vocab ${candidateId}`);
+    expect(rejected).toBe(`🗑️ rejected #${candidateId}`);
 
     manager.close();
   });

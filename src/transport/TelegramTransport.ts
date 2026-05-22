@@ -5,6 +5,31 @@ import { logger } from "../infrastructure/logger.js";
 
 const log = logger.child({ ctx: 'telegram' });
 
+export const TELEGRAM_COMMANDS = [
+  { command: "start", description: "Start Miguelito" },
+  { command: "progress", description: "Show learning progress" },
+  { command: "vocabulary", description: "List active vocabulary chunks" },
+  { command: "vocab_candidates", description: "List staged vocabulary candidates" },
+  { command: "promote_vocab", description: "Promote strong vocabulary candidates" },
+  { command: "accept_vocab", description: "Accept candidate: /accept_vocab <id>" },
+  { command: "reject_vocab", description: "Reject candidate: /reject_vocab <id>" },
+  { command: "proficiency", description: "Show proficiency diagnostics" },
+  { command: "memory", description: "Show dream memory" },
+  { command: "dream", description: "Run dream reflection" },
+] as const;
+
+const SIMPLE_COMMANDS = TELEGRAM_COMMANDS
+  .map((c) => c.command)
+  .filter((cmd) => cmd !== "dream" && cmd !== "accept_vocab" && cmd !== "reject_vocab") as string[];
+
+function normalizeTelegramCommandText(text: string): string {
+  if (text.startsWith("/vocab_candidates")) return text.replace("/vocab_candidates", "/vocab-candidates");
+  if (text.startsWith("/promote_vocab")) return text.replace("/promote_vocab", "/promote-vocab");
+  if (text.startsWith("/accept_vocab")) return text.replace("/accept_vocab", "/accept-vocab");
+  if (text.startsWith("/reject_vocab")) return text.replace("/reject_vocab", "/reject-vocab");
+  return text;
+}
+
 interface TelegramTransportConfig {
   telegramToken: string;
   allowedUsers: Set<string>;
@@ -38,6 +63,9 @@ export class TelegramTransport implements Transport {
   }
 
   start(opts?: Record<string, unknown>): void {
+    this.bot.api.setMyCommands([...TELEGRAM_COMMANDS]).catch((e) => {
+      log.error({ ...this.logFields, err: e }, 'Telegram set commands error');
+    });
     this.bot.start(opts as any).catch((e) => {
       log.error({ ...this.logFields, err: e }, 'Telegram bot start error');
     });
@@ -85,10 +113,15 @@ export class TelegramTransport implements Transport {
   }
 
   private _registerHandlers(): void {
-    const commands = ["start", "progress", "vocabulary", "proficiency", "memory"];
-    for (const cmd of commands) {
+    for (const cmd of SIMPLE_COMMANDS) {
       this.bot.command(cmd, (ctx) =>
-        this._dispatch(ctx, `/${cmd}`).catch(this._logError(ctx))
+        this._dispatch(ctx, normalizeTelegramCommandText(ctx.message?.text ?? `/${cmd}`)).catch(this._logError(ctx))
+      );
+    }
+
+    for (const cmd of ["accept_vocab", "reject_vocab"]) {
+      this.bot.command(cmd, (ctx) =>
+        this._dispatch(ctx, normalizeTelegramCommandText(ctx.message?.text ?? `/${cmd}`)).catch(this._logError(ctx))
       );
     }
 
