@@ -3,6 +3,7 @@ import type { LanguageConfig } from "../languages/LanguageConfig.js";
 import type { LLMProvider } from "../providers/interfaces.js";
 import type { CompetencyRepository, ErrorRepository, SessionRepository, VocabRepository } from "../repositories/interfaces.js";
 import type { TurnAnnotationInput, VocabReviewMode } from "../domain/types.js";
+import { analyzeTextDifficulty, outcomeScore } from "../domain/frequency.js";
 import { logger } from "../infrastructure/logger.js";
 
 const log = logger.child({ ctx: "postturn" });
@@ -95,6 +96,7 @@ export class PostTurnProcessor {
           used: ["construction actually produced by learner"],
           naturalness: 1,
           comprehension: "smooth|asked_clarify|requested_simpler",
+          lexical_rarity: 0.0,
           tunit_length: 1,
           had_subordination: false,
         },
@@ -145,8 +147,9 @@ export class PostTurnProcessor {
     let reviewsCompleted = 0;
     let annotationInserted = false;
 
-    const annotation = this.normalizeAnnotation(evaluation.annotation);
+    const annotation = this.normalizeAnnotation(evaluation.annotation, _input);
     await this.deps.competency.insertTurnAnnotation(annotation);
+    await this.recordDifficultyWeightedEvidence(annotation, _input);
     annotationInserted = true;
 
     const mode = typeof evaluation.mode === "string" ? evaluation.mode.trim().toUpperCase() : "";
@@ -228,7 +231,7 @@ export class PostTurnProcessor {
     return { ok: true, errorsLogged, vocabAdded, vocabCandidatesAdded, reviewsCompleted, annotationInserted };
   }
 
-  private normalizeAnnotation(raw?: Partial<TurnAnnotationInput>): TurnAnnotationInput {
+  private normalizeAnnotation(raw: Partial<TurnAnnotationInput> | undefined, input: PostTurnProcessInput): TurnAnnotationInput {
     const validCategories = new Set(this.deps.lang.errorCategories);
     const obligatory = Array.isArray(raw?.obligatory)
       ? raw!.obligatory
@@ -242,6 +245,8 @@ export class PostTurnProcessor {
     const comprehension = VALID_COMPREHENSION.has(comprehensionRaw)
       ? (comprehensionRaw as "smooth" | "asked_clarify" | "requested_simpler")
       : "smooth";
+    const assistantDifficulty = analyzeTextDifficulty(input.assistantText, this.deps.lang);
+    const modelRarity = Math.max(0, Math.min(1, Number(raw?.lexical_rarity ?? 0) || 0));
     return {
       obligatory,
       used,
@@ -249,9 +254,40 @@ export class PostTurnProcessor {
       comprehension,
       tunit_length: Math.max(1, Math.round(Number(raw?.tunit_length ?? 1) || 1)),
       had_subordination: Boolean(raw?.had_subordination),
-      lexical_rarity: Math.max(0, Math.min(1, Number(raw?.lexical_rarity ?? 0) || 0)),
+      lexical_rarity: Math.max(modelRarity, assistantDifficulty.lexicalDifficulty),
       self_correction: Boolean(raw?.self_correction),
     };
+  }
+
+  private async recordDifficultyWeightedEvidence(annotation: TurnAnnotationInput, input: PostTurnProcessInput): Promise<void> {
+    const assistantChallenge = analyzeTextDifficulty(input.assistantText, this.deps.lang);
+    const score = outcomeScore(annotation.comprehension);
+    const outcome = score >= 0.8 ? "success" : score >= 0.3 ? "partial" : "fail";
+    const rareWords = assistantChallenge.rareTokens.map((t) => t.token).join(", ");
+    await this.deps.competency.insertProficiencyEvidence({
+      skill: "reception",
+      dimension: "lexical",
+      level: assistantChallenge.estimatedLevel,
+      outcome,
+      confidence: assistantChallenge.tokensConsidered > 0 ? Math.max(0.35, Math.min(0.9, assistantChallenge.coverage || 0.5)) : 0.35,
+      weight: 1 + assistantChallenge.lexicalDifficulty,
+      evidence_text: `Comprehension=${annotation.comprehension}; assistant lexical level=${assistantChallenge.estimatedLevel}${rareWords ? `; hard tokens: ${rareWords}` : ""}.`,
+      challenge_json: JSON.stringify(assistantChallenge),
+    });
+
+    const learnerProduction = analyzeTextDifficulty(input.userMessage, this.deps.lang);
+    if (learnerProduction.tokensConsidered > 0) {
+      await this.deps.competency.insertProficiencyEvidence({
+        skill: "production",
+        dimension: "lexical",
+        level: learnerProduction.estimatedLevel,
+        outcome: annotation.naturalness == null || annotation.naturalness >= 0.75 ? "success" : annotation.naturalness >= 0.45 ? "partial" : "fail",
+        confidence: Math.max(0.35, Math.min(0.85, learnerProduction.coverage || 0.5)),
+        weight: 0.75 + learnerProduction.lexicalDifficulty,
+        evidence_text: `Learner produced ${learnerProduction.estimatedLevel} lexical material; naturalness=${annotation.naturalness ?? "unknown"}.`,
+        challenge_json: JSON.stringify(learnerProduction),
+      });
+    }
   }
 
   private clean(value: unknown): string {

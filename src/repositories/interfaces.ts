@@ -15,6 +15,8 @@ import type {
   VocabReviewAttempt,
   StartVocabReviewAttemptInput,
   FinishVocabReviewAttemptInput,
+  ProficiencyEvidenceInput,
+  ProficiencyEvidenceRow,
 } from "../domain/types.js";
 
 export interface VocabRepository {
@@ -77,4 +79,6 @@ export interface CompetencyRepository {
   updateCompetencyVector(fields: Partial<Omit<CompetencyVectorRow, "id" | "created_at">>): Promise<void>;
   insertTurnAnnotation(ann: TurnAnnotationInput): Promise<void>;
   getRecentAnnotations(limit: number): Promise<TurnAnnotation[]>;
+  insertProficiencyEvidence(evidence: ProficiencyEvidenceInput): Promise<number>;
+  listProficiencyEvidence(limit: number): Promise<ProficiencyEvidenceRow[]>;
 }

@@ -1,5 +1,6 @@
 import path from "path";
 import type { LanguageConfig } from "../LanguageConfig.js";
+import { PolishTopWords } from "../frequency/polish.js";
 
 export const PolishLanguage: LanguageConfig = {
   id: "polish",
@@ -71,6 +72,10 @@ Skup się na: postępach w słownictwie, trwałych wzorcach błędów (zwłaszcz
       `Jesteś asystentem nauki języka polskiego.\n\nArtykuł: "${title}"\n\nTekst: ${text}\n\nZadania:\n1. Napisz streszczenie 3-5 zdaniami w prostym, przystępnym języku polskim.\n2. Wyodrębnij 3-5 ciekawych polskich słów lub wyrażeń z tekstu. Dla każdego podaj krótkie wyjaśnienie po polsku (1 zdanie).\n\nOdpowiedz TYLKO w JSON:\n{"summary": "...", "words": [{"word": "...", "explanation": "..."}]}`,
     readingSuggest: (title, text) =>
       `Jesteś asystentem nauki języka polskiego.\n\nArtykuł: "${title}"\n\nTekst: ${text}\n\nZadania:\n1. Napisz streszczenie 2-3 zdaniami w prostym, przystępnym języku polskim.\n2. Wyodrębnij 1-2 ciekawe polskie słowa lub wyrażenia z tekstu. Dla każdego podaj krótkie wyjaśnienie po polsku (1 zdanie).\n\nOdpowiedz TYLKO w JSON:\n{"summary": "...", "words": [{"word": "...", "explanation": "..."}]}`,
+  },
+  frequency: {
+    source: "hermitdave/FrequencyWords OpenSubtitles 2018 pl_50k, top 10k",
+    topWords: PolishTopWords,
   },
   soulPath: path.resolve(__dirname, "soul.md"),
 };

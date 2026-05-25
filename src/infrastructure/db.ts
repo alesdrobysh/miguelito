@@ -8,6 +8,7 @@ import type {
   TurnAnnotationInput, TurnAnnotation, CompetencyVectorRow,
   VocabReviewMode, VocabReviewAttempt, StartVocabReviewAttemptInput, FinishVocabReviewAttemptInput,
   VocabCandidateItem,
+  ProficiencyEvidenceInput, ProficiencyEvidenceRow,
 } from "../domain/types.js";
 import type {
   VocabRepository, ErrorRepository, SessionRepository, ProfileRepository,
@@ -179,6 +180,21 @@ CREATE TABLE IF NOT EXISTS vocab_review_attempts (
     completed_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_vocab_attempts_active ON vocab_review_attempts(language, status, created_at);
+
+CREATE TABLE IF NOT EXISTS proficiency_evidence (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    language TEXT NOT NULL DEFAULT '',
+    skill TEXT NOT NULL,
+    dimension TEXT NOT NULL,
+    level TEXT NOT NULL,
+    outcome TEXT NOT NULL,
+    confidence REAL NOT NULL DEFAULT 0.5,
+    weight REAL NOT NULL DEFAULT 1.0,
+    evidence_text TEXT NOT NULL DEFAULT '',
+    challenge_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_proficiency_evidence_language_skill ON proficiency_evidence(language, skill, dimension, level, created_at);
 `;
 
 export type { ChunkItem, DueChunkItem, ErrorItem, UserProfile, ConversationStateResult, FsrsReviewResult, ProgressData, UpdateResult, TurnAnnotationInput, TurnAnnotation, CompetencyVectorRow } from "../domain/types.js";
@@ -1289,6 +1305,35 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
       `SELECT * FROM error_log WHERE language = ? AND created_at >= ? AND category IN (${placeholders}) ORDER BY id ASC`,
       [this.languageId, since, ...categories]
     ) as ErrorItem[];
+  }
+
+  async insertProficiencyEvidence(evidence: ProficiencyEvidenceInput): Promise<number> {
+    this.db.run(
+      `INSERT INTO proficiency_evidence
+        (language, skill, dimension, level, outcome, confidence, weight, evidence_text, challenge_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        this.languageId,
+        evidence.skill,
+        evidence.dimension,
+        evidence.level,
+        evidence.outcome,
+        Math.max(0, Math.min(1, evidence.confidence)),
+        Math.max(0, evidence.weight),
+        evidence.evidence_text,
+        evidence.challenge_json ?? "{}",
+      ]
+    );
+    const id = this.queryRow("SELECT last_insert_rowid() AS id") as { id: number };
+    this.save();
+    return id.id;
+  }
+
+  async listProficiencyEvidence(limit: number): Promise<ProficiencyEvidenceRow[]> {
+    return this.queryAll(
+      `SELECT * FROM proficiency_evidence WHERE language = ? ORDER BY id DESC LIMIT ?`,
+      [this.languageId, limit]
+    ) as ProficiencyEvidenceRow[];
   }
 
   close(): void {

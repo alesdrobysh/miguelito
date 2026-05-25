@@ -207,3 +207,25 @@ export interface CompetencyVectorRow {
   self_correction_obs: number;
   created_at: string;
 }
+
+export type ProficiencySkill = "reception" | "production" | "interaction";
+export type ProficiencyDimension = "lexical" | "syntax" | "idiom" | "abstraction" | "fluency";
+export type ProficiencyOutcome = "success" | "partial" | "fail";
+export type ProficiencyLevel = "A1" | "A2" | "B1" | "B2" | "C1" | "C2";
+
+export interface ProficiencyEvidenceInput {
+  skill: ProficiencySkill;
+  dimension: ProficiencyDimension;
+  level: ProficiencyLevel;
+  outcome: ProficiencyOutcome;
+  confidence: number;
+  weight: number;
+  evidence_text: string;
+  challenge_json?: string;
+}
+
+export interface ProficiencyEvidenceRow extends ProficiencyEvidenceInput {
+  id: number;
+  language: string;
+  created_at: string;
+}

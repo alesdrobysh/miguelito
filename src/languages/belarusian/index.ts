@@ -72,5 +72,9 @@ export const BelarusianLanguage: LanguageConfig = {
       `Ты асістэнт па вывучэнні беларускай мовы.\n\nАртыкул: "${title}"\n\nТэкст: ${text}\n\nЗаданні:\n1. Напішы рэзюмэ з 2-3 сказаў на простай, зразумелай беларускай мове.\n2. Вылучы 1-2 цікавыя беларускія словы або выразы з тэксту. Для кожнага дай кароткае тлумачэнне па-беларуску (1 сказ).\n\nАдкажы ТОЛЬКІ ў JSON:\n{"summary": "...", "words": [{"word": "...", "explanation": "..."}]}`,
   },
   interestsHeader: "Што я ведаю пра гэтага чалавека",
+  frequency: {
+    source: "No reliable bundled Belarusian frequency list found; difficulty falls back to unknown/rare until a list is added.",
+    topWords: [],
+  },
   soulPath: path.resolve(__dirname, "soul.md"),
 };

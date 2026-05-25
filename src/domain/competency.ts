@@ -29,6 +29,7 @@ export interface CompetencyVector {
     level: number;
     obs: number;
     confidence: Confidence;
+    byLevel: Record<string, { score: number | null; obs: number; confidence: Confidence }>;
   };
   monitoring: {
     selfCorrectionObs: number;
@@ -39,6 +40,23 @@ function obsToConfidence(obs: number): Confidence {
   if (obs < 5) return "low";
   if (obs < 30) return "medium";
   return "high";
+}
+
+async function buildReceptionByLevel(repo: CompetencyRepository): Promise<Record<string, { score: number | null; obs: number; confidence: Confidence }>> {
+  const levels = ["A1", "A2", "B1", "B2", "C1", "C2"];
+  const result: Record<string, { score: number | null; obs: number; confidence: Confidence }> = {};
+  for (const level of levels) result[level] = { score: null, obs: 0, confidence: "low" };
+
+  const rows = await repo.listProficiencyEvidence(200);
+  const outcomeScore: Record<string, number> = { success: 1, partial: 0.5, fail: 0 };
+  for (const level of levels) {
+    const bucket = rows.filter((r) => r.skill === "reception" && r.dimension === "lexical" && r.level === level);
+    const denom = bucket.reduce((s, r) => s + Math.max(0, r.weight) * Math.max(0, Math.min(1, r.confidence)), 0);
+    if (denom <= 0) continue;
+    const score = bucket.reduce((s, r) => s + (outcomeScore[r.outcome] ?? 0.5) * Math.max(0, r.weight) * Math.max(0, Math.min(1, r.confidence)), 0) / denom;
+    result[level] = { score, obs: bucket.length, confidence: obsToConfidence(bucket.length) };
+  }
+  return result;
 }
 
 export async function getCompetencyVector(repos: {
@@ -68,13 +86,14 @@ export async function getCompetencyVector(repos: {
 
   const morphRate = vec.morph_trials > 0.01 ? vec.morph_successes / vec.morph_trials : 0.5;
   const idiomRate = vec.idiom_trials > 0.01 ? vec.idiom_successes / vec.idiom_trials : 0.5;
+  const receptionByLevel = await buildReceptionByLevel(repos.competency);
 
   return {
     lexicon: { activeChunks, lexicalRarity: vec.lexical_rarity_ewma, confidence: lexiconConf },
     syntax: { meanTunitLength, subIndex, confidence: obsToConfidence(n) },
     morphology: { rate: morphRate, obs: vec.morph_obs, confidence: obsToConfidence(vec.morph_obs) },
     idiomaticity: { rate: idiomRate, obs: vec.idiom_obs, confidence: obsToConfidence(vec.idiom_obs) },
-    reception: { level: vec.reception_ewma, obs: vec.reception_obs, confidence: obsToConfidence(vec.reception_obs) },
+    reception: { level: vec.reception_ewma, obs: vec.reception_obs, confidence: obsToConfidence(vec.reception_obs), byLevel: receptionByLevel },
     monitoring: { selfCorrectionObs: vec.self_correction_obs },
   };
 }
@@ -238,12 +257,17 @@ export function formatVectorForDisplay(v: CompetencyVector): string {
   const pct = (n: number) => `${Math.round(n * 100)}%`;
   const conf = (c: string) => (c === "low" ? " (forming)" : "");
 
+  const byLevel = Object.entries(v.reception.byLevel)
+    .filter(([, b]) => b.score !== null)
+    .map(([level, b]) => `${level} ${pct(b.score ?? 0)}${conf(b.confidence)}`)
+    .join(", ") || "not enough leveled evidence";
+
   return [
     `Lexicon: ${v.lexicon.activeChunks} chunks, rarity ${v.lexicon.lexicalRarity.toFixed(2)}${conf(v.lexicon.confidence)}`,
     `Syntax: T-units ${v.syntax.meanTunitLength.toFixed(1)}, subordination ${pct(v.syntax.subIndex)}${conf(v.syntax.confidence)}`,
     `Morphology: ${pct(v.morphology.rate)} accuracy${conf(v.morphology.confidence)}`,
     `Idiomaticity: ${pct(v.idiomaticity.rate)} naturalness${conf(v.idiomaticity.confidence)}`,
-    `Reception: ${pct(v.reception.level)} smooth${conf(v.reception.confidence)}`,
+    `Reception: ${pct(v.reception.level)} smooth${conf(v.reception.confidence)}; by level: ${byLevel}`,
     `Self-Correction: ${v.monitoring.selfCorrectionObs} obs`,
   ].join(" | ");
 }

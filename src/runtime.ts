@@ -181,12 +181,17 @@ export class RuntimeManager {
     if (text === "/proficiency") {
       const cv = await getCompetencyVector({ competency: db, vocab: db });
       const focus = selectFocusAxis(cv, lang) ?? "balanced";
+      const receptionLevels = Object.entries(cv.reception.byLevel)
+        .map(([level, bucket]) => bucket.score === null ? `${level}: untested` : `${level}: ${Math.round(bucket.score * 100)}% (${bucket.obs} obs)`)
+        .join("\n");
       return [
         `📊 ${lang.name} proficiency`,
         `Vocabulary chunks: ${cv.lexicon.activeChunks}`,
         `Morphology: ${Math.round(cv.morphology.rate * 100)}% (${cv.morphology.obs} obs)`,
         `Idiomaticity: ${Math.round(cv.idiomaticity.rate * 100)}% (${cv.idiomaticity.obs} obs)`,
-        `Reception: ${Math.round(cv.reception.level * 100)}%`,
+        `Reception EWMA: ${Math.round(cv.reception.level * 100)}%`,
+        `Reception by lexical challenge:`,
+        receptionLevels,
         `Focus: ${focus}`,
       ].join("\n");
     }

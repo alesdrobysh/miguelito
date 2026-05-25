@@ -38,5 +38,9 @@ export interface LanguageConfig {
     readLink: (title: string, text: string) => string;
     readingSuggest: (title: string, text: string) => string;
   };
+  frequency?: {
+    source: string;
+    topWords: readonly string[];
+  };
   soulPath: string;
 }
