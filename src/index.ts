@@ -1,10 +1,9 @@
 import { loadConfig } from "./infrastructure/config.js";
 import { logger } from "./infrastructure/logger.js";
 import { createRuntimeManager } from "./runtime.js";
-import { TelegramTransport } from "./transport/TelegramTransport.js";
 import { TuiTransport } from "./transport/TuiTransport.js";
-import { startScheduler } from "./services/Scheduler.js";
 import { WebServer } from "./web/WebServer.js";
+import { createTelegramTransport, startLanguageScheduler, startTelegramTransport } from "./app/startup.js";
 
 const log = logger.child({ ctx: "app" });
 
@@ -41,40 +40,17 @@ async function main() {
       { language: "spanish", token: config.telegramBotTokens.spanish! },
     ];
 
-    const mirrorTransports: Record<string, TelegramTransport> = {};
+    const mirrorTransports = Object.fromEntries(
+      telegramBots.map((bot) => [bot.language, createTelegramTransport(config, bot.language, bot.token)]),
+    );
 
     for (const bot of telegramBots) {
-      const transport = new TelegramTransport({
-        telegramToken: bot.token,
-        allowedUsers: config.allowedUsers,
-        language: bot.language,
-        botLabel: `${bot.language}-telegram`,
-      });
-      mirrorTransports[bot.language] = transport;
-      transport.onMessage((chatId, userId, text) => manager.handleMessage(bot.language, Number(chatId), userId, text));
-
+      const transport = mirrorTransports[bot.language];
       const rt = manager.runtime(bot.language);
-      const morningCronPrompt = process.env.MORNING_CRON_PROMPT ?? rt.lang.prompts.morning;
-      const eveningCronPrompt = process.env.EVENING_CRON_PROMPT ?? rt.lang.prompts.evening;
-      startScheduler(
-        {
-          morningCron: config.morningCron,
-          eveningCron: config.eveningCron,
-          dreamCron: config.dreamCron,
-          timezone: config.timezone,
-          telegramChatId: config.telegramChatId,
-          morningCronPrompt,
-          eveningCronPrompt,
-        },
-        (prompt) => rt.agentRunner.run(prompt, []),
-        rt.dreamService,
-        transport,
-      );
-      transport.start({
-        onStart: (info: { username: string }) => log.info({ username: info.username, language: bot.language }, "bot started"),
-        allowed_updates: ["message"],
-      });
+      startLanguageScheduler(config, rt, transport);
+      startTelegramTransport(manager, config, bot.language, transport);
     }
+
     new WebServer(manager, {
       chatId: Number(config.telegramChatId),
       mirrorTransports,
@@ -84,35 +60,15 @@ async function main() {
 
   const transport = config.transport === "tui"
     ? new TuiTransport()
-    : new TelegramTransport({
-      telegramToken: config.telegramToken,
-      allowedUsers: config.allowedUsers,
-      language: defaultLanguage,
-      botLabel: `${defaultLanguage}-telegram`,
-    });
+    : createTelegramTransport(config, defaultLanguage, config.telegramToken);
 
   transport.onMessage((chatId, userId, text) => manager.handleMessage(defaultLanguage, Number(chatId), userId, text));
 
   if (config.transport === "telegram") {
     const rt = manager.runtime(defaultLanguage);
-    const morningCronPrompt = process.env.MORNING_CRON_PROMPT ?? rt.lang.prompts.morning;
-    const eveningCronPrompt = process.env.EVENING_CRON_PROMPT ?? rt.lang.prompts.evening;
-    startScheduler(
-      {
-        morningCron: config.morningCron,
-        eveningCron: config.eveningCron,
-        dreamCron: config.dreamCron,
-        timezone: config.timezone,
-        telegramChatId: config.telegramChatId,
-        morningCronPrompt,
-        eveningCronPrompt,
-      },
-      (prompt) => rt.agentRunner.run(prompt, []),
-      rt.dreamService,
-      transport,
-    );
+    startLanguageScheduler(config, rt, transport);
     transport.start({
-      onStart: (info: { username: string }) => log.info({ username: info.username }, "bot started"),
+      onStart: (info: { username: string }) => log.info({ username: info.username, language: defaultLanguage }, "bot started"),
       allowed_updates: ["message"],
     });
   } else {

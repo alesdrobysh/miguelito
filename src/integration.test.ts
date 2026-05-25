@@ -1,29 +1,19 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import fs from "fs";
-import os from "os";
-import path from "path";
-import { BuddyDb } from "./infrastructure/db.js";
+import type { BuddyDb } from "./infrastructure/db.js";
 import { SpanishLanguage } from "./languages/spanish/index.js";
 import { createTools, toolsToOpenAI } from "./tools/index.js";
+import { createTestDb, type TestDbHandle } from "./test/dbHelpers.js";
 
 let db: BuddyDb;
-let dbPath: string;
-let tmpDir: string;
+let handle: TestDbHandle;
 
 beforeEach(async () => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "miguelito-test-"));
-  dbPath = path.join(tmpDir, "test.db");
-  db = await BuddyDb.open(
-    dbPath,
-    "spanish",
-    SpanishLanguage.errorCategories,
-    SpanishLanguage.morphologyCategories,
-  );
+  handle = await createTestDb();
+  db = handle.db;
 });
 
-afterEach(async () => {
-  db.close();
-  fs.rmSync(tmpDir, { recursive: true, force: true });
+afterEach(() => {
+  handle.cleanup();
 });
 
 describe("integration: vocab add + score + due cycle", () => {

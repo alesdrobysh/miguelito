@@ -1,5 +1,6 @@
 import { llmChat, type LLMConfig } from "../llm.js";
 import type { LLMProvider, ChatOptions, ChatResult, ChatMessage } from "./interfaces.js";
+import { promptToMessages } from "./openAiCompatibleClient.js";
 
 export class OpenRouterProvider implements LLMProvider {
   private config: LLMConfig;
@@ -13,10 +14,11 @@ export class OpenRouterProvider implements LLMProvider {
   }
 
   async complete(systemPrompt: string | null, userPrompt: string, opts?: ChatOptions): Promise<string> {
-    const messages: ChatMessage[] = [];
-    if (systemPrompt) messages.push({ role: "system", content: systemPrompt });
-    messages.push({ role: "user", content: userPrompt });
-    const result = await llmChat(this.config, messages, undefined, opts?.temperature ?? 0.7, opts?.maxTokens ?? 1024, opts?.structured);
+    const result = await this.chat(promptToMessages(systemPrompt, userPrompt), undefined, {
+      ...opts,
+      temperature: opts?.temperature ?? 0.7,
+      maxTokens: opts?.maxTokens ?? 1024,
+    });
     return result.content ?? "";
   }
 

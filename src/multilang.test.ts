@@ -1,39 +1,23 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import fs from "fs";
-import os from "os";
-import path from "path";
 import { BuddyDb } from "./infrastructure/db.js";
 import { SpanishLanguage } from "./languages/spanish/index.js";
 import { PolishLanguage } from "./languages/polish/index.js";
+import { createMultilangTestDb, type MultilangTestDbHandle } from "./test/dbHelpers.js";
 
 let dbSpanish: BuddyDb;
 let dbPolish: BuddyDb;
 let dbPath: string;
-let tmpDir: string;
+let handle: MultilangTestDbHandle;
 
 beforeEach(async () => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "miguelito-multilang-test-"));
-  dbPath = path.join(tmpDir, "test.db");
-  
-  // Open same DB file with two different language contexts
-  dbSpanish = await BuddyDb.open(
-    dbPath,
-    "spanish",
-    SpanishLanguage.errorCategories,
-    SpanishLanguage.morphologyCategories,
-  );
-  dbPolish = await BuddyDb.open(
-    dbPath,
-    "polish",
-    PolishLanguage.errorCategories,
-    PolishLanguage.morphologyCategories,
-  );
+  handle = await createMultilangTestDb();
+  dbSpanish = handle.dbSpanish;
+  dbPolish = handle.dbPolish;
+  dbPath = handle.dbPath;
 });
 
-afterEach(async () => {
-  dbSpanish.close();
-  dbPolish.close();
-  fs.rmSync(tmpDir, { recursive: true, force: true });
+afterEach(() => {
+  handle.cleanup();
 });
 
 describe("Multi-language scoping in same database", () => {
