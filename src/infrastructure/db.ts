@@ -144,6 +144,10 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
     return this.vocab.finishVocabReviewAttempt(input);
   }
 
+  async listActiveVocabReviewAttempts(limit?: number): Promise<VocabReviewAttempt[]> {
+    return this.vocab.listActiveVocabReviewAttempts(limit);
+  }
+
   async logError(userText: string, correct: string, category: string, note: string): Promise<number> {
     return this.errors.logError(userText, correct, category, note);
   }

@@ -45,6 +45,7 @@ export interface VocabRepository {
   scoreVocab(chunk_l2: string, grade: number, mode?: VocabReviewMode): Promise<FsrsReviewResult>;
   startVocabReviewAttempt(input: StartVocabReviewAttemptInput): Promise<VocabReviewAttempt>;
   finishVocabReviewAttempt(input: FinishVocabReviewAttemptInput): Promise<VocabReviewAttempt>;
+  listActiveVocabReviewAttempts(limit?: number): Promise<VocabReviewAttempt[]>;
   exportVocab(format: string): Promise<{ count: number; data: string }>;
   progressSummary(): Promise<ProgressData>;
 }

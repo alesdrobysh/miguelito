@@ -218,6 +218,26 @@ describe("BuddyDb vocabulary (chunk-based)", () => {
     expect(rows[0].values[0]).toEqual([1, 0]);
   });
 
+  it("reuses an active vocabulary review attempt instead of creating duplicates", async () => {
+    await db.addVocab("coger el tren", "ctx", "coger");
+    const first = await db.startVocabReviewAttempt({
+      word: "coger el tren",
+      mode: "productive",
+      strategy: "cloze",
+      prompt_text: "Completa: tengo que ___",
+    });
+    const second = await db.startVocabReviewAttempt({
+      word: "coger el tren",
+      mode: "productive",
+      strategy: "personal_question",
+      prompt_text: "¿Cuándo coges el tren?",
+    });
+
+    expect(second.id).toBe(first.id);
+    const active = await db.listActiveVocabReviewAttempts(10);
+    expect(active.map((a) => a.word)).toEqual(["coger el tren"]);
+  });
+
 });
 
 describe("BuddyDb error log", () => {

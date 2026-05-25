@@ -131,4 +131,58 @@ describe("PostTurnProcessor", () => {
     const row = db.db.exec("SELECT pro_reps, rec_reps FROM vocabulary_items WHERE chunk_l2 = 'pasar el fin de semana'")[0].values[0];
     expect(row).toEqual([1, 0]);
   });
+
+  it("shows active attempts to the evaluator so the next learner reply can close them", async () => {
+    await db.addVocab("coger el tren", "ctx", "coger");
+    const attempt = await db.startVocabReviewAttempt({
+      word: "coger el tren",
+      mode: "productive",
+      strategy: "cloze",
+      prompt_text: "Completa: Mañana tengo que ___ para ir al trabajo.",
+      hint_level: 1,
+    });
+    const provider = new JsonProvider({
+      annotation: { obligatory: [], used: ["coger el tren"], naturalness: 1, comprehension: "smooth" },
+      mode: "REACT",
+      errors: [],
+      vocabulary: [],
+      reviews: [{ attempt_id: attempt.id, word: "coger el tren", mode: "productive", user_response: "Tengo que coger el tren", target_used: true, accepted_variant: "coger el tren", hint_level: 1, grade: 2, note: "answered cloze" }],
+    });
+
+    const processor = new PostTurnProcessor({ provider, vocab: db, errors: db, competency: db, session: db, lang: SpanishLanguage });
+    await processor.process({ userMessage: "Tengo que coger el tren", assistantText: "Exacto.", chatHistory: [] });
+
+    expect(provider.calls[0].userPrompt).toContain("Active review attempts:");
+    expect(provider.calls[0].userPrompt).toContain(`\"attempt_id\":${attempt.id}`);
+    expect(provider.calls[0].userPrompt).toContain("coger el tren");
+    const active = await db.listActiveVocabReviewAttempts();
+    expect(active).toHaveLength(0);
+  });
+
+  it("matches an active attempt by word and mode when the evaluator omits attempt_id", async () => {
+    await db.addVocab("coger el tren", "ctx", "coger");
+    await db.startVocabReviewAttempt({
+      word: "coger el tren",
+      mode: "productive",
+      strategy: "personal_question",
+      prompt_text: "¿Cuándo coges el tren?",
+    });
+    const provider = new JsonProvider({
+      annotation: { obligatory: [], used: ["coger el tren"], naturalness: 1, comprehension: "smooth" },
+      mode: "REACT",
+      errors: [],
+      vocabulary: [],
+      reviews: [{ word: "coger el tren", mode: "productive", user_response: "Cojo el tren mañana", target_used: true, accepted_variant: "cojo el tren", hint_level: 0, grade: 3, note: "correct" }],
+    });
+
+    const processor = new PostTurnProcessor({ provider, vocab: db, errors: db, competency: db, session: db, lang: SpanishLanguage });
+    const result = await processor.process({ userMessage: "Cojo el tren mañana", assistantText: "Muy bien.", chatHistory: [] });
+
+    expect(result.reviewsCompleted).toBe(1);
+    expect(await db.listActiveVocabReviewAttempts()).toHaveLength(0);
+    const attempts = db.db.exec("SELECT word, status, grade FROM vocab_review_attempts")[0].values;
+    expect(attempts).toEqual([["coger el tren", "completed", 3]]);
+    const row = db.db.exec("SELECT pro_reps, rec_reps FROM vocabulary_items WHERE chunk_l2 = 'coger el tren'")[0].values[0];
+    expect(row).toEqual([1, 0]);
+  });
 });

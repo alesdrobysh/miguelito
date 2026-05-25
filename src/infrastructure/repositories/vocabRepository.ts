@@ -262,6 +262,15 @@ export class SqlVocabRepository extends SqlRepository implements VocabRepository
     ) as { id: number; chunk_l2: string } | undefined;
     if (!row) throw new Error(`Chunk not found: ${word}`);
 
+    const existing = this.queryRow(
+      `SELECT * FROM vocab_review_attempts
+       WHERE language = ? AND word = ? COLLATE NOCASE AND mode = ? AND status = 'active'
+       ORDER BY created_at DESC, id DESC
+       LIMIT 1`,
+      [this.languageId, row.chunk_l2, mode]
+    ) as VocabReviewAttempt | undefined;
+    if (existing) return existing;
+
     this.db.run(
       `INSERT INTO vocab_review_attempts
         (vocab_id, word, language, mode, status, strategy, prompt_text, hint_level)
@@ -315,6 +324,26 @@ export class SqlVocabRepository extends SqlRepository implements VocabRepository
     ) as VocabReviewAttempt | undefined;
     if (!row) throw new Error(`Review attempt not found: ${id}`);
     return row;
+  }
+
+  async listActiveVocabReviewAttempts(limit = 5): Promise<VocabReviewAttempt[]> {
+    const capped = Math.max(1, Math.min(20, Math.round(limit || 5)));
+    return this.queryAll(
+      `SELECT * FROM vocab_review_attempts AS a
+       WHERE a.language = ?
+         AND a.status = 'active'
+         AND NOT EXISTS (
+           SELECT 1 FROM vocab_review_attempts AS newer
+           WHERE newer.language = a.language
+             AND newer.status = 'active'
+             AND newer.word = a.word COLLATE NOCASE
+             AND newer.mode = a.mode
+             AND newer.id > a.id
+         )
+       ORDER BY a.created_at DESC, a.id DESC
+       LIMIT ?`,
+      [this.languageId, capped]
+    ) as VocabReviewAttempt[];
   }
 
   async exportVocab(format: string): Promise<{ count: number; data: string }> {

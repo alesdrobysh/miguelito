@@ -2,7 +2,7 @@ import type { ChatMessage } from "../llm.js";
 import type { LanguageConfig } from "../languages/LanguageConfig.js";
 import type { LLMProvider } from "../providers/interfaces.js";
 import type { CompetencyRepository, ErrorRepository, SessionRepository, VocabRepository } from "../repositories/interfaces.js";
-import type { TurnAnnotationInput, VocabReviewMode } from "../domain/types.js";
+import type { TurnAnnotationInput, VocabReviewAttempt, VocabReviewMode } from "../domain/types.js";
 import { analyzeTextDifficulty, outcomeScore } from "../domain/frequency.js";
 import { logger } from "../infrastructure/logger.js";
 
@@ -83,6 +83,7 @@ export class PostTurnProcessor {
   }
 
   private async evaluate(input: PostTurnProcessInput): Promise<PostTurnEvaluation> {
+    const activeAttempts = await this.deps.vocab.listActiveVocabReviewAttempts(5);
     const systemPrompt = [
       `You are a deterministic evaluator for a ${this.deps.lang.name} tutoring chatbot.`,
       "Return only JSON. Do not write learner-facing text.",
@@ -112,16 +113,19 @@ export class PostTurnProcessor {
           acceptable_variants: ["optional variant"],
           elicitation_cues: ["optional production cue"]
         }],
-        reviews: [{ word: "exact chunk_l2 from vocabulary", mode: "productive|receptive", user_response: "learner answer", target_used: true, accepted_variant: "actual form", hint_level: 0, grade: 3, note: "why" }],
+        reviews: [{ attempt_id: 123, word: "exact chunk_l2 from vocabulary", mode: "productive|receptive", user_response: "learner answer", target_used: true, accepted_variant: "actual form", hint_level: 0, grade: 3, note: "why" }],
       }),
       "Use empty arrays when there is nothing to extract. Grade reviews 1..3 only.",
       "Add a review entry whenever the assistant created a vocabulary practice opportunity (e.g. asked the learner to produce or recognize a chunk) and the learner responded. Use word=exact chunk_l2, mode=productive if learner was asked to produce it, receptive if assistant used it for comprehension.",
+      "If Active review attempts are provided and the latest learner message answers one of them, include that exact attempt_id in the review entry so the pending attempt is completed instead of creating a new attempt.",
     ].join("\n");
 
     const recent = input.chatHistory.slice(-8).map((m) => `${m.role}: ${m.content}`).join("\n");
     const userPrompt = [
       "Recent history:",
       recent || "(none)",
+      "Active review attempts:",
+      this.formatActiveAttempts(activeAttempts),
       "Latest learner message:",
       input.userMessage,
       "Assistant reply:",
@@ -189,9 +193,10 @@ export class PostTurnProcessor {
     const promoted = await this.deps.vocab.promoteVocabCandidates({ maxPromotions: 2, minPriority: 0.85, maxActiveLearningItems: 40 });
     vocabAdded += promoted.length;
 
+    const activeAttempts = await this.deps.vocab.listActiveVocabReviewAttempts(10);
     for (const item of evaluation.reviews ?? []) {
       const grade = this.grade(item.grade);
-      const attemptId = Number(item.attempt_id ?? 0);
+      const attemptId = this.resolveAttemptId(item, activeAttempts);
       try {
         if (attemptId > 0) {
           await this.deps.vocab.finishVocabReviewAttempt({
@@ -257,6 +262,30 @@ export class PostTurnProcessor {
       lexical_rarity: Math.max(modelRarity, assistantDifficulty.lexicalDifficulty),
       self_correction: Boolean(raw?.self_correction),
     };
+  }
+
+  private formatActiveAttempts(attempts: VocabReviewAttempt[]): string {
+    if (attempts.length === 0) return "(none)";
+    return attempts.map((a) => JSON.stringify({
+      attempt_id: a.id,
+      word: a.word,
+      mode: a.mode,
+      strategy: a.strategy,
+      prompt_text: a.prompt_text,
+      hint_level: a.hint_level,
+      created_at: a.created_at,
+    })).join("\n");
+  }
+
+  private resolveAttemptId(item: EvaluatedReview, activeAttempts: VocabReviewAttempt[]): number {
+    const explicit = Number(item.attempt_id ?? 0);
+    if (explicit > 0) return explicit;
+    const word = this.clean(item.word).toLowerCase();
+    const mode = item.mode === "receptive" ? "receptive" : item.mode === "productive" ? "productive" : undefined;
+    const match = activeAttempts.find((a) =>
+      a.word.trim().toLowerCase() === word && (!mode || a.mode === mode)
+    );
+    return match?.id ?? 0;
   }
 
   private async recordDifficultyWeightedEvidence(annotation: TurnAnnotationInput, input: PostTurnProcessInput): Promise<void> {
