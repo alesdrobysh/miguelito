@@ -110,9 +110,10 @@ export class PostTurnProcessor {
           acceptable_variants: ["optional variant"],
           elicitation_cues: ["optional production cue"]
         }],
-        reviews: [{ attempt_id: 1, user_response: "learner answer", target_used: true, accepted_variant: "actual form", hint_level: 0, grade: 3, note: "why" }],
+        reviews: [{ word: "exact chunk_l2 from vocabulary", mode: "productive|receptive", user_response: "learner answer", target_used: true, accepted_variant: "actual form", hint_level: 0, grade: 3, note: "why" }],
       }),
       "Use empty arrays when there is nothing to extract. Grade reviews 1..3 only.",
+      "Add a review entry whenever the assistant created a vocabulary practice opportunity (e.g. asked the learner to produce or recognize a chunk) and the learner responded. Use word=exact chunk_l2, mode=productive if learner was asked to produce it, receptive if assistant used it for comprehension.",
     ].join("\n");
 
     const recent = input.chatHistory.slice(-8).map((m) => `${m.role}: ${m.content}`).join("\n");
