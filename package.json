@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "npm run build:web && tsc && cd src && find languages -name \"soul.md\" | rsync -R --files-from=- . ../dist/",
+    "build": "rm -rf dist && npm run build:web && tsc -p tsconfig.build.json && cd src && find languages -name \"soul.md\" -o -path \"languages/frequency/*.txt\" | rsync -R --files-from=- . ../dist/",
     "build:web": "vite build",
     "design:detect": "impeccable detect --gpt --gemini web src/web/dist",
     "start": "node dist/index.js",

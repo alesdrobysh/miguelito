@@ -1,6 +1,6 @@
 import path from "path";
 import type { LanguageConfig } from "../LanguageConfig.js";
-import { PolishTopWords } from "../frequency/polish.js";
+import { loadFrequencyWords } from "../frequency/load.js";
 
 export const PolishLanguage: LanguageConfig = {
   id: "polish",
@@ -75,7 +75,7 @@ Skup się na: postępach w słownictwie, trwałych wzorcach błędów (zwłaszcz
   },
   frequency: {
     source: "hermitdave/FrequencyWords OpenSubtitles 2018 pl_50k, top 10k",
-    topWords: PolishTopWords,
+    topWords: loadFrequencyWords("polish"),
   },
   soulPath: path.resolve(__dirname, "soul.md"),
 };

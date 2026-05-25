@@ -1,6 +1,6 @@
 import path from "path";
 import type { LanguageConfig } from "../LanguageConfig.js";
-import { SpanishTopWords } from "../frequency/spanish.js";
+import { loadFrequencyWords } from "../frequency/load.js";
 
 export const SpanishLanguage: LanguageConfig = {
   id: "spanish",
@@ -75,7 +75,7 @@ Céntrate en: progreso de vocabulario, patrones de error persistentes, fortaleza
   },
   frequency: {
     source: "hermitdave/FrequencyWords OpenSubtitles 2018 es_50k, top 10k",
-    topWords: SpanishTopWords,
+    topWords: loadFrequencyWords("spanish"),
   },
   soulPath: path.resolve(__dirname, "soul.md"),
 };
