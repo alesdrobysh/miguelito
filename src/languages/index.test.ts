@@ -18,13 +18,6 @@ describe("loadLanguage", () => {
     expect(lang.morphologyCategories).toContain("aspect");
   });
 
-  it("returns Belarusian config", () => {
-    const lang = loadLanguage("belarusian");
-    expect(lang.id).toBe("belarusian");
-    expect(lang.errorCategories).toContain("case");
-    expect(lang.morphologyCategories).toContain("aspect");
-  });
-
   it("throws for unknown language", () => {
     expect(() => loadLanguage("klingon")).toThrow('Unknown language: "klingon"');
   });

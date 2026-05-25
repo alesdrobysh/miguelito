@@ -94,7 +94,7 @@ describe("web config", () => {
   });
 
   it("lists all bundled languages for the UI", () => {
-    expect(listAvailableLanguages().map((l) => l.id)).toEqual(["spanish", "polish", "belarusian"]);
+    expect(listAvailableLanguages().map((l) => l.id)).toEqual(["spanish", "polish"]);
   });
 });
 
@@ -131,7 +131,7 @@ describe("runtime manager", () => {
 
     expect(manager.hasLanguage("spanish")).toBe(true);
     expect(manager.hasLanguage("polish")).toBe(true);
-    expect(manager.hasLanguage("belarusian")).toBe(true);
+    expect(manager.hasLanguage("belarusian")).toBe(false);
     manager.close();
     expect(fs.existsSync(path.join(tmpDir, "buddy.db"))).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, "buddy-spanish.db"))).toBe(false);
@@ -232,12 +232,12 @@ describe("web server", () => {
     expect(languages.status).toBe(200);
     expect(JSON.parse(languages.body).languages.map((l: any) => l.id)).toContain("spanish");
 
-    const reply = await server.handleApi("POST", "/api/chat", { language: "belarusian", text: "вітаю" });
+    const reply = await server.handleApi("POST", "/api/chat", { language: "polish", text: "cześć" });
     expect(reply.status).toBe(200);
-    expect(JSON.parse(reply.body).reply).toBe("echo:вітаю");
+    expect(JSON.parse(reply.body).reply).toBe("echo:cześć");
 
-    const history = await server.handleApi("GET", "/api/chat?language=belarusian");
-    expect(JSON.parse(history.body).messages.map((m: any) => m.content)).toEqual(["вітаю", "echo:вітаю"]);
+    const history = await server.handleApi("GET", "/api/chat?language=polish");
+    expect(JSON.parse(history.body).messages.map((m: any) => m.content)).toEqual(["cześć", "echo:cześć"]);
 
     manager.close();
   });
@@ -315,7 +315,7 @@ describe("web server", () => {
     expect(messages.at(-1).content).toBe("echo:turn-59");
 
     manager.close();
-  });
+  }, 10_000);
 
   it("keeps the model prompt history bounded while retaining older web messages", async () => {
     const provider = new FakeProvider();

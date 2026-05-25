@@ -6,7 +6,6 @@ const projectRoot = path.resolve(__dirname, "..", "..");
 const soulPaths = [
   "src/languages/spanish/soul.md",
   "src/languages/polish/soul.md",
-  "src/languages/belarusian/soul.md",
 ].map((p) => path.join(projectRoot, p));
 
 const postTurnOwnedToolNames = [
@@ -20,13 +19,11 @@ const postTurnOwnedToolNames = [
 const nonHumanIdentityPhrases = [
   { path: "src/languages/spanish/soul.md", phrase: "No finjas ser una persona" },
   { path: "src/languages/polish/soul.md", phrase: "Nie udawaj osoby" },
-  { path: "src/languages/belarusian/soul.md", phrase: "Не ўдавай чалавека" },
 ];
 
 const configIdentityPhrases = [
   { path: "src/languages/spanish/index.ts", phrases: ["tutor de español por software", "No finjas ser una persona", "No finjas vida humana propia"] },
   { path: "src/languages/polish/index.ts", phrases: ["programowym tutorem języka polskiego", "Nie udawaj osoby", "Nie udawaj własnego ludzkiego życia"] },
-  { path: "src/languages/belarusian/index.ts", phrases: ["праграмны т’ютар беларускай мовы", "Не ўдавай чалавека", "Не ўдавай уласнае чалавечае жыццё"] },
 ];
 
 describe("language prompt assets", () => {
