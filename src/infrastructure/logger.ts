@@ -5,11 +5,15 @@ import path from 'path';
 const LOG_DIR = 'logs';
 fs.mkdirSync(LOG_DIR, { recursive: true });
 
-const logPrefix = process.env.NODE_ENV === 'test' || process.env.VITEST ? 'test' : 'app';
-export const logPaths = {
-  json: path.join(LOG_DIR, `${logPrefix}.json.log`),
-  pretty: path.join(LOG_DIR, `${logPrefix}.pretty.log`),
-};
+export function logPathsForEnv(env: Record<string, string | undefined> = process.env): { json: string; pretty: string } {
+  const logPrefix = env.ENV === 'test' || env.NODE_ENV === 'test' || env.VITEST ? 'test' : 'app';
+  return {
+    json: path.join(LOG_DIR, `${logPrefix}.json.log`),
+    pretty: path.join(LOG_DIR, `${logPrefix}.pretty.log`),
+  };
+}
+
+export const logPaths = logPathsForEnv();
 
 const prettyTransport = pino.transport({
   target: 'pino-pretty',

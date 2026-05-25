@@ -225,6 +225,20 @@ export function runMigrations(db: Database): void {
     }
   }
 
+  db.run(`CREATE TABLE IF NOT EXISTS learning_practice_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    learning_item_id INTEGER NOT NULL,
+    language TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'active',
+    prompt_text TEXT,
+    user_response TEXT,
+    grade INTEGER,
+    note TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    completed_at TEXT
+  )`);
+  db.run("CREATE INDEX IF NOT EXISTS idx_learning_practice_attempts_active ON learning_practice_attempts(language, status, created_at)");
+
   try {
     db.run("DROP INDEX IF EXISTS idx_vocab_chunk_unique");
     const vocabColsNow = (db.exec("PRAGMA table_info(vocabulary_items)")[0]?.values ?? []).map((r) => r[1] as string);

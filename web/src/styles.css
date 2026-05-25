@@ -247,6 +247,26 @@ h1 { margin: 0; font-size: 18px; line-height: 1.05; letter-spacing: -0.03em; }
   color: #fff7f8;
   background: var(--danger);
 }
+.quick-actions {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 10px 14px 0;
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface-strong) 84%, transparent);
+}
+.quick-actions button {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 12px;
+  color: var(--ink);
+  background: var(--surface-soft);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+}
+.quick-actions button:disabled { opacity: 0.45; cursor: default; }
 .composer {
   display: grid;
   grid-template-columns: 1fr auto;

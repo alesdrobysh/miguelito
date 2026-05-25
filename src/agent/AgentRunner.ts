@@ -97,6 +97,7 @@ export class AgentRunner {
         errors: toolCtx.errors,
         competency: toolCtx.competency,
         session: toolCtx.session,
+        learning: toolCtx.learning ?? (toolCtx.vocab as any),
         lang,
       });
       await postTurn.process({ userMessage, assistantText: totalText, chatHistory });

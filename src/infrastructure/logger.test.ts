@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { logger, logPaths } from './logger.js';
+import { logger, logPaths, logPathsForEnv } from './logger.js';
 
 describe('logger', () => {
   it('exports a pino logger with standard methods', () => {
@@ -20,5 +20,13 @@ describe('logger', () => {
     expect(logPaths.json).toContain('test.json.log');
     expect(logPaths.pretty).toContain('test.pretty.log');
     expect(logPaths.json).not.toContain('app.json.log');
+  });
+
+  it('treats ENV=test as an isolated runtime log prefix', () => {
+    const paths = logPathsForEnv({ ENV: 'test', NODE_ENV: 'production', VITEST: undefined });
+
+    expect(paths.json).toContain('test.json.log');
+    expect(paths.pretty).toContain('test.pretty.log');
+    expect(paths.json).not.toContain('app.json.log');
   });
 });

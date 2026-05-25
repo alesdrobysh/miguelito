@@ -8,10 +8,11 @@ import type {
   VocabReviewMode, VocabReviewAttempt, StartVocabReviewAttemptInput, FinishVocabReviewAttemptInput,
   VocabCandidateItem,
   ProficiencyEvidenceInput, ProficiencyEvidenceRow,
+  LearningItemInput, LearningItem, LearningPracticeAttempt, StartLearningPracticeAttemptInput, FinishLearningPracticeAttemptInput,
 } from "../domain/types.js";
 import type {
   VocabRepository, ErrorRepository, SessionRepository, ProfileRepository,
-  InterestRepository, CompetencyRepository,
+  InterestRepository, CompetencyRepository, LearningRepository,
 } from "../repositories/interfaces.js";
 
 import { SCHEMA } from "./schema.js";
@@ -22,10 +23,11 @@ import { SqlSessionRepository } from "./repositories/sessionRepository.js";
 import { SqlProfileRepository } from "./repositories/profileRepository.js";
 import { SqlInterestRepository } from "./repositories/interestRepository.js";
 import { SqlCompetencyRepository } from "./repositories/competencyRepository.js";
+import { SqlLearningRepository } from "./repositories/learningRepository.js";
 
 export type { ChunkItem, DueChunkItem, ErrorItem, UserProfile, ConversationStateResult, FsrsReviewResult, ProgressData, UpdateResult, TurnAnnotationInput, TurnAnnotation, CompetencyVectorRow } from "../domain/types.js";
 
-export class BuddyDb implements VocabRepository, ErrorRepository, SessionRepository, ProfileRepository, InterestRepository, CompetencyRepository {
+export class BuddyDb implements VocabRepository, ErrorRepository, SessionRepository, ProfileRepository, InterestRepository, CompetencyRepository, LearningRepository {
   readonly db: Database;
   private dbPath: string;
   private languageId: string;
@@ -36,6 +38,7 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
   private readonly profiles: ProfileRepository;
   private readonly interests: InterestRepository;
   private readonly competency: CompetencyRepository;
+  private readonly learning: LearningRepository;
 
   private constructor(
     db: Database,
@@ -54,6 +57,7 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
     this.profiles = new SqlProfileRepository(db, languageId, save);
     this.interests = new SqlInterestRepository(db, languageId, save);
     this.competency = new SqlCompetencyRepository(db, languageId, save, morphologyCategories);
+    this.learning = new SqlLearningRepository(db, languageId, save);
   }
 
   withLanguage(languageId: string, errorCategories: readonly string[], morphologyCategories: readonly string[]): BuddyDb {
@@ -126,6 +130,30 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
 
   async listVocab(bucket: string, limit: number): Promise<ChunkItem[]> {
     return this.vocab.listVocab(bucket, limit);
+  }
+
+  async addLearningItem(input: LearningItemInput): Promise<number | null> {
+    return this.learning.addLearningItem(input);
+  }
+
+  async listLearningItems(status: string, limit: number): Promise<LearningItem[]> {
+    return this.learning.listLearningItems(status, limit);
+  }
+
+  async startLearningPracticeAttempt(input: StartLearningPracticeAttemptInput): Promise<LearningPracticeAttempt> {
+    return this.learning.startLearningPracticeAttempt(input);
+  }
+
+  async listActiveLearningPracticeAttempts(limit?: number): Promise<LearningPracticeAttempt[]> {
+    return this.learning.listActiveLearningPracticeAttempts(limit);
+  }
+
+  async finishLearningPracticeAttempt(input: FinishLearningPracticeAttemptInput): Promise<LearningPracticeAttempt> {
+    return this.learning.finishLearningPracticeAttempt(input);
+  }
+
+  async abandonActiveLearningPracticeAttempts(note?: string): Promise<number> {
+    return this.learning.abandonActiveLearningPracticeAttempts(note);
   }
 
   async dueVocab(limit: number, mode: VocabReviewMode = "productive"): Promise<DueChunkItem[]> {

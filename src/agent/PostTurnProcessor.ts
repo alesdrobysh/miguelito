@@ -1,8 +1,8 @@
 import type { ChatMessage } from "../llm.js";
 import type { LanguageConfig } from "../languages/LanguageConfig.js";
 import type { LLMProvider } from "../providers/interfaces.js";
-import type { CompetencyRepository, ErrorRepository, SessionRepository, VocabRepository } from "../repositories/interfaces.js";
-import type { TurnAnnotationInput, VocabReviewAttempt, VocabReviewMode } from "../domain/types.js";
+import type { CompetencyRepository, ErrorRepository, LearningRepository, SessionRepository, VocabRepository } from "../repositories/interfaces.js";
+import type { LearningItemInput, TurnAnnotationInput, VocabReviewAttempt, VocabReviewMode } from "../domain/types.js";
 import { analyzeTextDifficulty, outcomeScore } from "../domain/frequency.js";
 import { logger } from "../infrastructure/logger.js";
 
@@ -14,6 +14,7 @@ export interface PostTurnProcessorDeps {
   errors: ErrorRepository;
   competency: CompetencyRepository;
   session: SessionRepository;
+  learning?: LearningRepository;
   lang: LanguageConfig;
 }
 
@@ -42,6 +43,19 @@ interface EvaluatedVocab {
   elicitation_cues?: string[];
 }
 
+interface EvaluatedLearningItem {
+  type?: string;
+  title?: string;
+  prompt_l2?: string;
+  explanation?: string;
+  explanation_l1?: string;
+  source_type?: string;
+  evidence_snippet?: string;
+  priority?: number | string;
+  practice_modes?: string[];
+  tags?: string[];
+}
+
 interface EvaluatedReview {
   attempt_id?: number | string;
   word?: string;
@@ -59,6 +73,7 @@ interface PostTurnEvaluation {
   mode?: string;
   errors?: EvaluatedError[];
   vocabulary?: EvaluatedVocab[];
+  learning_items?: EvaluatedLearningItem[];
   reviews?: EvaluatedReview[];
 }
 
@@ -67,6 +82,7 @@ export interface PostTurnProcessResult {
   errorsLogged: number;
   vocabAdded: number;
   vocabCandidatesAdded: number;
+  learningItemsAdded: number;
   reviewsCompleted: number;
   annotationInserted: boolean;
 }
@@ -113,6 +129,7 @@ export class PostTurnProcessor {
           acceptable_variants: ["optional variant"],
           elicitation_cues: ["optional production cue"]
         }],
+        learning_items: [{ type: "grammar_point|correction|phrase|word|collocation|idiom|register_note|pronunciation", title: "por vs para", prompt_l2: "optional L2 prompt", explanation_l1: "short explanation", source_type: "user_question|conversation|correction", priority: 0.8, practice_modes: ["short_drill"] }],
         reviews: [{ attempt_id: 123, word: "exact chunk_l2 from vocabulary", mode: "productive|receptive", user_response: "learner answer", target_used: true, accepted_variant: "actual form", hint_level: 0, grade: 3, note: "why" }],
       }),
       "Use empty arrays when there is nothing to extract. Grade reviews 1..3 only.",
@@ -148,6 +165,7 @@ export class PostTurnProcessor {
     let errorsLogged = 0;
     let vocabAdded = 0;
     let vocabCandidatesAdded = 0;
+    let learningItemsAdded = 0;
     let reviewsCompleted = 0;
     let annotationInserted = false;
 
@@ -188,6 +206,42 @@ export class PostTurnProcessor {
         promotion_reason: this.clean(item.reason) || undefined,
       });
       if (id !== null) vocabCandidatesAdded++;
+      const learningId = await this.learningRepo().addLearningItem({
+        type: "phrase",
+        title: word,
+        prompt_l2: this.clean(item.context),
+        explanation_l1: this.clean(item.meaning) || this.clean(item.reason) || undefined,
+        source_type: evaluation.errors?.length ? "correction" : "conversation",
+        evidence_snippet: this.clean(item.context) || _input.userMessage,
+        priority: Math.max(0, Math.min(1, Number(item.priority ?? 0.6) || 0.6)),
+        practice_modes: ["active_production", "cloze"],
+        tags: Array.isArray(item.topic_tags) ? item.topic_tags.map((x) => String(x)).filter(Boolean) : [],
+      });
+      if (learningId !== null) learningItemsAdded++;
+    }
+
+    for (const item of evaluation.errors ?? []) {
+      const userText = this.clean(item.user_text);
+      const correct = this.clean(item.correct);
+      if (!userText || !correct) continue;
+      const learningId = await this.learningRepo().addLearningItem({
+        type: "correction",
+        title: `${userText} → ${correct}`,
+        prompt_l2: userText,
+        explanation_l1: this.clean(item.note) || undefined,
+        source_type: "correction",
+        evidence_snippet: _input.userMessage,
+        priority: 0.9,
+        practice_modes: ["rewrite"],
+      });
+      if (learningId !== null) learningItemsAdded++;
+    }
+
+    for (const item of evaluation.learning_items ?? []) {
+      const input = this.learningItemInput(item, _input);
+      if (!input) continue;
+      const learningId = await this.learningRepo().addLearningItem(input);
+      if (learningId !== null) learningItemsAdded++;
     }
 
     const promoted = await this.deps.vocab.promoteVocabCandidates({ maxPromotions: 2, minPriority: 0.85, maxActiveLearningItems: 40 });
@@ -233,7 +287,27 @@ export class PostTurnProcessor {
       }
     }
 
-    return { ok: true, errorsLogged, vocabAdded, vocabCandidatesAdded, reviewsCompleted, annotationInserted };
+    return { ok: true, errorsLogged, vocabAdded, vocabCandidatesAdded, learningItemsAdded, reviewsCompleted, annotationInserted };
+  }
+
+  private learningRepo(): LearningRepository {
+    return this.deps.learning ?? (this.deps.vocab as unknown as LearningRepository);
+  }
+
+  private learningItemInput(item: EvaluatedLearningItem, input: PostTurnProcessInput): LearningItemInput | null {
+    const title = this.clean(item.title);
+    if (!title) return null;
+    return {
+      type: this.clean(item.type) || "phrase",
+      title,
+      prompt_l2: this.clean(item.prompt_l2) || undefined,
+      explanation_l1: this.clean(item.explanation_l1) || this.clean(item.explanation) || undefined,
+      source_type: this.clean(item.source_type) || "user_question",
+      evidence_snippet: this.clean(item.evidence_snippet) || input.userMessage,
+      priority: Math.max(0, Math.min(1, Number(item.priority ?? 0.7) || 0.7)),
+      practice_modes: Array.isArray(item.practice_modes) ? item.practice_modes.map((x) => String(x)).filter(Boolean) : [],
+      tags: Array.isArray(item.tags) ? item.tags.map((x) => String(x)).filter(Boolean) : [],
+    };
   }
 
   private normalizeAnnotation(raw: Partial<TurnAnnotationInput> | undefined, input: PostTurnProcessInput): TurnAnnotationInput {

@@ -50,6 +50,42 @@ CREATE TABLE IF NOT EXISTS vocabulary_candidates (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_vocab_candidates_language_chunk_unique ON vocabulary_candidates(language, chunk_l2 COLLATE NOCASE);
 CREATE INDEX IF NOT EXISTS idx_vocab_candidates_status_priority ON vocabulary_candidates(language, status, priority DESC, created_at);
+CREATE TABLE IF NOT EXISTS learning_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    language TEXT NOT NULL DEFAULT '',
+    type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    prompt_l2 TEXT,
+    explanation_l1 TEXT,
+    source_type TEXT NOT NULL DEFAULT 'conversation',
+    source_message_id INTEGER,
+    evidence_snippet TEXT,
+    priority REAL NOT NULL DEFAULT 0.5,
+    status TEXT NOT NULL DEFAULT 'active',
+    practice_modes_json TEXT NOT NULL DEFAULT '[]',
+    tags_json TEXT NOT NULL DEFAULT '[]',
+    due_at TEXT,
+    last_practiced_at TEXT,
+    reps INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_learning_items_language_type_title_unique ON learning_items(language, type, title COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS idx_learning_items_status_priority ON learning_items(language, status, priority DESC, created_at);
+CREATE TABLE IF NOT EXISTS learning_practice_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    learning_item_id INTEGER NOT NULL,
+    language TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'active',
+    prompt_text TEXT,
+    user_response TEXT,
+    grade INTEGER,
+    note TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    completed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_learning_practice_attempts_active ON learning_practice_attempts(language, status, created_at);
+
 CREATE TABLE IF NOT EXISTS error_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_text TEXT NOT NULL,

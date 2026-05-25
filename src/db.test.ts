@@ -240,6 +240,118 @@ describe("BuddyDb vocabulary (chunk-based)", () => {
 
 });
 
+describe("BuddyDb learning items", () => {
+  it("stores words, corrections, and grammar points as one learning inbox scoped by language", async () => {
+    const phraseId = await db.addLearningItem({
+      type: "phrase",
+      title: "me cuesta + [inf]",
+      prompt_l2: "Me cuesta levantarme temprano",
+      explanation_l1: "мне трудно...",
+      source_type: "conversation",
+      priority: 0.8,
+      practice_modes: ["active_production", "cloze"],
+      tags: ["routine"],
+    });
+    const correctionId = await db.addLearningItem({
+      type: "correction",
+      title: "yo es → yo soy",
+      prompt_l2: "yo es cansado",
+      explanation_l1: "ser conjugation",
+      source_type: "correction",
+      evidence_snippet: "yo es cansado",
+      priority: 0.95,
+      practice_modes: ["rewrite"],
+    });
+    const grammarId = await db.addLearningItem({
+      type: "grammar_point",
+      title: "pretérito indefinido: fui",
+      explanation_l1: "past one-off movement/action",
+      source_type: "user_question",
+      priority: 0.7,
+      practice_modes: ["short_drill"],
+    });
+
+    expect([phraseId, correctionId, grammarId].every((id) => typeof id === "number" && id > 0)).toBe(true);
+    const items = await db.listLearningItems("active", 10);
+    expect(items.map((i) => [i.type, i.title])).toEqual([
+      ["correction", "yo es → yo soy"],
+      ["phrase", "me cuesta + [inf]"],
+      ["grammar_point", "pretérito indefinido: fui"],
+    ]);
+    expect(JSON.parse(items[0].practice_modes_json)).toEqual(["rewrite"]);
+    expect(JSON.parse(items[1].tags_json)).toEqual(["routine"]);
+
+    const polish = db.withLanguage("polish", [], []);
+    expect(await polish.listLearningItems("active", 10)).toHaveLength(0);
+  });
+
+  it("dedupes learning items by language, type, and title", async () => {
+    const first = await db.addLearningItem({ type: "grammar_point", title: "Ser vs estar", source_type: "user_question" });
+    const second = await db.addLearningItem({ type: "grammar_point", title: "ser VS estar", source_type: "conversation" });
+    const phrase = await db.addLearningItem({ type: "phrase", title: "ser VS estar", source_type: "conversation" });
+
+    expect(first).toBeTypeOf("number");
+    expect(second).toBeNull();
+    expect(phrase).toBeTypeOf("number");
+    expect(await db.listLearningItems("all", 10)).toHaveLength(2);
+  });
+
+  it("records and completes learning practice attempts with scheduling metadata", async () => {
+    const itemId = await db.addLearningItem({
+      type: "correction",
+      title: "yo es → yo soy",
+      prompt_l2: "Corrige: yo es estudiante",
+      priority: 0.9,
+    });
+    expect(itemId).toBeTypeOf("number");
+
+    const attempt = await db.startLearningPracticeAttempt({
+      learning_item_id: itemId!,
+      prompt_text: "Corrige: yo es estudiante",
+    });
+
+    expect(attempt.id).toBeGreaterThan(0);
+    expect(attempt.status).toBe("active");
+    expect(attempt.learning_item_id).toBe(itemId);
+
+    const reused = await db.startLearningPracticeAttempt({
+      learning_item_id: itemId!,
+      prompt_text: "Another prompt",
+    });
+    expect(reused.id).toBe(attempt.id);
+    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(1);
+
+    const completed = await db.finishLearningPracticeAttempt({
+      attempt_id: attempt.id,
+      user_response: "Yo soy estudiante.",
+      grade: 3,
+      note: "correct rewrite",
+    });
+
+    expect(completed.status).toBe("completed");
+    expect(completed.grade).toBe(3);
+    expect(completed.user_response).toBe("Yo soy estudiante.");
+    const items = await db.listLearningItems("active", 10);
+    expect(items[0].reps).toBe(1);
+    expect(items[0].last_practiced_at).toBeTruthy();
+    expect(items[0].due_at).toBeTruthy();
+  });
+
+  it("abandons active learning practice attempts without updating item reps", async () => {
+    const itemId = await db.addLearningItem({ type: "phrase", title: "me cuesta + infinitivo", priority: 0.9 });
+    expect(itemId).toBeTypeOf("number");
+    await db.startLearningPracticeAttempt({ learning_item_id: itemId!, prompt_text: "Use it." });
+
+    const abandoned = await db.abandonActiveLearningPracticeAttempts("learner stopped");
+
+    expect(abandoned).toBe(1);
+    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(0);
+    const items = await db.listLearningItems("active", 10);
+    expect(items[0].reps).toBe(0);
+    expect(items[0].last_practiced_at).toBeNull();
+  });
+});
+
 describe("BuddyDb error log", () => {
   it("logError inserts an error and returns id", async () => {
     const id = await db.logError("la gata", "el gato", "gender", "wrong gender");

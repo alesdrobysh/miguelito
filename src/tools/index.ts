@@ -1,4 +1,4 @@
-import type { VocabRepository, ErrorRepository, ProfileRepository, InterestRepository, CompetencyRepository, SessionRepository } from "../repositories/interfaces.js";
+import type { VocabRepository, ErrorRepository, ProfileRepository, InterestRepository, CompetencyRepository, SessionRepository, LearningRepository } from "../repositories/interfaces.js";
 import type { LLMProvider } from "../providers/interfaces.js";
 import { createVocabTools } from "./vocab.js";
 import { createErrorTools } from "./errors.js";
@@ -24,6 +24,7 @@ export interface ToolContext {
   interests: InterestRepository;
   competency: CompetencyRepository;
   session: SessionRepository;
+  learning?: LearningRepository;
   provider: LLMProvider | null;
 }
 

@@ -9,6 +9,8 @@ export const TELEGRAM_COMMANDS = [
   { command: "start", description: "Start Miguelito" },
   { command: "progress", description: "Show learning progress" },
   { command: "vocabulary", description: "List active vocabulary chunks" },
+  { command: "learning", description: "List active learning items" },
+  { command: "practice", description: "Practice active learning items" },
   { command: "vocab_candidates", description: "List staged vocabulary candidates" },
   { command: "promote_vocab", description: "Promote strong vocabulary candidates" },
   { command: "accept_vocab", description: "Accept candidate: /accept_vocab <id>" },

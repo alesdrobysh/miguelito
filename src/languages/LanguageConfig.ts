@@ -15,6 +15,15 @@ export interface LanguageConfig {
     idiomaticityFocus: (pct: number) => string;
     idiomaticityNormal: string;
   };
+  productPolicy: {
+    name: string;
+    learnerLevel: string;
+    mission: string;
+    inputPolicy: string;
+    correctionPolicy: string;
+    toolPolicy: string;
+    visibleSummary: string;
+  };
   promptText: {
     languageBlock: string;
     postHistoryReminder: string;

@@ -49,6 +49,76 @@ export interface VocabCandidateItem {
   reviewed_at: string | null;
 }
 
+export type LearningItemType =
+  | "word"
+  | "phrase"
+  | "correction"
+  | "grammar_point"
+  | "collocation"
+  | "idiom"
+  | "register_note"
+  | "pronunciation";
+
+export type LearningItemStatus = "candidate" | "active" | "ignored" | "mastered";
+
+export interface LearningItemInput {
+  type: LearningItemType | string;
+  title: string;
+  prompt_l2?: string;
+  explanation_l1?: string;
+  source_type?: string;
+  source_message_id?: number;
+  evidence_snippet?: string;
+  priority?: number;
+  status?: LearningItemStatus | string;
+  practice_modes?: string[];
+  tags?: string[];
+}
+
+export interface LearningItem extends Required<Pick<LearningItemInput, "type" | "title">> {
+  id: number;
+  language: string;
+  prompt_l2: string | null;
+  explanation_l1: string | null;
+  source_type: string;
+  source_message_id: number | null;
+  evidence_snippet: string | null;
+  priority: number;
+  status: LearningItemStatus;
+  practice_modes_json: string;
+  tags_json: string;
+  due_at: string | null;
+  last_practiced_at: string | null;
+  reps: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LearningPracticeAttempt {
+  id: number;
+  learning_item_id: number;
+  language: string;
+  status: "active" | "completed" | "abandoned";
+  prompt_text: string | null;
+  user_response: string | null;
+  grade: number | null;
+  note: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface StartLearningPracticeAttemptInput {
+  learning_item_id: number;
+  prompt_text?: string;
+}
+
+export interface FinishLearningPracticeAttemptInput {
+  attempt_id: number;
+  user_response: string;
+  grade: number;
+  note?: string;
+}
+
 export interface DueChunkItem {
   id: number;
   chunk_l2: string;

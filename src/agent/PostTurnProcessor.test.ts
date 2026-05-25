@@ -68,6 +68,28 @@ describe("PostTurnProcessor", () => {
     expect(session.last_mode).toBe("DIG");
   });
 
+  it("captures corrections, vocabulary, and grammar questions into the learning inbox", async () => {
+    const provider = new JsonProvider({
+      annotation: { obligatory: [], used: [], naturalness: 1, comprehension: "smooth" },
+      mode: "TEACH",
+      errors: [{ user_text: "yo es", correct: "yo soy", category: "verb_conjugation", note: "ser conjugation" }],
+      vocabulary: [{ word: "me cuesta + [inf]", context: "Me cuesta levantarme temprano", anchor: "costar", reason: "corrective chunk", priority: 0.8 }],
+      learning_items: [{ type: "grammar_point", title: "fui vs voy", explanation: "past vs present", priority: 0.9, practice_modes: ["short_drill"] }],
+      reviews: [],
+    });
+
+    const processor = new PostTurnProcessor({ provider, vocab: db, errors: db, competency: db, session: db, learning: db, lang: SpanishLanguage });
+    const result = await processor.process({ userMessage: "Por qué fui y no voy?", assistantText: "Fui es pasado; voy es presente.", chatHistory: [] });
+
+    expect(result.learningItemsAdded).toBe(3);
+    const items = await db.listLearningItems("active", 10);
+    expect(items.map((i) => [i.type, i.title])).toEqual([
+      ["correction", "yo es → yo soy"],
+      ["grammar_point", "fui vs voy"],
+      ["phrase", "me cuesta + [inf]"],
+    ]);
+  });
+
   it("stages evaluator vocabulary as candidates instead of directly growing active SRS", async () => {
     const provider = new JsonProvider({
       annotation: { obligatory: [], used: [], naturalness: 1, comprehension: "smooth" },

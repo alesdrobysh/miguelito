@@ -48,8 +48,9 @@ export function loadConfig(
   const ollamaBaseUrl = env.OLLAMA_BASE_URL ?? "http://localhost:11434/v1";
   const ollamaModel = env.OLLAMA_MODEL ?? "llama3.2";
   const ollamaApiKey = env.OLLAMA_API_KEY ?? "";
-  const dbPath = env.DB_PATH ?? "./data/buddy.db";
-  const dataDir = env.DATA_DIR ?? path.resolve(process.cwd(), "data");
+  const isTestEnv = env.ENV === "test";
+  const dataDir = env.DATA_DIR ?? path.resolve(process.cwd(), isTestEnv ? "data-test" : "data");
+  const dbPath = env.DB_PATH ?? path.join(dataDir, "buddy.db");
   const allowedUsers = new Set(
     (env.ALLOWED_USERS ?? "").split(",").filter(Boolean)
   );
@@ -72,7 +73,7 @@ export function loadConfig(
   }
 
   const dreamCron = env.DREAM_CRON ?? "0 23 * * *";
-  const dreamMemoryPath = env.DREAM_MEMORY_PATH ?? path.resolve(process.cwd(), "data/memory/MEMORY.md");
+  const dreamMemoryPath = env.DREAM_MEMORY_PATH ?? path.join(dataDir, "memory", "MEMORY.md");
   const webHost = env.WEB_HOST ?? "127.0.0.1";
   const webPort = Number(env.WEB_PORT ?? "8787");
 

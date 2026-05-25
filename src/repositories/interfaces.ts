@@ -17,7 +17,21 @@ import type {
   FinishVocabReviewAttemptInput,
   ProficiencyEvidenceInput,
   ProficiencyEvidenceRow,
+  LearningItemInput,
+  LearningItem,
+  LearningPracticeAttempt,
+  StartLearningPracticeAttemptInput,
+  FinishLearningPracticeAttemptInput,
 } from "../domain/types.js";
+
+export interface LearningRepository {
+  addLearningItem(input: LearningItemInput): Promise<number | null>;
+  listLearningItems(status: string, limit: number): Promise<LearningItem[]>;
+  startLearningPracticeAttempt(input: StartLearningPracticeAttemptInput): Promise<LearningPracticeAttempt>;
+  listActiveLearningPracticeAttempts(limit?: number): Promise<LearningPracticeAttempt[]>;
+  finishLearningPracticeAttempt(input: FinishLearningPracticeAttemptInput): Promise<LearningPracticeAttempt>;
+  abandonActiveLearningPracticeAttempts(note?: string): Promise<number>;
+}
 
 export interface VocabRepository {
   addVocab(chunk_l2: string, capture_context_l2: string, anchor?: string): Promise<number | null>;

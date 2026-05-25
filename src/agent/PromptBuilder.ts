@@ -32,7 +32,7 @@ export class PromptBuilder {
     const { basicProfile, learnerProfile, calibration, userInterests, dreamMemory } =
       await this._buildInjection(userMessage, dreamMemoryPath, convState);
 
-    let fullSystem = this.lang.promptText.languageBlock + soulContent + basicProfile;
+    let fullSystem = this.lang.promptText.languageBlock + soulContent + this.renderProductPolicy() + basicProfile;
     if (dreamMemory) fullSystem += dreamMemory;
     if (learnerProfile) fullSystem += learnerProfile;
     if (calibration) fullSystem += calibration;
@@ -53,6 +53,24 @@ export class PromptBuilder {
    */
   buildPostHistoryReminder(): string {
     return this.lang.promptText.postHistoryReminder;
+  }
+
+  private renderProductPolicy(): string {
+    const policy = this.lang.productPolicy;
+    return [
+      "\n\n## Product policy",
+      `${policy.name}: ${policy.mission}`,
+      `Learner level: ${policy.learnerLevel}.`,
+      `Input policy: ${policy.inputPolicy}`,
+      `Correction policy: ${policy.correctionPolicy}`,
+      `Session stance: ${policy.visibleSummary}`,
+      "",
+      "## Tutor tools",
+      "Default: talk naturally. When needed: explain, correct, drill, review.",
+      "Recognize these user intents and switch briefly without exposing mode names: conversation, correct, explain, grammar practice, vocabulary practice, review, recap.",
+      "Conversation remains the default surface; tool-like teaching moments should be short, contextual, and return to the dialogue when the user is done.",
+      policy.toolPolicy,
+    ].join("\n");
   }
 
   private async _buildInjection(

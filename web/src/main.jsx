@@ -3,6 +3,13 @@ import { createRoot } from 'react-dom/client';
 import './styles.css';
 
 const FALLBACK_LANGUAGE = 'spanish';
+const QUICK_ACTIONS = [
+  { label: 'Chat', prompt: '' },
+  { label: 'Correct', prompt: 'Correct this and explain briefly: ' },
+  { label: 'Explain', prompt: 'Explain this word or grammar point: ' },
+  { label: 'Practice', prompt: 'Give me a short practice drill for: ' },
+  { label: 'Review', prompt: 'Review what I should revisit today.' },
+];
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (c) => ({
@@ -151,6 +158,15 @@ function App() {
     }
   }
 
+  function applyQuickAction(action) {
+    if (!action.prompt) {
+      inputRef.current?.focus();
+      return;
+    }
+    setDraft((value) => value.trim() ? `${action.prompt}${value.trim()}` : action.prompt);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
   return (
     <main className="app-shell">
       <section className="phone-frame" aria-label="Miguelito chat">
@@ -203,6 +219,14 @@ function App() {
         </section>
 
         {error && <div className="error-banner" role="alert">{error}</div>}
+
+        <div className="quick-actions" aria-label="Tutor tools">
+          {QUICK_ACTIONS.map((action) => (
+            <button type="button" key={action.label} onClick={() => applyQuickAction(action)} disabled={sending}>
+              {action.label}
+            </button>
+          ))}
+        </div>
 
         <form className="composer" onSubmit={sendMessage}>
           <textarea

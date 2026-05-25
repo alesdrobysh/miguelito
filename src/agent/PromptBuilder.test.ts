@@ -75,6 +75,66 @@ describe("PromptBuilder interest injection", () => {
 });
 
 
+describe("PromptBuilder product coaching policy", () => {
+  it("positions Spanish as an A2 buddy with tool intents for explain, correct, practice, review, and recap", async () => {
+    const builder = new PromptBuilder(
+      { vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db },
+      SpanishLanguage,
+    );
+
+    const prompt = await builder.build("¿Por qué se dice fui y no voy?");
+
+    expect(prompt).toContain("## Product policy");
+    expect(prompt).toContain("Spanish Buddy");
+    expect(prompt).toContain("A2");
+    expect(prompt).toContain("slightly above the learner's level");
+    expect(prompt).toContain("one question at a time");
+    expect(prompt).toContain("## Tutor tools");
+    for (const intent of ["conversation", "correct", "explain", "grammar practice", "vocabulary practice", "review", "recap"]) {
+      expect(prompt).toContain(intent);
+    }
+    expect(prompt).toContain("Default: talk naturally. When needed: explain, correct, drill, review.");
+  });
+
+  it("positions Polish as a B2 native-like expression coach rather than a gentle A2 buddy", async () => {
+    const { PolishLanguage } = await import("../languages/polish/index.js");
+    const polishDb = db.withLanguage("polish", PolishLanguage.errorCategories, PolishLanguage.morphologyCategories);
+    const builder = new PromptBuilder(
+      { vocab: polishDb, errors: polishDb, profile: db, langProfile: polishDb, interests: polishDb, competency: polishDb, session: polishDb },
+      PolishLanguage,
+    );
+
+    const prompt = await builder.build("Trenuję się z sztangą");
+
+    expect(prompt).toContain("## Product policy");
+    expect(prompt).toContain("Polish Coach");
+    expect(prompt).toContain("B2");
+    expect(prompt).toContain("natural, precise, native-like Polish");
+    expect(prompt).toContain("native-like rewrites");
+    expect(prompt).toContain("calques");
+    expect(prompt).toContain("collocations");
+    expect(prompt).toContain("grammar nuance");
+    expect(prompt).not.toContain("Spanish Buddy");
+  });
+
+  it("tells Polish Coach to honor brevity requests and keep collocation cloze frames grammatical", async () => {
+    const { PolishLanguage } = await import("../languages/polish/index.js");
+    const polishDb = db.withLanguage("polish", PolishLanguage.errorCategories, PolishLanguage.morphologyCategories);
+    const builder = new PromptBuilder(
+      { vocab: polishDb, errors: polishDb, profile: db, langProfile: polishDb, interests: polishDb, competency: polishDb, session: polishDb },
+      PolishLanguage,
+    );
+
+    const prompt = await builder.build('Napisz krótko. Daj ćwiczenie z "podjąć decyzję".');
+
+    expect(prompt).toContain("gdy uczeń prosi krótko");
+    expect(prompt).toContain("jedno pytanie naraz");
+    expect(prompt).toContain("muszę podjąć decyzję");
+    expect(prompt).toContain("podjąłem decyzję");
+    expect(prompt).not.toContain("muszę [czasownik w czasie przeszłym]");
+  });
+});
+
 describe("PromptBuilder vocabulary target injection", () => {
   it("separates receptive words for bot integration from productive words for learner elicitation", async () => {
     await db.addVocab("posponer la reunión", "ctx", "posponer");
