@@ -1,0 +1,16 @@
+appId: com.miguelito.app
+productName: Miguelito
+directories:
+  output: release
+files:
+  - dist/**
+  - dist-electron/**
+  - node_modules/**
+  - package.json
+asarUnpack:
+  - node_modules/sql.js/**
+mac:
+  target:
+    - target: dmg
+    - target: zip
+  category: public.app-category.education
