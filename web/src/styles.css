@@ -320,3 +320,14 @@ h1 { margin: 0; font-size: 18px; line-height: 1.05; letter-spacing: -0.03em; }
   .language-chip { min-width: 92px; }
   .language-chip select { padding-inline: 10px 18px; }
 }
+
+/* Electron: window drag region and traffic-light clearance */
+.electron-app .chat-header {
+  -webkit-app-region: drag;
+  padding-left: 80px;
+}
+.electron-app .chat-header button,
+.electron-app .chat-header select,
+.electron-app .chat-header input {
+  -webkit-app-region: no-drag;
+}
