@@ -51,4 +51,19 @@ describe("language prompt assets", () => {
       }
     }
   });
+
+  it("keeps Polish Coach concise when learner asks for brevity", () => {
+    const content = fs.readFileSync(path.join(projectRoot, "src/languages/polish/soul.md"), "utf8");
+
+    expect(content).toContain("Gdy użytkownik prosi o krótkość");
+    expect(content).toContain("maksymalnie jedno pytanie");
+  });
+
+  it("guards Polish collocation exercises against tense-frame mismatches", () => {
+    const content = fs.readFileSync(path.join(projectRoot, "src/languages/polish/soul.md"), "utf8");
+
+    expect(content).toContain("muszę podjąć decyzję");
+    expect(content).toContain("wreszcie podjąłem decyzję");
+    expect(content).toContain("nie łącz ramy z bezokolicznikiem z poleceniem czasu przeszłego");
+  });
 });
