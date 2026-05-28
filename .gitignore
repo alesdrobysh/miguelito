@@ -9,3 +9,5 @@ logs/
 *log
 *.pid
 dogfood-output/
+dist-electron/
+release/
