@@ -73,6 +73,7 @@ export interface LearningItemInput {
   status?: LearningItemStatus | string;
   practice_modes?: string[];
   tags?: string[];
+  due_at?: string;
 }
 
 export interface LearningItem extends Required<Pick<LearningItemInput, "type" | "title">> {

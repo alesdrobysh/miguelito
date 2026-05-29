@@ -30,8 +30,8 @@ export class SqlLearningRepository extends SqlRepository {
     this.db.run(
       `INSERT OR IGNORE INTO learning_items
        (language, type, title, prompt_l2, explanation_l1, source_type, source_message_id, evidence_snippet,
-        priority, status, practice_modes_json, tags_json, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        priority, status, practice_modes_json, tags_json, due_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         this.languageId,
         type,
@@ -45,6 +45,7 @@ export class SqlLearningRepository extends SqlRepository {
         status,
         JSON.stringify(input.practice_modes ?? []),
         JSON.stringify(input.tags ?? []),
+        input.due_at?.trim() || null,
         now,
         now,
       ],

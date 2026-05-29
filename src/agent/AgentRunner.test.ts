@@ -90,6 +90,6 @@ describe("AgentRunner post-turn evaluation", () => {
     expect(names).not.toContain("miguelito_vocab_score");
     expect(names).not.toContain("miguelito_vocab_attempt_start");
     expect(names).not.toContain("miguelito_vocab_attempt_finish");
-    expect(names).toContain("miguelito_progress_summary");
+    expect(names).not.toContain("miguelito_progress_summary");
   });
 });

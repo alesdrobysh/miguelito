@@ -32,15 +32,16 @@ export class AgentRunner {
   constructor(private deps: AgentDeps) {}
 
   private conversationTools(tools: Map<string, ToolDefinition>): Map<string, ToolDefinition> {
-    const postTurnOwned = new Set([
+    const internalOnly = new Set([
       "miguelito_turn_annotate",
       "miguelito_error_log",
       "miguelito_vocab_add",
       "miguelito_vocab_score",
       "miguelito_vocab_attempt_start",
       "miguelito_vocab_attempt_finish",
+      "miguelito_progress_summary",
     ]);
-    return new Map(Array.from(tools.entries()).filter(([name]) => !postTurnOwned.has(name)));
+    return new Map(Array.from(tools.entries()).filter(([name]) => !internalOnly.has(name)));
   }
 
   async run(userMessage: string, chatHistory: ChatMessage[]): Promise<AgentResult> {

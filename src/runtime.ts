@@ -10,10 +10,8 @@ import type { LLMProvider } from "./providers/interfaces.js";
 import { PromptBuilder } from "./agent/PromptBuilder.js";
 import { AgentRunner } from "./agent/AgentRunner.js";
 import { DreamService } from "./services/DreamService.js";
-import { statusOf } from "./domain/fsrs.js";
-import { getCompetencyVector, selectFocusAxis } from "./domain/competency.js";
 import type { ChatMessage } from "./llm.js";
-import type { LearningItem, LearningPracticeAttempt, ProgressData } from "./domain/types.js";
+import type { LearningItem, LearningPracticeAttempt } from "./domain/types.js";
 
 export interface RuntimeDeps {
   provider?: LLMProvider;
@@ -61,53 +59,43 @@ export function createEvaluatorProvider(config: Config): LLMProvider {
 
 const MODEL_HISTORY_LIMIT = 50;
 
-function normalizeCommandText(text: string): string {
-  if (text.startsWith("/vocab_candidates")) return text.replace("/vocab_candidates", "/vocab-candidates");
-  if (text.startsWith("/promote_vocab")) return text.replace("/promote_vocab", "/promote-vocab");
-  if (text.startsWith("/accept_vocab")) return text.replace("/accept_vocab", "/accept-vocab");
-  if (text.startsWith("/reject_vocab")) return text.replace("/reject_vocab", "/reject-vocab");
-  return text;
+function isPracticeIntent(text: string, lang: LanguageConfig): boolean {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized || normalized.startsWith("/")) return false;
+  const common = ["practice", "practise", "exercise", "drill", "review"];
+  const spanish = ["practicar", "práctica", "practica", "ejercicio", "repasar", "repaso", "entrenar"];
+  const polish = ["ćwicz", "ćwiczenie", "poćwicz", "potrenuj", "trening", "powtór", "powtorka", "powtórka"];
+  const russian = ["потрен", "практик", "упражнен", "повтор"];
+  const words = lang.id === "polish" ? [...common, ...polish, ...russian] : [...common, ...spanish, ...russian];
+  return words.some((word) => normalized.includes(word));
 }
 
 function formatStart(lang: LanguageConfig): string {
   if (lang.id === "polish") {
     return [
       `Cześć — jestem ${lang.name}. Pisz normalnie po polsku albo po angielsku/rosyjsku, kiedy potrzebujesz wyjaśnienia.`,
-      "Najważniejsze komendy:",
-      "/practice — krótkie ćwiczenie z aktywnych elementów",
-      "/learning — lista rzeczy zapisanych do ćwiczenia",
+      "Zapamiętam przydatne rzeczy i będę je delikatnie wplatać z powrotem w rozmowę.",
     ].join("\n");
   }
   return [
     `Hola — soy ${lang.name}. Escribe de forma natural en español, o en inglés/ruso si necesitas una explicación.`,
-    "Comandos principales:",
-    "/practice — práctica corta de elementos activos",
-    "/learning — lista de cosas guardadas para practicar",
+    "Recordaré lo útil y lo traeré de vuelta suavemente en la conversación.",
   ].join("\n");
 }
 
-function formatProgressSummary(data: ProgressData, lang: LanguageConfig): string {
-  const recent = data.recentWords.length > 0 ? data.recentWords.slice(0, 5).join(", ") : (lang.id === "polish" ? "brak" : "none");
-  const errors = Object.entries(data.errorCategories)
-    .slice(0, 5)
-    .map(([category, count]) => `${category}: ${count}`)
-    .join(", ");
+function formatCommandRedirect(lang: LanguageConfig): string {
   if (lang.id === "polish") {
-    return [
-      "📈 Postępy",
-      `Słownictwo: ${data.totalCount} łącznie · ${data.dueCount} do powtórki`,
-      `Status: ${data.newCount} nowe · ${data.learningCount} w nauce · ${data.reviewCount} do przeglądu · ${data.masteredCount} opanowane`,
-      `Ostatnie słowa: ${recent}`,
-      errors ? `Błędy: ${errors}` : "Błędy: brak",
-    ].join("\n");
+    return "Pisz do mnie normalnie; zapamiętam to, co przydatne, i wrócę do tego w rozmowie.";
   }
-  return [
-    "📈 Progreso",
-    `Vocabulario: ${data.totalCount} total · ${data.dueCount} para repasar`,
-    `Estado: ${data.newCount} nuevas · ${data.learningCount} aprendiendo · ${data.reviewCount} en repaso · ${data.masteredCount} dominadas`,
-    `Palabras recientes: ${recent}`,
-    errors ? `Errores: ${errors}` : "Errores: none",
-  ].join("\n");
+  return "Escríbeme normalmente; yo recordaré lo útil y lo traeré de vuelta en la conversación.";
+}
+
+function formatNoDuePractice(activeCount: number, lang: LanguageConfig): string {
+  if (activeCount <= 0) return practiceCopy(lang).noActivePractice;
+  if (lang.id === "polish") {
+    return `Masz ${activeCount} zapisany element; jeszcze nic nie wypada ćwiczyć. Pisz naturalnie, a wrócę do tego w odpowiednim momencie.`;
+  }
+  return `Tienes ${activeCount} elemento guardado; todavía nada toca practicar. Escribe naturalmente y volveré a sacarlo cuando toque.`;
 }
 
 type PracticeCopy = {
@@ -269,8 +257,7 @@ function formatPracticeFeedback(grade: number, note: string, corrected?: string,
   const copy = lang ? practiceCopy(lang) : undefined;
   const icon = grade >= 3 ? "✅" : grade === 2 ? "🟡" : "🔁";
   const label = grade >= 3 ? copy?.complete ?? "Practice complete" : grade === 2 ? copy?.recorded ?? "Practice recorded" : copy?.tryAgain ?? "Try again soon";
-  const suggestedLabel = copy?.suggestedAnswer ?? "Suggested answer";
-  const lines = [`${icon} ${label}`, note, corrected ? `${suggestedLabel}: ${corrected}` : ""];
+  const lines = [`${icon} ${label}`, note, corrected ? corrected : ""];
   if (nextItem && lang && copy) {
     lines.push(formatPracticeItem(nextItem, lang, copy.nextTitle));
   } else {
@@ -355,87 +342,37 @@ export class RuntimeManager {
       return practiceReply || null;
     }
 
+    if (isPracticeIntent(text, rt.lang)) {
+      const intentReply = await this.startPracticeReply(rt);
+      if (intentReply) await db.addChatMessage(chatId, "assistant", intentReply, convState.session_id);
+      return intentReply || null;
+    }
+
     const result = await agentRunner.run(text, history);
     if (result.text) await db.addChatMessage(chatId, "assistant", result.text, convState.session_id);
     return result.text || null;
   }
 
   private async handleCommand(rt: LanguageRuntime, text: string): Promise<string | undefined> {
-    text = normalizeCommandText(text);
-    const { db, lang, dreamService, dreamMemoryPath } = rt;
+    const { db, lang } = rt;
     if (text === "/start") return formatStart(lang);
-    if (text === "/progress") return formatProgressSummary(await db.progressSummary(), lang);
-    if (text === "/dream") return dreamService.run();
-    if (text === "/memory") {
-      if (fs.existsSync(dreamMemoryPath)) return fs.readFileSync(dreamMemoryPath, "utf-8");
-      return lang.id === "polish" ? "Brak pliku pamięci." : "No memory file found.";
-    }
-    if (text === "/vocabulary") {
-      const items = await db.listVocab("all", 50);
-      if (items.length === 0) return lang.id === "polish" ? "Słownictwo jest puste." : "Vocabulary is empty.";
-      return items.map((r) => {
-        const status = statusOf(r.pro_reps, r.pro_stability);
-        const icon = status === "mastered" ? "✅" : status === "review" ? "⏳" : status === "learning" ? "🌱" : "🆕";
-        return `${icon} ${r.chunk_l2}${r.anchor ? ` (${r.anchor})` : ""}`;
-      }).join("\n");
-    }
-    if (text === "/learning") {
-      const items = await db.listLearningItems("active", 30);
-      if (items.length === 0) return lang.id === "polish" ? "Learning inbox jest pusty." : "Learning inbox is empty.";
-      return ["🧠 Learning inbox", ...items.map((r) => `#${r.id} ${r.type}: ${r.title}${r.explanation_l1 ? ` — ${r.explanation_l1}` : ""}`)].join("\n");
-    }
     if (text === "/practice") {
-      const started = await this.startNextPracticeItem(rt);
-      if (!started) return practiceCopy(lang).noActivePractice;
-      return formatPracticeItem(started, lang);
+      return this.startPracticeReply(rt);
     }
     if (text === "/practice stop") {
       const stopped = await db.abandonActiveLearningPracticeAttempts("stopped by learner");
       const copy = practiceCopy(lang);
       return stopped > 0 ? copy.stopped : copy.noneToStop;
     }
-    if (text === "/vocab-candidates") {
-      const items = await db.listVocabCandidates("candidate", 20);
-      if (items.length === 0) return lang.id === "polish" ? "Brak kandydatów słownictwa." : "No vocabulary candidates.";
-      return items.map((r) => `⭐ #${r.id} ${r.chunk_l2}${r.anchor ? ` (${r.anchor})` : ""} — ${Math.round(r.priority * 100)}%${r.promotion_reason ? `; ${r.promotion_reason}` : ""}`).join("\n");
-    }
-    if (text === "/promote-vocab") {
-      const promoted = await db.promoteVocabCandidates({ maxPromotions: 3, minPriority: 0.75, maxActiveLearningItems: 40 });
-      if (promoted.length === 0) return lang.id === "polish" ? "Nic nie awansowało: brak mocnych kandydatów albo pełna kolejka." : "Nothing promoted: no strong candidates or active queue is full.";
-      return promoted.map((r) => `✅ ${r.chunk_l2}${r.anchor ? ` (${r.anchor})` : ""}`).join("\n");
-    }
-    if (text === "/accept-vocab" || text.startsWith("/accept-vocab ")) {
-      const id = Number(text.split(/\s+/)[1]);
-      if (!Number.isFinite(id) || id <= 0) return "Usage: /accept-vocab <candidate_id>";
-      const candidate = (await db.listVocabCandidates("all", 200)).find((c) => c.id === id && c.status === "candidate");
-      if (!candidate) return `Candidate #${id} not found.`;
-      const promoted = await db.promoteSpecificVocabCandidate(id);
-      return promoted ? `✅ ${promoted.chunk_l2}` : `Could not promote #${id}.`;
-    }
-    if (text === "/reject-vocab" || text.startsWith("/reject-vocab ")) {
-      const id = Number(text.split(/\s+/)[1]);
-      if (!Number.isFinite(id) || id <= 0) return "Usage: /reject-vocab <candidate_id>";
-      const ok = await db.updateVocabCandidateStatus(id, "rejected");
-      return ok ? `🗑️ rejected #${id}` : `Candidate #${id} not found.`;
-    }
-    if (text === "/proficiency") {
-      const cv = await getCompetencyVector({ competency: db, vocab: db });
-      const focus = selectFocusAxis(cv, lang) ?? "balanced";
-      const receptionLevels = Object.entries(cv.reception.byLevel)
-        .map(([level, bucket]) => bucket.score === null ? `${level}: untested` : `${level}: ${Math.round(bucket.score * 100)}% (${bucket.obs} obs)`)
-        .join("\n");
-      return [
-        `📊 ${lang.name} proficiency`,
-        `Vocabulary chunks: ${cv.lexicon.activeChunks}`,
-        formatObservedRate("Morphology", cv.morphology.rate, cv.morphology.obs),
-        formatObservedRate("Idiomaticity", cv.idiomaticity.rate, cv.idiomaticity.obs),
-        `Reception EWMA: ${Math.round(cv.reception.level * 100)}%`,
-        `Reception by lexical challenge:`,
-        receptionLevels,
-        `Focus: ${focus}`,
-      ].join("\n");
-    }
+    if (text.startsWith("/")) return formatCommandRedirect(lang);
     return undefined;
+  }
+
+  private async startPracticeReply(rt: LanguageRuntime): Promise<string> {
+    const started = await this.startNextPracticeItem(rt);
+    if (started) return formatPracticeItem(started, rt.lang);
+    const activeItems = await rt.db.listLearningItems("active", 200);
+    return formatNoDuePractice(activeItems.length, rt.lang);
   }
 
   private async startNextPracticeItem(rt: LanguageRuntime): Promise<LearningItem | null> {

@@ -29,7 +29,7 @@ export class TuiTransport implements Transport {
 
     console.log(`${BOLD}${YELLOW}miguelito-ts TUI${RESET}`);
     console.log(`${YELLOW}Type a message to chat with your tutor.${RESET}`);
-    console.log(`${YELLOW}Commands: /practice, /learning. Hidden diagnostics: /progress, /vocabulary, /proficiency, /memory, /dream${RESET}`);
+    console.log(`${YELLOW}Just type naturally; Miguelito will remember useful material and bring it back in conversation.${RESET}`);
     console.log("");
 
     this.rl.prompt();

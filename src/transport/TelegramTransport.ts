@@ -7,8 +7,6 @@ const log = logger.child({ ctx: 'telegram' });
 
 export const TELEGRAM_COMMANDS = [
   { command: "start", description: "Start Miguelito" },
-  { command: "learning", description: "List active learning items" },
-  { command: "practice", description: "Practice active learning items" },
 ] as const;
 
 const MENU_COMMANDS = TELEGRAM_COMMANDS.map((c) => c.command) as string[];

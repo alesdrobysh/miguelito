@@ -105,11 +105,9 @@ describe("runtime config", () => {
 });
 
 describe("runtime manager", () => {
-  it("exposes only the core learner slash commands in the Telegram menu", () => {
+  it("exposes no learning-system commands in the Telegram menu", () => {
     expect(TELEGRAM_COMMANDS.map((c) => c.command)).toEqual([
       "start",
-      "learning",
-      "practice",
     ]);
     for (const item of TELEGRAM_COMMANDS) {
       expect(item.command).toMatch(/^[a-z0-9_]{1,32}$/);
@@ -118,19 +116,62 @@ describe("runtime manager", () => {
     }
   });
 
-  it("keeps start and progress deterministic instead of falling through to chat", async () => {
+  it("keeps start chat-first and avoids showing a learning app surface", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const provider = new FakeProvider();
     const manager = await createRuntimeManager(config, { provider });
 
     const start = await manager.handleMessage("spanish", 777, "telegram-user", "/start");
-    const progress = await manager.handleMessage("spanish", 777, "telegram-user", "/progress");
 
-    expect(start).toContain("Comandos principales");
-    expect(start).toContain("/practice");
-    expect(progress).toContain("📈 Progreso");
-    expect(progress).toContain("Vocabulario:");
+    expect(start).toContain("Escribe de forma natural");
+    expect(start).not.toContain("Comandos");
+    expect(start).not.toContain("/practice");
+    expect(start).not.toContain("/learning");
     expect(provider.chatCalls).toHaveLength(0);
+    manager.close();
+  });
+
+  it("does not expose hidden dashboards or CRM-style commands to learners", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+
+    for (const command of ["/learning", "/progress", "/vocabulary", "/proficiency", "/vocab_candidates"]) {
+      const reply = await manager.handleMessage("spanish", 777, "telegram-user", command);
+      expect(reply).toBe("Escríbeme normalmente; yo recordaré lo útil y lo traeré de vuelta en la conversación.");
+    }
+
+    expect(provider.chatCalls).toHaveLength(0);
+    manager.close();
+  });
+
+  it("starts practice from natural learner requests without requiring slash commands", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+    const db = manager.runtime("spanish").db;
+    await db.addLearningItem({ type: "phrase", title: "me cuesta + infinitivo", priority: 0.8 });
+
+    const reply = await manager.handleMessage("spanish", 777, "telegram-user", "quiero practicar");
+
+    expect(reply).toContain("🎯 Práctica");
+    expect(reply).toContain("me cuesta + infinitivo");
+    expect(reply).not.toContain("echo:quiero practicar");
+    expect(provider.chatCalls).toHaveLength(0);
+    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(1);
+    manager.close();
+  });
+
+  it("uses practice as the only visible learner surface and reports the queue briefly", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const manager = await createRuntimeManager(config, { provider: new FakeProvider() });
+    const db = manager.runtime("spanish").db;
+    const future = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    await db.addLearningItem({ type: "phrase", title: "me cuesta + infinitivo", due_at: future, priority: 0.8 });
+
+    const reply = await manager.handleMessage("spanish", 777, "telegram-user", "/practice");
+
+    expect(reply).toBe("Tienes 1 elemento guardado; todavía nada toca practicar. Escribe naturalmente y volveré a sacarlo cuando toque.");
     manager.close();
   });
 
@@ -171,7 +212,7 @@ describe("runtime manager", () => {
     manager.close();
   });
 
-  it("lists active learning items through a first-class learning command", async () => {
+  it("keeps saved learning material internal instead of listing it as an inbox", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const manager = await createRuntimeManager(config, { provider: new FakeProvider() });
     const db = manager.runtime("spanish").db;
@@ -180,9 +221,10 @@ describe("runtime manager", () => {
 
     const listed = await manager.handleMessage("spanish", 777, "telegram-user", "/learning");
 
-    expect(listed).toContain("🧠 Learning inbox");
-    expect(listed).toContain("grammar_point: por vs para");
-    expect(listed).toContain("correction: yo es → yo soy");
+    expect(listed).toBe("Escríbeme normalmente; yo recordaré lo útil y lo traeré de vuelta en la conversación.");
+    expect(listed).not.toContain("🧠 Learning inbox");
+    expect(listed).not.toContain("grammar_point: por vs para");
+    expect(listed).not.toContain("correction: yo es → yo soy");
     manager.close();
   });
 
@@ -219,7 +261,7 @@ describe("runtime manager", () => {
     manager.close();
   });
 
-  it("grades the next learner message and immediately offers the next practice item", async () => {
+  it("grades the next learner message with compact feedback and immediately offers the next practice item", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const provider = new FakeProvider();
     const evaluator = new FakeProvider([{ grade: 3, note: "Correct rewrite.", corrected_answer: "Yo soy estudiante." }]);
@@ -244,6 +286,7 @@ describe("runtime manager", () => {
 
     expect(feedback).toContain("✅ Práctica completada");
     expect(feedback).toContain("Correct rewrite.");
+    expect(feedback).not.toContain("Respuesta sugerida");
     expect(feedback).toContain("Siguiente ejercicio");
     expect(feedback).toContain("Gramática: por vs para");
     expect(feedback).not.toContain("Practice complete");
@@ -337,36 +380,4 @@ describe("runtime manager", () => {
     manager.close();
   });
 
-  it("marks zero-observation proficiency dimensions as untested instead of scored", async () => {
-    const config = loadConfig(env({ DATA_DIR: tmpDir }));
-    const manager = await createRuntimeManager(config, { provider: new FakeProvider() });
-
-    const proficiency = await manager.handleMessage("spanish", 777, "telegram-user", "/proficiency");
-
-    expect(proficiency).toContain("Morphology: untested");
-    expect(proficiency).toContain("Idiomaticity: untested");
-    expect(proficiency).not.toContain("Morphology: 50% (0 obs)");
-    expect(proficiency).not.toContain("Idiomaticity: 50% (0 obs)");
-    manager.close();
-  });
-
-  it("supports hidden underscore aliases for vocabulary candidate commands", async () => {
-    const config = loadConfig(env({ DATA_DIR: tmpDir }));
-    const manager = await createRuntimeManager(config, { provider: new FakeProvider() });
-    const db = manager.runtime("spanish").db;
-    const candidateId = await db.addVocabCandidate({
-      chunk_l2: "aprovechar el trayecto",
-      source_type: "conversation",
-      priority: 0.9,
-    });
-
-    const listed = await manager.handleMessage("spanish", 777, "telegram-user", "/vocab_candidates");
-    expect(listed).toContain(`#${candidateId}`);
-    await expect(manager.handleMessage("spanish", 777, "telegram-user", "/accept_vocab")).resolves.toBe("Usage: /accept-vocab <candidate_id>");
-
-    const rejected = await manager.handleMessage("spanish", 777, "telegram-user", `/reject_vocab ${candidateId}`);
-    expect(rejected).toBe(`🗑️ rejected #${candidateId}`);
-
-    manager.close();
-  });
 });
