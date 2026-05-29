@@ -7,30 +7,11 @@ const log = logger.child({ ctx: 'telegram' });
 
 export const TELEGRAM_COMMANDS = [
   { command: "start", description: "Start Miguelito" },
-  { command: "progress", description: "Show learning progress" },
-  { command: "vocabulary", description: "List active vocabulary chunks" },
   { command: "learning", description: "List active learning items" },
   { command: "practice", description: "Practice active learning items" },
-  { command: "vocab_candidates", description: "List staged vocabulary candidates" },
-  { command: "promote_vocab", description: "Promote strong vocabulary candidates" },
-  { command: "accept_vocab", description: "Accept candidate: /accept_vocab <id>" },
-  { command: "reject_vocab", description: "Reject candidate: /reject_vocab <id>" },
-  { command: "proficiency", description: "Show proficiency diagnostics" },
-  { command: "memory", description: "Show dream memory" },
-  { command: "dream", description: "Run dream reflection" },
 ] as const;
 
-const SIMPLE_COMMANDS = TELEGRAM_COMMANDS
-  .map((c) => c.command)
-  .filter((cmd) => cmd !== "dream" && cmd !== "accept_vocab" && cmd !== "reject_vocab") as string[];
-
-function normalizeTelegramCommandText(text: string): string {
-  if (text.startsWith("/vocab_candidates")) return text.replace("/vocab_candidates", "/vocab-candidates");
-  if (text.startsWith("/promote_vocab")) return text.replace("/promote_vocab", "/promote-vocab");
-  if (text.startsWith("/accept_vocab")) return text.replace("/accept_vocab", "/accept-vocab");
-  if (text.startsWith("/reject_vocab")) return text.replace("/reject_vocab", "/reject-vocab");
-  return text;
-}
+const MENU_COMMANDS = TELEGRAM_COMMANDS.map((c) => c.command) as string[];
 
 interface TelegramTransportConfig {
   telegramToken: string;
@@ -115,42 +96,11 @@ export class TelegramTransport implements Transport {
   }
 
   private _registerHandlers(): void {
-    for (const cmd of SIMPLE_COMMANDS) {
+    for (const cmd of MENU_COMMANDS) {
       this.bot.command(cmd, (ctx) =>
-        this._dispatch(ctx, normalizeTelegramCommandText(ctx.message?.text ?? `/${cmd}`)).catch(this._logError(ctx))
+        this._dispatch(ctx, ctx.message?.text ?? `/${cmd}`).catch(this._logError(ctx))
       );
     }
-
-    for (const cmd of ["accept_vocab", "reject_vocab"]) {
-      this.bot.command(cmd, (ctx) =>
-        this._dispatch(ctx, normalizeTelegramCommandText(ctx.message?.text ?? `/${cmd}`)).catch(this._logError(ctx))
-      );
-    }
-
-    this.bot.command("dream", async (ctx) => {
-      if (!this._isAllowed(ctx)) {
-        log.warn({ ...this.logFields, userId: ctx.from?.id?.toString()?.slice(0, 6) }, 'unauthorized user attempt');
-        return;
-      }
-      if (!this.handler) return;
-
-      const chatId = ctx.chat!.id;
-      const userId = ctx.from?.id?.toString() ?? "";
-
-      log.info({ ...this.logFields, chatId, userId: userId.slice(0, 6) }, 'message received');
-
-      await ctx.reply("Dreaming...");
-      try {
-        const reply = await this.handler(chatId, userId, "/dream");
-        if (reply) {
-          await this._send(ctx, reply);
-          log.info({ ...this.logFields, chatId }, 'reply sent');
-        }
-      } catch (e: any) {
-        log.error({ ...this.logFields, updateId: ctx.update?.update_id, message: (e.message ?? String(e)).slice(0, 200) }, 'handler error');
-        await ctx.reply("Dream failed: " + (e.message ?? String(e)).slice(0, 200));
-      }
-    });
 
     this.bot.on("message:text", async (ctx) => {
       if (!this._isAllowed(ctx)) {

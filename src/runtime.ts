@@ -13,7 +13,7 @@ import { DreamService } from "./services/DreamService.js";
 import { statusOf } from "./domain/fsrs.js";
 import { getCompetencyVector, selectFocusAxis } from "./domain/competency.js";
 import type { ChatMessage } from "./llm.js";
-import type { LearningItem, LearningPracticeAttempt } from "./domain/types.js";
+import type { LearningItem, LearningPracticeAttempt, ProgressData } from "./domain/types.js";
 
 export interface RuntimeDeps {
   provider?: LLMProvider;
@@ -67,6 +67,47 @@ function normalizeCommandText(text: string): string {
   if (text.startsWith("/accept_vocab")) return text.replace("/accept_vocab", "/accept-vocab");
   if (text.startsWith("/reject_vocab")) return text.replace("/reject_vocab", "/reject-vocab");
   return text;
+}
+
+function formatStart(lang: LanguageConfig): string {
+  if (lang.id === "polish") {
+    return [
+      `Cześć — jestem ${lang.name}. Pisz normalnie po polsku albo po angielsku/rosyjsku, kiedy potrzebujesz wyjaśnienia.`,
+      "Najważniejsze komendy:",
+      "/practice — krótkie ćwiczenie z aktywnych elementów",
+      "/learning — lista rzeczy zapisanych do ćwiczenia",
+    ].join("\n");
+  }
+  return [
+    `Hola — soy ${lang.name}. Escribe de forma natural en español, o en inglés/ruso si necesitas una explicación.`,
+    "Comandos principales:",
+    "/practice — práctica corta de elementos activos",
+    "/learning — lista de cosas guardadas para practicar",
+  ].join("\n");
+}
+
+function formatProgressSummary(data: ProgressData, lang: LanguageConfig): string {
+  const recent = data.recentWords.length > 0 ? data.recentWords.slice(0, 5).join(", ") : (lang.id === "polish" ? "brak" : "none");
+  const errors = Object.entries(data.errorCategories)
+    .slice(0, 5)
+    .map(([category, count]) => `${category}: ${count}`)
+    .join(", ");
+  if (lang.id === "polish") {
+    return [
+      "📈 Postępy",
+      `Słownictwo: ${data.totalCount} łącznie · ${data.dueCount} do powtórki`,
+      `Status: ${data.newCount} nowe · ${data.learningCount} w nauce · ${data.reviewCount} do przeglądu · ${data.masteredCount} opanowane`,
+      `Ostatnie słowa: ${recent}`,
+      errors ? `Błędy: ${errors}` : "Błędy: brak",
+    ].join("\n");
+  }
+  return [
+    "📈 Progreso",
+    `Vocabulario: ${data.totalCount} total · ${data.dueCount} para repasar`,
+    `Estado: ${data.newCount} nuevas · ${data.learningCount} aprendiendo · ${data.reviewCount} en repaso · ${data.masteredCount} dominadas`,
+    `Palabras recientes: ${recent}`,
+    errors ? `Errores: ${errors}` : "Errores: none",
+  ].join("\n");
 }
 
 type PracticeCopy = {
@@ -322,6 +363,8 @@ export class RuntimeManager {
   private async handleCommand(rt: LanguageRuntime, text: string): Promise<string | undefined> {
     text = normalizeCommandText(text);
     const { db, lang, dreamService, dreamMemoryPath } = rt;
+    if (text === "/start") return formatStart(lang);
+    if (text === "/progress") return formatProgressSummary(await db.progressSummary(), lang);
     if (text === "/dream") return dreamService.run();
     if (text === "/memory") {
       if (fs.existsSync(dreamMemoryPath)) return fs.readFileSync(dreamMemoryPath, "utf-8");

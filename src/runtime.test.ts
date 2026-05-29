@@ -105,26 +105,33 @@ describe("runtime config", () => {
 });
 
 describe("runtime manager", () => {
-  it("exposes every supported slash command as a valid Telegram menu command", () => {
+  it("exposes only the core learner slash commands in the Telegram menu", () => {
     expect(TELEGRAM_COMMANDS.map((c) => c.command)).toEqual([
       "start",
-      "progress",
-      "vocabulary",
       "learning",
       "practice",
-      "vocab_candidates",
-      "promote_vocab",
-      "accept_vocab",
-      "reject_vocab",
-      "proficiency",
-      "memory",
-      "dream",
     ]);
     for (const item of TELEGRAM_COMMANDS) {
       expect(item.command).toMatch(/^[a-z0-9_]{1,32}$/);
       expect(item.description.length).toBeGreaterThan(0);
       expect(item.description.length).toBeLessThanOrEqual(256);
     }
+  });
+
+  it("keeps start and progress deterministic instead of falling through to chat", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+
+    const start = await manager.handleMessage("spanish", 777, "telegram-user", "/start");
+    const progress = await manager.handleMessage("spanish", 777, "telegram-user", "/progress");
+
+    expect(start).toContain("Comandos principales");
+    expect(start).toContain("/practice");
+    expect(progress).toContain("📈 Progreso");
+    expect(progress).toContain("Vocabulario:");
+    expect(provider.chatCalls).toHaveLength(0);
+    manager.close();
   });
 
   it("loads all languages for unified transport so Telegram bots share one DB instance per language", async () => {
@@ -343,7 +350,7 @@ describe("runtime manager", () => {
     manager.close();
   });
 
-  it("supports Telegram-menu underscore aliases for vocabulary candidate commands", async () => {
+  it("supports hidden underscore aliases for vocabulary candidate commands", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const manager = await createRuntimeManager(config, { provider: new FakeProvider() });
     const db = manager.runtime("spanish").db;
