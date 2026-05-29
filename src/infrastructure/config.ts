@@ -5,7 +5,7 @@ dotenv.config();
 
 export interface Config {
   provider: "openrouter" | "ollama";
-  transport: "telegram" | "tui" | "web" | "unified";
+  transport: "telegram" | "tui" | "unified";
   telegramToken: string;
   telegramBotTokens: Partial<Record<"polish" | "spanish", string>>;
   openrouterApiKey: string;
@@ -24,8 +24,6 @@ export interface Config {
   telegramChatId: string;
   dreamCron: string;
   dreamMemoryPath: string;
-  webHost: string;
-  webPort: number;
 }
 
 export function loadConfig(
@@ -36,6 +34,9 @@ export function loadConfig(
     throw new Error(`Unsupported PROVIDER: ${provider}`);
   }
   const transport = (env.TRANSPORT ?? "telegram") as Config["transport"];
+  if (transport !== "telegram" && transport !== "tui" && transport !== "unified") {
+    throw new Error(`Unsupported TRANSPORT: ${transport}`);
+  }
   const telegramToken = env.TELEGRAM_BOT_TOKEN ?? "";
   const telegramBotTokens: Config["telegramBotTokens"] = {
     polish: env.TELEGRAM_POLISH_BOT_TOKEN ?? undefined,
@@ -74,9 +75,6 @@ export function loadConfig(
 
   const dreamCron = env.DREAM_CRON ?? "0 23 * * *";
   const dreamMemoryPath = env.DREAM_MEMORY_PATH ?? path.join(dataDir, "memory", "MEMORY.md");
-  const webHost = env.WEB_HOST ?? "127.0.0.1";
-  const webPort = Number(env.WEB_PORT ?? "8787");
-
   return {
     provider,
     transport,
@@ -98,8 +96,6 @@ export function loadConfig(
     telegramChatId,
     dreamCron,
     dreamMemoryPath,
-    webHost,
-    webPort,
   };
 }
 

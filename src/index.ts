@@ -2,7 +2,6 @@ import { loadConfig } from "./infrastructure/config.js";
 import { logger } from "./infrastructure/logger.js";
 import { createRuntimeManager } from "./runtime.js";
 import { TuiTransport } from "./transport/TuiTransport.js";
-import { WebServer } from "./web/WebServer.js";
 import { createTelegramTransport, startLanguageScheduler, startTelegramTransport } from "./app/startup.js";
 
 const log = logger.child({ ctx: "app" });
@@ -29,10 +28,6 @@ async function main() {
     languages: manager.languages().map((l) => l.id),
   }, "miguelito starting");
 
-  if (config.transport === "web") {
-    new WebServer(manager).start(config.webHost, config.webPort);
-    return;
-  }
 
   if (config.transport === "unified") {
     const telegramBots = [
@@ -40,21 +35,13 @@ async function main() {
       { language: "spanish", token: config.telegramBotTokens.spanish! },
     ];
 
-    const mirrorTransports = Object.fromEntries(
-      telegramBots.map((bot) => [bot.language, createTelegramTransport(config, bot.language, bot.token)]),
-    );
-
     for (const bot of telegramBots) {
-      const transport = mirrorTransports[bot.language];
+      const transport = createTelegramTransport(config, bot.language, bot.token);
       const rt = manager.runtime(bot.language);
       startLanguageScheduler(config, rt, transport);
       startTelegramTransport(manager, config, bot.language, transport);
     }
 
-    new WebServer(manager, {
-      chatId: Number(config.telegramChatId),
-      mirrorTransports,
-    }).start(config.webHost, config.webPort);
     return;
   }
 
