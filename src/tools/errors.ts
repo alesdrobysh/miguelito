@@ -15,7 +15,7 @@ function errorLog(ctx: ToolContext, lang: LanguageConfig) {
         },
         correct: {
           type: "string",
-          description: "The corrected Spanish form.",
+          description: "The corrected form.",
         },
         category: {
           type: "string",
@@ -23,7 +23,7 @@ function errorLog(ctx: ToolContext, lang: LanguageConfig) {
         },
         note: {
           type: "string",
-          description: "Short explanation in user's native language.",
+          description: "Short explanation.",
         },
       },
       required: ["user_text", "correct", "category"],
