@@ -102,9 +102,7 @@ Add drag region for the frameless window. The `.chat-header` becomes the drag ha
 }
 ```
 
-Also add `padding-left` to accommodate the macOS traffic light buttons (approximately 72px) when running under Electron. The main process sets `process.env.ELECTRON=1`; the renderer can detect `window.process` absence and use a CSS class injected by the preload, or simply always reserve the space since the web UI isn't expected to be used in a regular browser simultaneously.
-
-Simpler approach: always reserve the traffic light space in `.chat-header` via a fixed left padding, since this CSS only ships in the Electron-bundled build anyway.
+Also add `padding-left` to `.chat-header` to accommodate the macOS traffic light buttons (~72px). Since this CSS only ships in the Electron-bundled build (not the standalone web server), always reserve the space unconditionally.
 
 ## Data & Config
 
