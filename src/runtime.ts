@@ -59,42 +59,29 @@ export function createEvaluatorProvider(config: Config): LLMProvider {
 
 const MODEL_HISTORY_LIMIT = 50;
 
-function isPracticeIntent(text: string, lang: LanguageConfig): boolean {
+function isPracticeIntent(text: string, _lang: LanguageConfig): boolean {
   const normalized = text.trim().toLowerCase();
   if (!normalized || normalized.startsWith("/")) return false;
   const common = ["practice", "practise", "exercise", "drill", "review"];
   const spanish = ["practicar", "práctica", "practica", "ejercicio", "repasar", "repaso", "entrenar"];
-  const polish = ["ćwicz", "ćwiczenie", "poćwicz", "potrenuj", "trening", "powtór", "powtorka", "powtórka"];
   const russian = ["потрен", "практик", "упражнен", "повтор"];
-  const words = lang.id === "polish" ? [...common, ...polish, ...russian] : [...common, ...spanish, ...russian];
+  const words = [...common, ...spanish, ...russian];
   return words.some((word) => normalized.includes(word));
 }
 
 function formatStart(lang: LanguageConfig): string {
-  if (lang.id === "polish") {
-    return [
-      `Cześć — jestem ${lang.name}. Pisz normalnie po polsku albo po angielsku/rosyjsku, kiedy potrzebujesz wyjaśnienia.`,
-      "Zapamiętam przydatne rzeczy i będę je delikatnie wplatać z powrotem w rozmowę.",
-    ].join("\n");
-  }
   return [
     `Hola — soy ${lang.name}. Escribe de forma natural en español, o en inglés/ruso si necesitas una explicación.`,
     "Recordaré lo útil y lo traeré de vuelta suavemente en la conversación.",
   ].join("\n");
 }
 
-function formatCommandRedirect(lang: LanguageConfig): string {
-  if (lang.id === "polish") {
-    return "Pisz do mnie normalnie; zapamiętam to, co przydatne, i wrócę do tego w rozmowie.";
-  }
+function formatCommandRedirect(_lang: LanguageConfig): string {
   return "Escríbeme normalmente; yo recordaré lo útil y lo traeré de vuelta en la conversación.";
 }
 
 function formatNoDuePractice(activeCount: number, lang: LanguageConfig): string {
   if (activeCount <= 0) return practiceCopy(lang).noActivePractice;
-  if (lang.id === "polish") {
-    return `Masz ${activeCount} zapisany element; jeszcze nic nie wypada ćwiczyć. Pisz naturalnie, a wrócę do tego w odpowiednim momencie.`;
-  }
   return `Tienes ${activeCount} elemento guardado; todavía nada toca practicar. Escribe naturalmente y volveré a sacarlo cuando toque.`;
 }
 
@@ -114,33 +101,7 @@ type PracticeCopy = {
   typeLabels: Record<string, string>;
 };
 
-function practiceCopy(lang: LanguageConfig): PracticeCopy {
-  if (lang.id === "polish") {
-    return {
-      title: "🎯 Ćwiczenie",
-      answerBriefly: "odpowiedz krótko. /practice stop kończy sesję.",
-      nextTitle: "Następne ćwiczenie",
-      complete: "Ćwiczenie ukończone",
-      recorded: "Odpowiedź zapisana",
-      tryAgain: "Spróbuj wkrótce jeszcze raz",
-      queueDone: "Kolejka ćwiczeń jest teraz pusta. Wpisz /practice później, żeby wrócić.",
-      suggestedAnswer: "Proponowana odpowiedź",
-      hint: "Pamiętaj",
-      noActivePractice: "Nie ma jeszcze aktywnych learning items do praktyki.",
-      stopped: "Ćwiczenie zatrzymane. Wpisz /practice, kiedy chcesz wrócić.",
-      noneToStop: "Nie ma aktywnego ćwiczenia do zatrzymania.",
-      typeLabels: {
-        correction: "Poprawka",
-        grammar_point: "Gramatyka",
-        phrase: "Zwrot",
-        collocation: "Kolokacja",
-        idiom: "Idiom",
-        word: "Słowo",
-        register_note: "Rejestr",
-        pronunciation: "Wymowa",
-      },
-    };
-  }
+function practiceCopy(_lang: LanguageConfig): PracticeCopy {
   return {
     title: "🎯 Práctica",
     answerBriefly: "responde brevemente. /practice stop termina la sesión.",
@@ -172,31 +133,12 @@ function humanizeLearningType(type: string, lang: LanguageConfig): string {
   return copy.typeLabels[type] ?? type.split("_").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
 }
 
-function promptForLearningItem(item: LearningItem, lang: LanguageConfig): string {
+function promptForLearningItem(item: LearningItem, _lang: LanguageConfig): string {
   if (item.type === "correction") {
     const wrong = item.title.includes("→") ? item.title.split("→")[0].trim() : item.title;
-    const instruction = lang.id === "polish" ? "Popraw zdanie:" : "Reescribe la frase correctamente:";
-    return `${instruction}\n${item.prompt_l2 ?? wrong}`;
+    return `Reescribe la frase correctamente:\n${item.prompt_l2 ?? wrong}`;
   }
   if (item.prompt_l2) return item.prompt_l2;
-  if (lang.id === "polish") {
-    switch (item.type) {
-      case "grammar_point":
-        return `Ułóż jedno zdanie z tym punktem gramatycznym: ${item.title}`;
-      case "phrase":
-      case "collocation":
-      case "idiom":
-        return `Użyj tego naturalnie w jednym zdaniu: ${item.title}`;
-      case "word":
-        return `Użyj tego słowa w krótkiej odpowiedzi: ${item.title}`;
-      case "register_note":
-        return `Przepisz krótkie zdanie w odpowiednim rejestrze: ${item.title}`;
-      case "pronunciation":
-        return `Napisz krótki przykład z tym elementem wymowy: ${item.title}`;
-      default:
-        return `Poćwicz ten element: ${item.title}`;
-    }
-  }
   switch (item.type) {
     case "grammar_point":
       return `Haz una frase con este punto gramatical: ${item.title}`;
@@ -232,19 +174,12 @@ function formatPracticeItem(item: LearningItem, lang: LanguageConfig, prefix?: s
 
 function fallbackPracticeGrade(item: LearningItem, response: string, lang: LanguageConfig): { grade: number; note: string; corrected_answer?: string } {
   const answer = response.trim();
-  const notes = lang.id === "polish"
-    ? {
-      empty: "Pusta odpowiedź.",
-      corrected: "Wygląda na to, że użyłeś poprawionej formy.",
-      compare: "Porównaj z",
-      recorded: "Odpowiedź ćwiczeniowa zapisana.",
-    }
-    : {
-      empty: "Respuesta vacía.",
-      corrected: "Parece que usaste la forma corregida.",
-      compare: "Compara con",
-      recorded: "Respuesta de práctica guardada.",
-    };
+  const notes = {
+    empty: "Respuesta vacía.",
+    corrected: "Parece que usaste la forma corregida.",
+    compare: "Compara con",
+    recorded: "Respuesta de práctica guardada.",
+  };
   if (!answer) return { grade: 1, note: notes.empty };
   if (item.type === "correction" && item.title.includes("→")) {
     const expected = item.title.split("→").pop()?.trim().toLowerCase() ?? "";
@@ -398,9 +333,7 @@ export class RuntimeManager {
     let evaluation = fallbackPracticeGrade(item, text, rt.lang);
     try {
       const evaluated = await this.evaluatorProvider.completeJson<{ grade?: number; note?: string; corrected_answer?: string }>(
-        rt.lang.id === "polish"
-          ? "Oceń odpowiedź w ćwiczeniu z języka polskiego. Zwróć JSON z grade 1-4, note po polsku i opcjonalnym corrected_answer. Krótko."
-          : "Evalúa la respuesta de práctica de español. Devuelve JSON con grade 1-4, note en español y corrected_answer opcional. Sé breve.",
+        "Evalúa la respuesta de práctica de español. Devuelve JSON con grade 1-4, note en español y corrected_answer opcional. Sé breve.",
         JSON.stringify({ language: rt.lang.id, item_type: item.type, item_title: item.title, prompt: attempt.prompt_text, learner_response: text }),
         { temperature: 0, structured: true },
       );

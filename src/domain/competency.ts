@@ -169,88 +169,46 @@ export function renderCalibration(v: CompetencyVector, focus: Axis | null, lang:
   return lines.join("\n");
 }
 
-function calibrationHeader(lang: LanguageConfig): string {
-  if (lang.id === "spanish") return "## Calibración de dificultad";
-  if (lang.id === "polish") return "## Kalibracja trudności";
-  return "## Каліброўка складанасці";
+function calibrationHeader(_lang: LanguageConfig): string {
+  return "## Calibración de dificultad";
 }
 
-function calibrationLine(lang: LanguageConfig, key: "lexiconLow" | "lexiconFocus" | "syntaxLow"): string {
-  const byLang = {
-    spanish: {
-      lexiconLow: "Vocabulario: usa vocabulario natural y variado, adecuado para una persona en desarrollo.",
-      lexiconFocus: "Vocabulario: introduce aproximadamente una palabra de frecuencia media (rango 3.000-8.000) por turno, integrada de forma natural; no te quedes solo en la banda de las 1.000 más frecuentes.",
-      syntaxLow: "Sintaxis: usa frases claras, mayormente simples.",
-    },
-    polish: {
-      lexiconLow: "Słownictwo: używaj naturalnego, zróżnicowanego słownictwa odpowiedniego dla rozwijającego się ucznia.",
-      lexiconFocus: "Słownictwo: wprowadzaj około jedno słowo średniej częstotliwości (zakres 3 000-8 000) na turę, naturalnie wplecione w kontekst; nie zostawaj wyłącznie w paśmie 1 000 najczęstszych słów.",
-      syntaxLow: "Składnia: używaj jasnych, przeważnie prostych zdań.",
-    },
-    belarusian: {
-      lexiconLow: "Лексіка: выкарыстоўвай натуральную, разнастайную лексіку, прыдатную для навучэнца ў развіцці.",
-      lexiconFocus: "Лексіка: уводзь прыкладна адно слова сярэдняй частотнасці (дыяпазон 3 000-8 000) за ход, натуральна ўплеценае ў кантэкст; не заставайся толькі ў зоне 1 000 найчасцейшых слоў.",
-      syntaxLow: "Сінтаксіс: выкарыстоўвай ясныя, пераважна простыя сказы.",
-    },
+function calibrationLine(_lang: LanguageConfig, key: "lexiconLow" | "lexiconFocus" | "syntaxLow"): string {
+  const lines = {
+    lexiconLow: "Vocabulario: usa vocabulario natural y variado, adecuado para una persona en desarrollo.",
+    lexiconFocus: "Vocabulario: introduce aproximadamente una palabra de frecuencia media (rango 3.000-8.000) por turno, integrada de forma natural; no te quedes solo en la banda de las 1.000 más frecuentes.",
+    syntaxLow: "Sintaxis: usa frases claras, mayormente simples.",
   } as const;
-  return byLang[lang.id as keyof typeof byLang][key];
+  return lines[key];
 }
 
-function calibrationLexiconMatch(lang: LanguageConfig, rarity: number): string {
-  if (lang.id === "spanish") {
-    const label = rarity > 0.6 ? "sofisticado" : rarity > 0.3 ? "de frecuencia media" : "común";
-    return `Vocabulario: el aprendiz usa lenguaje ${label}; responde con complejidad similar o ligeramente superior (señal de rareza léxica: ${rarity.toFixed(2)}).`;
-  }
-  if (lang.id === "polish") {
-    const label = rarity > 0.6 ? "wyrafinowanego" : rarity > 0.3 ? "średniej częstotliwości" : "częstego";
-    return `Słownictwo: uczeń używa języka ${label}; odpowiadaj podobną albo nieco wyższą złożonością (sygnał rzadkości leksykalnej: ${rarity.toFixed(2)}).`;
-  }
-  const label = rarity > 0.6 ? "вытанчаную" : rarity > 0.3 ? "сярэдняй частотнасці" : "звычайную";
-  return `Лексіка: навучэнец выкарыстоўвае ${label} мову; адказвай з падобнай або крыху вышэйшай складанасцю (сігнал лексічнай рэдкасці: ${rarity.toFixed(2)}).`;
+function calibrationLexiconMatch(_lang: LanguageConfig, rarity: number): string {
+  const label = rarity > 0.6 ? "sofisticado" : rarity > 0.3 ? "de frecuencia media" : "común";
+  return `Vocabulario: el aprendiz usa lenguaje ${label}; responde con complejidad similar o ligeramente superior (señal de rareza léxica: ${rarity.toFixed(2)}).`;
 }
 
-function calibrationSyntaxFocus(lang: LanguageConfig, meanTunitLength: number, subIndex: number): string {
+function calibrationSyntaxFocus(_lang: LanguageConfig, meanTunitLength: number, subIndex: number): string {
   const pct = Math.round(subIndex * 100);
-  if (lang.id === "spanish") return `Sintaxis: modela frases complejas; incluye subordinadas (que + cláusula, frases con si, relativas); tu salida debe estar un paso por encima de la producción actual del aprendiz (${meanTunitLength.toFixed(1)} T-units de media, ${pct}% con subordinación).`;
-  if (lang.id === "polish") return `Składnia: modeluj zdania złożone; używaj zdań podrzędnych, warunkowych i względnych; twoja wypowiedź powinna być o krok powyżej bieżącej produkcji ucznia (${meanTunitLength.toFixed(1)} T-unit średnio, ${pct}% z podrzędnością).`;
-  return `Сінтаксіс: мадэлюй складаныя сказы; уключай даданыя, умоўныя і адносныя канструкцыі; твой вывад павінен быць на адзін крок вышэй за бягучую прадукцыю навучэнца (${meanTunitLength.toFixed(1)} T-units у сярэднім, ${pct}% з падпарадкаваннем).`;
+  return `Sintaxis: modela frases complejas; incluye subordinadas (que + cláusula, frases con si, relativas); tu salida debe estar un paso por encima de la producción actual del aprendiz (${meanTunitLength.toFixed(1)} T-units de media, ${pct}% con subordinación).`;
 }
 
-function calibrationSyntaxNormal(lang: LanguageConfig, meanTunitLength: number): string {
-  if (lang.id === "spanish") {
-    const label = meanTunitLength < 3 ? "simples" : meanTunitLength < 6 ? "moderadas" : "variadas";
-    return `Sintaxis: usa estructuras ${label}; incluye alguna subordinada ocasional.`;
-  }
-  if (lang.id === "polish") {
-    const label = meanTunitLength < 3 ? "proste" : meanTunitLength < 6 ? "umiarkowane" : "zróżnicowane";
-    return `Składnia: używaj ${label} struktur zdań; czasem dodaj zdanie podrzędne.`;
-  }
-  const label = meanTunitLength < 3 ? "простыя" : meanTunitLength < 6 ? "умераныя" : "разнастайныя";
-  return `Сінтаксіс: выкарыстоўвай ${label} структуры сказаў; часам уключай даданы сказ.`;
+function calibrationSyntaxNormal(_lang: LanguageConfig, meanTunitLength: number): string {
+  const label = meanTunitLength < 3 ? "simples" : meanTunitLength < 6 ? "moderadas" : "variadas";
+  return `Sintaxis: usa estructuras ${label}; incluye alguna subordinada ocasional.`;
 }
 
-function calibrationCategory(lang: LanguageConfig, category: "morphology" | "idiomaticity", text: string): string {
-  if (lang.id === "spanish") return `${category === "morphology" ? "Morfología" : "Idiomaticidad"}: ${text}`;
-  if (lang.id === "polish") return `${category === "morphology" ? "Morfologia" : "Idiomatyczność"}: ${text}`;
-  return `${category === "morphology" ? "Марфалогія" : "Ідыяматычнасць"}: ${text}`;
+function calibrationCategory(_lang: LanguageConfig, category: "morphology" | "idiomaticity", text: string): string {
+  return `${category === "morphology" ? "Morfología" : "Idiomaticidad"}: ${text}`;
 }
 
-function calibrationReception(lang: LanguageConfig, pct: number, direction: "raise" | "lower"): string {
-  if (lang.id === "spanish") return direction === "raise"
+function calibrationReception(_lang: LanguageConfig, pct: number, direction: "raise" | "lower"): string {
+  return direction === "raise"
     ? `Comprensión: ${pct}% fluida — sube un paso la complejidad de tu propia salida.`
     : `Comprensión: ${pct}% fluida — simplifica tu salida; frases más cortas y vocabulario más común.`;
-  if (lang.id === "polish") return direction === "raise"
-    ? `Recepcja: ${pct}% płynnie — podnieś złożoność własnej wypowiedzi o jeden krok.`
-    : `Recepcja: ${pct}% płynnie — uprość własną wypowiedź; krótsze zdania i częstsze słownictwo.`;
-  return direction === "raise"
-    ? `Успрыманне: ${pct}% гладка — павяліч складанасць свайго вываду на адзін крок.`
-    : `Успрыманне: ${pct}% гладка — спрасці свой вывад; карацейшыя сказы і больш частая лексіка.`;
 }
 
-function calibrationSelfCorrection(lang: LanguageConfig, obs: number): string {
-  if (lang.id === "spanish") return `Autocorrección: el aprendiz monitoriza activamente su habla (${obs} observaciones); respeta sus autocorrecciones y céntrate en feedback estilístico de nivel más alto.`;
-  if (lang.id === "polish") return `Autokorekta: uczeń aktywnie monitoruje swoją mowę (${obs} obserwacji); szanuj autokorekty i skupiaj się na wyższopoziomowej informacji stylistycznej.`;
-  return `Самавыпраўленне: навучэнец актыўна кантралюе маўленне (${obs} назіранняў); паважай самавыпраўленні і засяроджвайся на стылістычнай зваротнай сувязі вышэйшага ўзроўню.`;
+function calibrationSelfCorrection(_lang: LanguageConfig, obs: number): string {
+  return `Autocorrección: el aprendiz monitoriza activamente su habla (${obs} observaciones); respeta sus autocorrecciones y céntrate en feedback estilístico de nivel más alto.`;
 }
 
 export function formatVectorForDisplay(v: CompetencyVector): string {

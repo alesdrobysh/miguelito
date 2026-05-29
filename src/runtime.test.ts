@@ -182,20 +182,20 @@ describe("runtime manager", () => {
     const manager = await createRuntimeManager(config, { provider: new FakeProvider() });
 
     expect(manager.hasLanguage("spanish")).toBe(true);
-    expect(manager.hasLanguage("polish")).toBe(false);
+    expect(manager.hasLanguage("secondary")).toBe(false);
     expect(manager.hasLanguage("belarusian")).toBe(false);
     manager.close();
     expect(fs.existsSync(path.join(tmpDir, "buddy.db"))).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, "buddy-spanish.db"))).toBe(false);
-    expect(fs.existsSync(path.join(tmpDir, "buddy-polish.db"))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, "buddy-secondary.db"))).toBe(false);
   });
 
-  it("rejects inactive languages at runtime", async () => {
+  it("rejects unknown languages at runtime", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const manager = await createRuntimeManager(config, { provider: new FakeProvider() });
 
     await expect(manager.handleMessage("spanish", 777, "test-user", "hola")).resolves.toBe("echo:hola");
-    await expect(manager.handleMessage("polish", 777, "test-user", "cześć")).rejects.toThrow("Unknown language: polish");
+    await expect(manager.handleMessage("secondary", 777, "test-user", "hello")).rejects.toThrow("Unknown language: secondary");
 
     manager.close();
   });

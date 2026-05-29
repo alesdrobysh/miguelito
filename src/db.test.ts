@@ -281,8 +281,8 @@ describe("BuddyDb learning items", () => {
     expect(JSON.parse(items[0].practice_modes_json)).toEqual(["rewrite"]);
     expect(JSON.parse(items[1].tags_json)).toEqual(["routine"]);
 
-    const polish = db.withLanguage("polish", [], []);
-    expect(await polish.listLearningItems("active", 10)).toHaveLength(0);
+    const secondary = db.withLanguage("secondary", [], []);
+    expect(await secondary.listLearningItems("active", 10)).toHaveLength(0);
   });
 
   it("dedupes learning items by language, type, and title", async () => {

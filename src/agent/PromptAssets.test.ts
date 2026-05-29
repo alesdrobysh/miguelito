@@ -5,7 +5,6 @@ import path from "path";
 const projectRoot = path.resolve(__dirname, "..", "..");
 const soulPaths = [
   "src/languages/spanish/soul.md",
-  "src/languages/polish/soul.md",
 ].map((p) => path.join(projectRoot, p));
 
 const postTurnOwnedToolNames = [
@@ -18,12 +17,10 @@ const postTurnOwnedToolNames = [
 
 const nonHumanIdentityPhrases = [
   { path: "src/languages/spanish/soul.md", phrase: "No finjas ser una persona" },
-  { path: "src/languages/polish/soul.md", phrase: "Nie udawaj osoby" },
 ];
 
 const configIdentityPhrases = [
   { path: "src/languages/spanish/index.ts", phrases: ["tutor de español por software", "No finjas ser una persona", "No finjas vida humana propia"] },
-  { path: "src/languages/polish/index.ts", phrases: ["programowym tutorem języka polskiego", "Nie udawaj osoby", "Nie udawaj własnego ludzkiego życia"] },
 ];
 
 describe("language prompt assets", () => {
@@ -50,20 +47,5 @@ describe("language prompt assets", () => {
         expect(content, `${relativePath} should contain ${phrase}`).toContain(phrase);
       }
     }
-  });
-
-  it("keeps Polish Coach concise when learner asks for brevity", () => {
-    const content = fs.readFileSync(path.join(projectRoot, "src/languages/polish/soul.md"), "utf8");
-
-    expect(content).toContain("Gdy użytkownik prosi o krótkość");
-    expect(content).toContain("maksymalnie jedno pytanie");
-  });
-
-  it("guards Polish collocation exercises against tense-frame mismatches", () => {
-    const content = fs.readFileSync(path.join(projectRoot, "src/languages/polish/soul.md"), "utf8");
-
-    expect(content).toContain("muszę podjąć decyzję");
-    expect(content).toContain("wreszcie podjąłem decyzję");
-    expect(content).toContain("nie łącz ramy z bezokolicznikiem z poleceniem czasu przeszłego");
   });
 });

@@ -5,7 +5,6 @@ import path from "path";
 import { BuddyDb } from "./db.js";
 import { consolidateMiguelitoDatabases } from "./consolidateDb.js";
 import { SpanishLanguage } from "../languages/spanish/index.js";
-import { PolishLanguage } from "../languages/polish/index.js";
 
 let tmpDir: string;
 
@@ -20,7 +19,7 @@ afterEach(() => {
 describe("consolidateMiguelitoDatabases", () => {
   it("merges language DBs into one operational DB with language-scoped rows and an audit copy of every source row", async () => {
     const spanishPath = path.join(tmpDir, "buddy-spanish.db");
-    const polishPath = path.join(tmpDir, "buddy-polish.db");
+    const secondaryPath = path.join(tmpDir, "buddy-secondary.db");
     const sharedPath = path.join(tmpDir, "buddy-shared.db");
     const targetPath = path.join(tmpDir, "buddy.db");
 
@@ -33,13 +32,13 @@ describe("consolidateMiguelitoDatabases", () => {
     await spanish.addInterest("Music", "spanish", 0.7);
     spanish.close();
 
-    const polish = await BuddyDb.open(polishPath, "polish", PolishLanguage.errorCategories, PolishLanguage.morphologyCategories);
-    await polish.addVocab("kot", "ten kot", "kot");
-    const polishSession = await polish.getConversationState();
-    await polish.addChatMessage(123, "user", "Cześć", polishSession.session.session_id);
-    await polish.addInterest("Music", "polish", 0.9);
-    await polish.addInterest("Trains", "polish", 0.8);
-    polish.close();
+    const secondary = await BuddyDb.open(secondaryPath, "secondary", [], []);
+    await secondary.addVocab("chunk", "secondary context", "chunk");
+    const secondarySession = await secondary.getConversationState();
+    await secondary.addChatMessage(123, "user", "Secondary hello", secondarySession.session.session_id);
+    await secondary.addInterest("Music", "secondary", 0.9);
+    await secondary.addInterest("Trains", "secondary", 0.8);
+    secondary.close();
 
     const shared = await BuddyDb.open(sharedPath, "shared", [], []);
     await shared.setProfile({ name: "Shared profile", goal: "speak more" });
@@ -47,16 +46,16 @@ describe("consolidateMiguelitoDatabases", () => {
 
     const result = await consolidateMiguelitoDatabases({ dataDir: tmpDir, targetPath });
 
-    expect(result.sources.map((s) => path.basename(s.path)).sort()).toEqual(["buddy-polish.db", "buddy-shared.db", "buddy-spanish.db"]);
+    expect(result.sources.map((s) => path.basename(s.path)).sort()).toEqual(["buddy-secondary.db", "buddy-shared.db", "buddy-spanish.db"]);
     expect(result.targetPath).toBe(targetPath);
 
     const spanUnified = await BuddyDb.open(targetPath, "spanish", SpanishLanguage.errorCategories, SpanishLanguage.morphologyCategories);
-    const polUnified = spanUnified.withLanguage("polish", PolishLanguage.errorCategories, PolishLanguage.morphologyCategories);
+    const secondaryUnified = spanUnified.withLanguage("secondary", [], []);
 
     expect((await spanUnified.listVocab("all", 10)).map((r) => r.chunk_l2)).toContain("gato");
-    expect((await polUnified.listVocab("all", 10)).map((r) => r.chunk_l2)).toContain("kot");
+    expect((await secondaryUnified.listVocab("all", 10)).map((r) => r.chunk_l2)).toContain("chunk");
     expect((await spanUnified.getChatHistory(123, 10)).map((m) => m.content)).toEqual(["Hola"]);
-    expect((await polUnified.getChatHistory(123, 10)).map((m) => m.content)).toEqual(["Cześć"]);
+    expect((await secondaryUnified.getChatHistory(123, 10)).map((m) => m.content)).toEqual(["Secondary hello"]);
     expect(await spanUnified.listInterests(10)).toEqual(expect.arrayContaining(["Music", "Trains"]));
 
     const auditCount = spanUnified.db.exec("SELECT COUNT(*) FROM _migration_rows")[0].values[0][0];

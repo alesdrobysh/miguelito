@@ -95,44 +95,6 @@ describe("PromptBuilder product coaching policy", () => {
     }
     expect(prompt).toContain("Default: talk naturally. When needed: explain, correct, drill, review.");
   });
-
-  it("positions Polish as a B2 native-like expression coach rather than a gentle A2 buddy", async () => {
-    const { PolishLanguage } = await import("../languages/polish/index.js");
-    const polishDb = db.withLanguage("polish", PolishLanguage.errorCategories, PolishLanguage.morphologyCategories);
-    const builder = new PromptBuilder(
-      { vocab: polishDb, errors: polishDb, profile: db, langProfile: polishDb, interests: polishDb, competency: polishDb, session: polishDb },
-      PolishLanguage,
-    );
-
-    const prompt = await builder.build("Trenuję się z sztangą");
-
-    expect(prompt).toContain("## Product policy");
-    expect(prompt).toContain("Polish Coach");
-    expect(prompt).toContain("B2");
-    expect(prompt).toContain("natural, precise, native-like Polish");
-    expect(prompt).toContain("native-like rewrites");
-    expect(prompt).toContain("calques");
-    expect(prompt).toContain("collocations");
-    expect(prompt).toContain("grammar nuance");
-    expect(prompt).not.toContain("Spanish Buddy");
-  });
-
-  it("tells Polish Coach to honor brevity requests and keep collocation cloze frames grammatical", async () => {
-    const { PolishLanguage } = await import("../languages/polish/index.js");
-    const polishDb = db.withLanguage("polish", PolishLanguage.errorCategories, PolishLanguage.morphologyCategories);
-    const builder = new PromptBuilder(
-      { vocab: polishDb, errors: polishDb, profile: db, langProfile: polishDb, interests: polishDb, competency: polishDb, session: polishDb },
-      PolishLanguage,
-    );
-
-    const prompt = await builder.build('Napisz krótko. Daj ćwiczenie z "podjąć decyzję".');
-
-    expect(prompt).toContain("gdy uczeń prosi krótko");
-    expect(prompt).toContain("jedno pytanie naraz");
-    expect(prompt).toContain("muszę podjąć decyzję");
-    expect(prompt).toContain("podjąłem decyzję");
-    expect(prompt).not.toContain("muszę [czasownik w czasie przeszłym]");
-  });
 });
 
 describe("PromptBuilder vocabulary target injection", () => {

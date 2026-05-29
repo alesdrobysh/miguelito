@@ -409,7 +409,7 @@ The hamburger button and text in the header should be visible to the right of th
 
 - [ ] **Step 4: Verify chat works**
 
-Type a message in Spanish or Polish and send it. Verify a response comes back.
+Type a message in Spanish and send it. Verify a response comes back.
 
 - [ ] **Step 5: Commit any fixes needed**
 
