@@ -1,6 +1,8 @@
+import fs from "fs";
 import path from "path";
 import type { LanguageConfig } from "../LanguageConfig.js";
-import { loadFrequencyWords } from "../frequency/load.js";
+import { lemmatize } from "./lemmatize.js";
+import { loadCefrLevels } from "./cefr.js";
 
 export const SpanishLanguage: LanguageConfig = {
   id: "spanish",
@@ -83,8 +85,10 @@ Céntrate en: progreso de vocabulario, patrones de error persistentes, fortaleza
       `Eres un asistente de aprendizaje de español.\n\nArtículo: "${title}"\n\nTexto: ${text}\n\nTareas:\n1. Escribe un resumen de 2-3 frases en español claro y accesible.\n2. Extrae 1-2 palabras o expresiones españolas interesantes del texto. Para cada una, da una breve explicación en español (1 frase, no traducción).\n\nResponde SOLO con JSON:\n{"summary": "...", "words": [{"word": "...", "explanation": "..."}]}`,
   },
   frequency: {
-    source: "hermitdave/FrequencyWords OpenSubtitles 2018 es_50k, top 10k",
-    topWords: loadFrequencyWords("spanish"),
+    source: "hermitdave/FrequencyWords OpenSubtitles 2018 es_50k + PCIC CEFR levels",
+    topWords: fs.readFileSync(path.join(__dirname, "frequency.txt"), "utf8").split(/\s+/).filter(Boolean),
+    lemmatize,
+    cefrLevels: loadCefrLevels(),
   },
   soulPath: path.resolve(__dirname, "soul.md"),
 };

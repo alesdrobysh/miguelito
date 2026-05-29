@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "rm -rf dist && tsc -p tsconfig.build.json && cd src && find languages -name \"soul.md\" -o -path \"languages/frequency/*.txt\" | rsync -R --files-from=- . ../dist/",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && cd src && find languages -name \"soul.md\" -o -path \"languages/spanish/*.txt\" -o -path \"languages/spanish/*.tsv\" | rsync -R --files-from=- . ../dist/",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "db:consolidate": "tsx scripts/consolidate-db.ts",
