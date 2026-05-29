@@ -1,18 +1,16 @@
 import type { LanguageConfig } from "./LanguageConfig.js";
 import { SpanishLanguage } from "./spanish/index.js";
-import { PolishLanguage } from "./polish/index.js";
 
-export { SpanishLanguage, PolishLanguage };
+export { SpanishLanguage };
+
+const ACTIVE_LANGUAGES = [SpanishLanguage] as const;
 
 export function listAvailableLanguages(): LanguageConfig[] {
-  return [SpanishLanguage, PolishLanguage];
+  return [...ACTIVE_LANGUAGES];
 }
 
 export function loadLanguage(id: string): LanguageConfig {
-  switch (id) {
-    case "spanish": return SpanishLanguage;
-    case "polish": return PolishLanguage;
-    default:
-      throw new Error(`Unknown language: "${id}". Supported: spanish, polish`);
-  }
+  const language = ACTIVE_LANGUAGES.find((lang) => lang.id === id);
+  if (language) return language;
+  throw new Error(`Unknown language: "${id}". Supported: ${ACTIVE_LANGUAGES.map((lang) => lang.id).join(", ")}`);
 }

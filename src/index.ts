@@ -30,16 +30,13 @@ async function main() {
 
 
   if (config.transport === "unified") {
-    const telegramBots = [
-      { language: "polish", token: config.telegramBotTokens.polish! },
-      { language: "spanish", token: config.telegramBotTokens.spanish! },
-    ];
-
-    for (const bot of telegramBots) {
-      const transport = createTelegramTransport(config, bot.language, bot.token);
-      const rt = manager.runtime(bot.language);
+    for (const language of manager.languages().map((lang) => lang.id)) {
+      const token = config.telegramBotTokens[language];
+      if (!token) throw new Error(`Missing Telegram token for active language: ${language}`);
+      const transport = createTelegramTransport(config, language, token);
+      const rt = manager.runtime(language);
       startLanguageScheduler(config, rt, transport);
-      startTelegramTransport(manager, config, bot.language, transport);
+      startTelegramTransport(manager, config, language, transport);
     }
 
     return;

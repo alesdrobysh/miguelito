@@ -11,11 +11,14 @@ describe("loadLanguage", () => {
     expect(lang.calibrationThresholds.morphology).toBe(0.75);
   });
 
-  it("returns Polish config", () => {
-    const lang = loadLanguage("polish");
-    expect(lang.id).toBe("polish");
-    expect(lang.errorCategories).toContain("case");
-    expect(lang.morphologyCategories).toContain("aspect");
+  it("keeps Polish inactive in the registry while allowing the config to stay in-tree", async () => {
+    expect(listAvailableLanguages().map((lang) => lang.id)).toEqual(["spanish"]);
+    expect(() => loadLanguage("polish")).toThrow('Unknown language: "polish"');
+
+    const { PolishLanguage } = await import("./polish/index.js");
+    expect(PolishLanguage.id).toBe("polish");
+    expect(PolishLanguage.errorCategories).toContain("case");
+    expect(PolishLanguage.morphologyCategories).toContain("aspect");
   });
 
   it("throws for unknown language", () => {

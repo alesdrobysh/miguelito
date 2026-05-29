@@ -11,7 +11,6 @@ import type { LLMProvider } from "./providers/interfaces.js";
 const MIN_ENV = {
   PROVIDER: "ollama",
   TRANSPORT: "unified",
-  TELEGRAM_POLISH_BOT_TOKEN: "pl-token",
   TELEGRAM_SPANISH_BOT_TOKEN: "es-token",
   TELEGRAM_CHAT_ID: "279737838",
 } as Record<string, string>;
@@ -72,24 +71,22 @@ describe("runtime config", () => {
     expect(config.dreamMemoryPath).toBe(path.join(tmpDir, "memory", "MEMORY.md"));
   });
 
-  it("accepts TRANSPORT=unified with separate Telegram bot tokens for Polish and Spanish", () => {
+  it("accepts TRANSPORT=unified with bot tokens for active languages", () => {
     const config = loadConfig(env({
       TRANSPORT: "unified",
       TELEGRAM_BOT_TOKEN: undefined,
-      TELEGRAM_POLISH_BOT_TOKEN: "pl-token",
       TELEGRAM_SPANISH_BOT_TOKEN: "es-token",
       TELEGRAM_CHAT_ID: "279737838",
     }));
 
     expect(config.transport).toBe("unified");
-    expect(config.telegramBotTokens).toEqual({ polish: "pl-token", spanish: "es-token" });
+    expect(config.telegramBotTokens).toEqual({ spanish: "es-token" });
   });
 
-  it("rejects TRANSPORT=unified when either language bot token is missing", () => {
+  it("rejects TRANSPORT=unified when an active language bot token is missing", () => {
     expect(() => loadConfig(env({
       TRANSPORT: "unified",
       TELEGRAM_BOT_TOKEN: undefined,
-      TELEGRAM_POLISH_BOT_TOKEN: "pl-token",
       TELEGRAM_SPANISH_BOT_TOKEN: undefined,
       TELEGRAM_CHAT_ID: "279737838",
     }))).toThrow(/TELEGRAM_SPANISH_BOT_TOKEN/);
@@ -99,8 +96,8 @@ describe("runtime config", () => {
     expect(() => loadConfig(env({ TRANSPORT: "web" }))).toThrow(/Unsupported TRANSPORT: web/);
   });
 
-  it("lists all bundled languages for unified runtime", () => {
-    expect(listAvailableLanguages().map((l) => l.id)).toEqual(["spanish", "polish"]);
+  it("lists only active languages for unified runtime while inactive configs can remain in-tree", () => {
+    expect(listAvailableLanguages().map((l) => l.id)).toEqual(["spanish"]);
   });
 });
 
@@ -175,18 +172,17 @@ describe("runtime manager", () => {
     manager.close();
   });
 
-  it("loads all languages for unified transport so Telegram bots share one DB instance per language", async () => {
+  it("loads active languages for unified transport so Telegram bots share one DB instance", async () => {
     const config = loadConfig(env({
       TRANSPORT: "unified",
       DATA_DIR: tmpDir,
-      TELEGRAM_POLISH_BOT_TOKEN: "pl-token",
       TELEGRAM_SPANISH_BOT_TOKEN: "es-token",
       TELEGRAM_CHAT_ID: "279737838",
     }));
     const manager = await createRuntimeManager(config, { provider: new FakeProvider() });
 
     expect(manager.hasLanguage("spanish")).toBe(true);
-    expect(manager.hasLanguage("polish")).toBe(true);
+    expect(manager.hasLanguage("polish")).toBe(false);
     expect(manager.hasLanguage("belarusian")).toBe(false);
     manager.close();
     expect(fs.existsSync(path.join(tmpDir, "buddy.db"))).toBe(true);
@@ -194,20 +190,12 @@ describe("runtime manager", () => {
     expect(fs.existsSync(path.join(tmpDir, "buddy-polish.db"))).toBe(false);
   });
 
-  it("handles multiple languages in one process with isolated chat histories", async () => {
+  it("rejects inactive languages at runtime", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const manager = await createRuntimeManager(config, { provider: new FakeProvider() });
 
-    const es = await manager.handleMessage("spanish", 777, "test-user", "hola");
-    const pl = await manager.handleMessage("polish", 777, "test-user", "cześć");
-
-    expect(es).toBe("echo:hola");
-    expect(pl).toBe("echo:cześć");
-
-    const esHistory = await manager.getChatHistory("spanish", 777, 10);
-    const plHistory = await manager.getChatHistory("polish", 777, 10);
-    expect(esHistory.map((m) => m.content)).toEqual(["hola", "echo:hola"]);
-    expect(plHistory.map((m) => m.content)).toEqual(["cześć", "echo:cześć"]);
+    await expect(manager.handleMessage("spanish", 777, "test-user", "hola")).resolves.toBe("echo:hola");
+    await expect(manager.handleMessage("polish", 777, "test-user", "cześć")).rejects.toThrow("Unknown language: polish");
 
     manager.close();
   });
@@ -329,55 +317,17 @@ describe("runtime manager", () => {
     manager.close();
   });
 
-  it("localizes Polish practice prompts, feedback, and stop message", async () => {
-    const config = loadConfig(env({ DATA_DIR: tmpDir }));
-    const evaluator = new FakeProvider([{ grade: 3, note: "Dobra poprawka." }]);
-    const manager = await createRuntimeManager(config, { provider: new FakeProvider(), evaluatorProvider: evaluator });
-    const db = manager.runtime("polish").db;
-    await db.addLearningItem({
-      type: "correction",
-      title: "Zrobiłem decyzję → Podjąłem decyzję",
-      explanation_l1: "Kalka z angielskiego.",
-      priority: 0.95,
-    });
-    await db.addLearningItem({ type: "phrase", title: "podjąć decyzję", priority: 0.8 });
-
-    const practice = await manager.handleMessage("polish", 777, "telegram-user", "/practice");
-    const feedback = await manager.handleMessage("polish", 777, "telegram-user", "Podjąłem decyzję.");
-    const stopped = await manager.handleMessage("polish", 777, "telegram-user", "/practice stop");
-
-    expect(practice).toContain("🎯 Ćwiczenie");
-    expect(practice).toContain("Popraw zdanie:");
-    expect(practice).toContain("Pamiętaj: Kalka z angielskiego.");
-    expect(feedback).toContain("✅ Ćwiczenie ukończone");
-    expect(feedback).toContain("Dobra poprawka.");
-    expect(feedback).toContain("Następne ćwiczenie");
-    expect(feedback).toContain("Zwrot: podjąć decyzję");
-    expect(stopped).toContain("Ćwiczenie zatrzymane");
-    for (const englishLeak of ["Practice complete", "Next item", "Hint", "Practice stopped", "Phrase:"]) {
-      expect(`${practice}\n${feedback}\n${stopped}`).not.toContain(englishLeak);
-    }
-
-    manager.close();
-  });
-
   it("localizes deterministic practice grading notes when the evaluator is unavailable", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const manager = await createRuntimeManager(config, { provider: new FakeProvider(), evaluatorProvider: new FakeProvider() });
     const spanishDb = manager.runtime("spanish").db;
-    const polishDb = manager.runtime("polish").db;
     await spanishDb.addLearningItem({ type: "correction", title: "yo es → yo soy", priority: 0.95 });
-    await polishDb.addLearningItem({ type: "correction", title: "Zrobiłem decyzję → Podjąłem decyzję", priority: 0.95 });
 
     await manager.handleMessage("spanish", 777, "telegram-user", "/practice");
     const spanishFeedback = await manager.handleMessage("spanish", 777, "telegram-user", "yo soy");
-    await manager.handleMessage("polish", 777, "telegram-user", "/practice");
-    const polishFeedback = await manager.handleMessage("polish", 777, "telegram-user", "Podjąłem decyzję");
 
     expect(spanishFeedback).toContain("Parece que usaste la forma corregida.");
-    expect(polishFeedback).toContain("Wygląda na to, że użyłeś poprawionej formy.");
-    expect(`${spanishFeedback}\n${polishFeedback}`).not.toContain("Looks like you used the corrected form.");
+    expect(spanishFeedback).not.toContain("Looks like you used the corrected form.");
     manager.close();
   });
-
 });

@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import path from "path";
+import { listAvailableLanguages } from "../languages/index.js";
 
 dotenv.config();
 
@@ -7,7 +8,7 @@ export interface Config {
   provider: "openrouter" | "ollama";
   transport: "telegram" | "tui" | "unified";
   telegramToken: string;
-  telegramBotTokens: Partial<Record<"polish" | "spanish", string>>;
+  telegramBotTokens: Record<string, string | undefined>;
   openrouterApiKey: string;
   openrouterModel: string;
   evaluatorModel: string;
@@ -38,10 +39,10 @@ export function loadConfig(
     throw new Error(`Unsupported TRANSPORT: ${transport}`);
   }
   const telegramToken = env.TELEGRAM_BOT_TOKEN ?? "";
-  const telegramBotTokens: Config["telegramBotTokens"] = {
-    polish: env.TELEGRAM_POLISH_BOT_TOKEN ?? undefined,
-    spanish: env.TELEGRAM_SPANISH_BOT_TOKEN ?? undefined,
-  };
+  const activeLanguages = listAvailableLanguages();
+  const telegramBotTokens: Config["telegramBotTokens"] = Object.fromEntries(
+    activeLanguages.map((lang) => [lang.id, env[`TELEGRAM_${lang.id.toUpperCase().replace(/[^A-Z0-9]/g, "_")}_BOT_TOKEN`] ?? undefined]),
+  );
   const openrouterApiKey = env.OPENROUTER_API_KEY ?? "";
   const openrouterModel = env.OPENROUTER_MODEL ?? "google/gemini-2.0-flash-lite";
   const evaluatorModel = env.EVALUATOR_MODEL ?? "google/gemini-2.5-flash-lite";
@@ -68,8 +69,10 @@ export function loadConfig(
     if (!telegramChatId) throw new Error("TELEGRAM_CHAT_ID is required when TRANSPORT=telegram");
   }
   if (transport === "unified") {
-    if (!telegramBotTokens.polish) throw new Error("TELEGRAM_POLISH_BOT_TOKEN is required when TRANSPORT=unified");
-    if (!telegramBotTokens.spanish) throw new Error("TELEGRAM_SPANISH_BOT_TOKEN is required when TRANSPORT=unified");
+    for (const lang of activeLanguages) {
+      const envName = `TELEGRAM_${lang.id.toUpperCase().replace(/[^A-Z0-9]/g, "_")}_BOT_TOKEN`;
+      if (!telegramBotTokens[lang.id]) throw new Error(`${envName} is required when TRANSPORT=unified`);
+    }
     if (!telegramChatId) throw new Error("TELEGRAM_CHAT_ID is required when TRANSPORT=unified");
   }
 
