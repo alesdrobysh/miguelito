@@ -68,9 +68,9 @@ describe("config provider field", () => {
     expect(config.evaluatorModel).toBe("eval-model");
   });
 
-  it("defaults evaluator model to the main OpenRouter model", () => {
+  it("defaults evaluator model to Gemini 2.5 Flash Lite independent of the main OpenRouter model", () => {
     const config = loadConfig(env({ OPENROUTER_MODEL: "main-model" }));
-    expect(config.evaluatorModel).toBe("main-model");
+    expect(config.evaluatorModel).toBe("google/gemini-2.5-flash-lite");
   });
 
   it("defaults ollamaApiKey to empty string", () => {
