@@ -250,7 +250,7 @@ export class PostTurnProcessor {
       if (learningId !== null) learningItemsAdded++;
     }
 
-    const promoted = await this.deps.vocab.promoteVocabCandidates({ maxPromotions: 2, minPriority: 0.75, maxActiveLearningItems: 40 });
+    const promoted = await this.deps.vocab.promoteVocabCandidates({ maxPromotions: 2, minPriority: 0.65, maxActiveLearningItems: 40 });
     vocabAdded += promoted.length;
 
     const activeAttempts = await this.deps.vocab.listActiveVocabReviewAttempts(10);
