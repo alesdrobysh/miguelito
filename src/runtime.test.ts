@@ -143,16 +143,20 @@ describe("runtime manager", () => {
   });
 
 
-  it("uses practice as the only visible learner surface and reports the queue briefly", async () => {
+  it("redirects practice commands back to normal conversation instead of starting drills", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
-    const manager = await createRuntimeManager(config, { provider: new FakeProvider() });
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
     const db = manager.runtime("spanish").db;
-    const future = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-    await db.addLearningItem({ type: "phrase", title: "me cuesta + infinitivo", due_at: future, priority: 0.8 });
+    await db.addLearningItem({ type: "phrase", title: "me cuesta + infinitivo", priority: 0.8 });
 
-    const reply = await manager.handleMessage("spanish", 777, "telegram-user", "/practice");
+    const practice = await manager.handleMessage("spanish", 777, "telegram-user", "/practice");
+    const practiceStop = await manager.handleMessage("spanish", 777, "telegram-user", "/practice stop");
 
-    expect(reply).toBe("Tienes 1 elemento guardado; todavía nada toca practicar. Escribe naturalmente y volveré a sacarlo cuando toque.");
+    expect(practice).toBe("Escríbeme normalmente; yo recordaré lo útil y lo traeré de vuelta en la conversación.");
+    expect(practiceStop).toBe("Escríbeme normalmente; yo recordaré lo útil y lo traeré de vuelta en la conversación.");
+    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(0);
+    expect(provider.chatCalls).toHaveLength(0);
     manager.close();
   });
 
@@ -200,118 +204,23 @@ describe("runtime manager", () => {
     manager.close();
   });
 
-  it("starts practice with exactly one active item at a time", async () => {
-    const config = loadConfig(env({ DATA_DIR: tmpDir }));
-    const manager = await createRuntimeManager(config, { provider: new FakeProvider() });
-    const db = manager.runtime("spanish").db;
-    await db.addLearningItem({
-      type: "correction",
-      title: "yo es → yo soy",
-      explanation_l1: "Use soy with yo for ser.",
-      prompt_l2: "Corrige: yo es estudiante",
-      priority: 0.95,
-    });
-    await db.addLearningItem({
-      type: "grammar_point",
-      title: "por vs para",
-      explanation_l1: "Purpose usually uses para.",
-      priority: 0.8,
-    });
-    await db.addLearningItem({ type: "phrase", title: "me cuesta + infinitivo", priority: 0.7 });
-
-    const practice = await manager.handleMessage("spanish", 777, "telegram-user", "/practice");
-
-    expect(practice).toContain("🎯 Práctica");
-    expect(practice).toContain("Reescribe la frase correctamente:");
-    expect(practice).toContain("Corrige: yo es estudiante");
-    expect(practice).toContain("Pista: Use soy with yo for ser.");
-    expect(practice).not.toContain("2. Grammar");
-    expect(practice).not.toContain("3. Phrase");
-    expect(practice).not.toContain("Hint");
-    expect(practice).not.toContain("echo:/practice");
-    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(1);
-    manager.close();
-  });
-
-  it("grades the next learner message with compact feedback and immediately offers the next practice item", async () => {
-    const config = loadConfig(env({ DATA_DIR: tmpDir }));
-    const provider = new FakeProvider();
-    const evaluator = new FakeProvider([{ grade: 3, note: "Correct rewrite.", corrected_answer: "Yo soy estudiante." }]);
-    const manager = await createRuntimeManager(config, { provider, evaluatorProvider: evaluator });
-    const db = manager.runtime("spanish").db;
-    await db.addLearningItem({
-      type: "correction",
-      title: "yo es → yo soy",
-      explanation_l1: "Use soy with yo for ser.",
-      prompt_l2: "Corrige: yo es estudiante",
-      priority: 0.95,
-    });
-    await db.addLearningItem({
-      type: "grammar_point",
-      title: "por vs para",
-      explanation_l1: "Purpose usually uses para.",
-      priority: 0.8,
-    });
-
-    await manager.handleMessage("spanish", 777, "telegram-user", "/practice");
-    const feedback = await manager.handleMessage("spanish", 777, "telegram-user", "Yo soy estudiante.");
-
-    expect(feedback).toContain("✅ Práctica completada");
-    expect(feedback).toContain("Correct rewrite.");
-    expect(feedback).not.toContain("Respuesta sugerida");
-    expect(feedback).toContain("Siguiente ejercicio");
-    expect(feedback).toContain("Gramática: por vs para");
-    expect(feedback).not.toContain("Practice complete");
-    expect(feedback).not.toContain("Next item");
-    expect(feedback).not.toContain("echo:Yo soy estudiante");
-    expect(provider.chatCalls).toHaveLength(0);
-    const activeAttempts = await db.listActiveLearningPracticeAttempts(10);
-    expect(activeAttempts).toHaveLength(1);
-    const items = await db.listLearningItems("active", 10);
-    const completed = items.find((item) => item.title === "yo es → yo soy")!;
-    expect(completed.reps).toBe(1);
-    expect(completed.last_practiced_at).toBeTruthy();
-    expect(completed.due_at).toBeTruthy();
-    manager.close();
-  });
-
-  it("stops an active practice session without grading the next normal message", async () => {
+  it("does not let abandoned historical practice attempts hijack normal chat", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const provider = new FakeProvider();
     const manager = await createRuntimeManager(config, { provider });
     const db = manager.runtime("spanish").db;
-    await db.addLearningItem({ type: "phrase", title: "me cuesta + infinitivo", priority: 0.8 });
+    const itemId = await db.addLearningItem({ type: "correction", title: "yo es → yo soy", priority: 0.95 });
+    expect(itemId).not.toBeNull();
+    await db.startLearningPracticeAttempt({ learning_item_id: itemId!, prompt_text: "Corrige: yo es estudiante" });
 
-    await manager.handleMessage("spanish", 777, "telegram-user", "/practice");
-    const stopped = await manager.handleMessage("spanish", 777, "telegram-user", "/practice stop");
     const normal = await manager.handleMessage("spanish", 777, "telegram-user", "hola normal");
 
-    expect(stopped).toContain("Práctica detenida");
-    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(0);
     expect(normal).toBe("echo:hola normal");
     expect(provider.chatCalls).toHaveLength(1);
+    const attempts = await db.listActiveLearningPracticeAttempts(10);
+    expect(attempts).toHaveLength(1);
+    expect(attempts[0].user_response).toBeNull();
     manager.close();
   });
 
-  it("says practice is empty when there are no active learning items", async () => {
-    const config = loadConfig(env({ DATA_DIR: tmpDir }));
-    const manager = await createRuntimeManager(config, { provider: new FakeProvider() });
-
-    await expect(manager.handleMessage("spanish", 777, "telegram-user", "/practice")).resolves.toBe("Todavía no hay elementos activos para practicar.");
-    manager.close();
-  });
-
-  it("localizes deterministic practice grading notes when the evaluator is unavailable", async () => {
-    const config = loadConfig(env({ DATA_DIR: tmpDir }));
-    const manager = await createRuntimeManager(config, { provider: new FakeProvider(), evaluatorProvider: new FakeProvider() });
-    const spanishDb = manager.runtime("spanish").db;
-    await spanishDb.addLearningItem({ type: "correction", title: "yo es → yo soy", priority: 0.95 });
-
-    await manager.handleMessage("spanish", 777, "telegram-user", "/practice");
-    const spanishFeedback = await manager.handleMessage("spanish", 777, "telegram-user", "yo soy");
-
-    expect(spanishFeedback).toContain("Parece que usaste la forma corregida.");
-    expect(spanishFeedback).not.toContain("Looks like you used the corrected form.");
-    manager.close();
-  });
 });
