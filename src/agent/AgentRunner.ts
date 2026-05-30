@@ -101,7 +101,9 @@ export class AgentRunner {
         learning: toolCtx.learning ?? (toolCtx.vocab as any),
         lang,
       });
-      await postTurn.process({ userMessage, assistantText: totalText, chatHistory });
+      postTurn.process({ userMessage, assistantText: totalText, chatHistory }).catch((err) =>
+        log.warn({ err }, "post-turn evaluation failed")
+      );
     }
 
     log.info({ totalIters: i + 1, toolCallsMade, responseLength: totalText.length }, 'run complete');
