@@ -39,34 +39,6 @@ describe("integration: vocab add + score + due cycle", () => {
   });
 });
 
-describe("integration: vocab list with buckets", () => {
-  it("filters by bucket after scoring some words", async () => {
-    const tools = createTools({ vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, provider: null }, SpanishLanguage);
-    const addTool = tools.get("miguelito_vocab_add")!;
-    const scoreTool = tools.get("miguelito_vocab_score")!;
-    const listTool = tools.get("miguelito_vocab_list")!;
-
-    await addTool.execute({ word: "gato", translation: "cat" });
-    await addTool.execute({ word: "perro", translation: "dog" });
-    await addTool.execute({ word: "casa", translation: "house" });
-
-    const allBefore = await listTool.execute({ bucket: "all" });
-    expect((allBefore as any).count).toBe(3);
-
-    const newBefore = await listTool.execute({ bucket: "new" });
-    expect((newBefore as any).count).toBe(3);
-
-    await scoreTool.execute({ word: "gato", quality: "4" });
-    await scoreTool.execute({ word: "perro", quality: "4" });
-
-    const newAfter = await listTool.execute({ bucket: "new" });
-    expect((newAfter as any).count).toBe(1);
-    expect((newAfter as any).items[0].word).toBe("casa");
-
-    const learningAfter = await listTool.execute({ bucket: "learning" });
-    expect((learningAfter as any).count).toBe(2);
-  });
-});
 
 describe("integration: error log + summary cycle", () => {
   it("logs errors and verifies categories in progress summary", async () => {
@@ -164,23 +136,6 @@ describe("integration: progress summary aggregates", () => {
   });
 });
 
-describe("integration: vocab export produces valid CSV", () => {
-  it("exports words as CSV with correct content", async () => {
-    const tools = createTools({ vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, provider: null }, SpanishLanguage);
-    const addTool = tools.get("miguelito_vocab_add")!;
-    const exportTool = tools.get("miguelito_vocab_export")!;
-
-    await addTool.execute({ word: "gato", context: "El gato duerme" });
-    await addTool.execute({ word: "perro", context: "El perro corre" });
-
-    const result = await exportTool.execute({ format: "csv" });
-    expect((result as any).ok).toBe(true);
-    expect((result as any).count).toBe(2);
-    expect((result as any).data).toContain("chunk_l2,anchor");
-    expect((result as any).data).toContain("gato");
-    expect((result as any).data).toContain("perro");
-  });
-});
 
 describe("integration: tool registry creates all expected tools", () => {
   it("createTools returns all tool names", () => {
@@ -188,21 +143,18 @@ describe("integration: tool registry creates all expected tools", () => {
 
     const expectedNames = [
       "miguelito_vocab_add",
-      "miguelito_vocab_list",
       "miguelito_vocab_score",
-      "miguelito_vocab_export",
       "miguelito_vocab_attempt_start",
       "miguelito_vocab_attempt_finish",
       "miguelito_error_log",
       "miguelito_profile_set",
       "miguelito_read_link",
-      "miguelito_reading_suggest",
       "miguelito_interest_add",
       "miguelito_progress_summary",
       "miguelito_turn_annotate",
     ];
 
-    expect(tools.size).toBe(13);
+    expect(tools.size).toBe(10);
     for (const name of expectedNames) {
       expect(tools.has(name)).toBe(true);
     }
@@ -215,7 +167,7 @@ describe("integration: toolsToOpenAI produces valid format", () => {
     const openai = toolsToOpenAI(tools);
 
     expect(Array.isArray(openai)).toBe(true);
-    expect(openai).toHaveLength(13);
+    expect(openai).toHaveLength(10);
 
     for (const item of openai as any[]) {
       expect(item.type).toBe("function");
