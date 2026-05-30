@@ -59,15 +59,6 @@ export function createEvaluatorProvider(config: Config): LLMProvider {
 
 const MODEL_HISTORY_LIMIT = 50;
 
-function isPracticeIntent(text: string, _lang: LanguageConfig): boolean {
-  const normalized = text.trim().toLowerCase();
-  if (!normalized || normalized.startsWith("/")) return false;
-  const common = ["practice", "practise", "exercise", "drill", "review"];
-  const spanish = ["practicar", "práctica", "practica", "ejercicio", "repasar", "repaso", "entrenar"];
-  const russian = ["потрен", "практик", "упражнен", "повтор"];
-  const words = [...common, ...spanish, ...russian];
-  return words.some((word) => normalized.includes(word));
-}
 
 function formatStart(lang: LanguageConfig): string {
   return [
@@ -275,12 +266,6 @@ export class RuntimeManager {
     if (practiceReply !== undefined) {
       if (practiceReply) await db.addChatMessage(chatId, "assistant", practiceReply, convState.session_id);
       return practiceReply || null;
-    }
-
-    if (isPracticeIntent(text, rt.lang)) {
-      const intentReply = await this.startPracticeReply(rt);
-      if (intentReply) await db.addChatMessage(chatId, "assistant", intentReply, convState.session_id);
-      return intentReply || null;
     }
 
     const result = await agentRunner.run(text, history);
