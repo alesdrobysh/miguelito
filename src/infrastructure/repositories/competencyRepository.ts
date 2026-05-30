@@ -23,7 +23,7 @@ export class SqlCompetencyRepository extends SqlRepository implements Competency
     return d.toISOString().slice(0, 19).replace("T", " ");
   }
 
-  private updateVectorFromAnnotation(ann: TurnAnnotationInput, since: string): void {
+  private updateVectorFromAnnotation(ann: TurnAnnotationInput): void {
     const DECAY = 0.85;
     const RECEPTION_ALPHA = 0.2;
     const RARITY_ALPHA = 0.15;
@@ -40,14 +40,9 @@ export class SqlCompetencyRepository extends SqlRepository implements Competency
 
     const morphObligatory = ann.obligatory.filter((o) => this.morphologyTypes.has(o.type)).length;
     if (morphObligatory > 0) {
-      const morphCats = Array.from(this.morphologyTypes);
-      const placeholders = morphCats.map(() => "?").join(",");
-      const recentMorphErrors = this.queryAll(
-        `SELECT id FROM error_log WHERE language = ? AND created_at >= ? AND category IN (${placeholders})`,
-        [this.languageId, since, ...morphCats]
-      );
+      const morphErrors = ann.morphology_errors ?? 0;
       morphT += morphObligatory;
-      morphS += Math.max(0, morphObligatory - recentMorphErrors.length);
+      morphS += Math.max(0, morphObligatory - morphErrors);
       morphObs++;
     }
 
@@ -80,7 +75,6 @@ export class SqlCompetencyRepository extends SqlRepository implements Competency
   }
 
   async insertTurnAnnotation(ann: TurnAnnotationInput): Promise<void> {
-    const since60s = SqlCompetencyRepository.utcAgoIso(60);
     this.db.run(
       `INSERT INTO turn_annotations
         (session_id, turn_number, obligatory_json, used_json, naturalness, comprehension, tunit_length, had_subordination, lexical_rarity, self_correction, language)
@@ -99,7 +93,7 @@ export class SqlCompetencyRepository extends SqlRepository implements Competency
         this.languageId,
       ]
     );
-    this.updateVectorFromAnnotation(ann, since60s);
+    this.updateVectorFromAnnotation(ann);
     this.save();
   }
 

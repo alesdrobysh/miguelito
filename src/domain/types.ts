@@ -246,6 +246,7 @@ export interface TurnAnnotationInput {
   had_subordination?: boolean;
   lexical_rarity?: number;
   self_correction?: boolean;
+  morphology_errors?: number;
 }
 
 export interface TurnAnnotation {

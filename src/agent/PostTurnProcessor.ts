@@ -169,7 +169,12 @@ export class PostTurnProcessor {
     let reviewsCompleted = 0;
     let annotationInserted = false;
 
-    const annotation = this.normalizeAnnotation(evaluation.annotation, _input);
+    const morphologyTypes = new Set(this.deps.lang.morphologyCategories);
+    const morphologyErrors = (evaluation.errors ?? []).filter((e) => {
+      const cat = this.clean(e.category).toLowerCase();
+      return morphologyTypes.has(cat);
+    }).length;
+    const annotation = this.normalizeAnnotation(evaluation.annotation, _input, morphologyErrors);
     await this.deps.competency.insertTurnAnnotation(annotation);
     await this.recordDifficultyWeightedEvidence(annotation, _input);
     annotationInserted = true;
@@ -310,8 +315,9 @@ export class PostTurnProcessor {
     };
   }
 
-  private normalizeAnnotation(raw: Partial<TurnAnnotationInput> | undefined, input: PostTurnProcessInput): TurnAnnotationInput {
+  private normalizeAnnotation(raw: Partial<TurnAnnotationInput> | undefined, input: PostTurnProcessInput, morphologyErrors: number): TurnAnnotationInput {
     const validCategories = new Set(this.deps.lang.errorCategories);
+    const morphologyTypes = new Set(this.deps.lang.morphologyCategories);
     const obligatory = Array.isArray(raw?.obligatory)
       ? raw!.obligatory
           .map((o) => ({ type: this.clean((o as { type?: string }).type) }))
@@ -326,6 +332,7 @@ export class PostTurnProcessor {
       : "smooth";
     const assistantDifficulty = analyzeTextDifficulty(input.assistantText, this.deps.lang);
     const modelRarity = Math.max(0, Math.min(1, Number(raw?.lexical_rarity ?? 0) || 0));
+    const morphObligatoryCount = obligatory.filter((o) => morphologyTypes.has(o.type)).length;
     return {
       obligatory,
       used,
@@ -335,6 +342,7 @@ export class PostTurnProcessor {
       had_subordination: Boolean(raw?.had_subordination),
       lexical_rarity: Math.max(modelRarity, assistantDifficulty.lexicalDifficulty),
       self_correction: Boolean(raw?.self_correction),
+      morphology_errors: Math.min(morphologyErrors, morphObligatoryCount),
     };
   }
 
