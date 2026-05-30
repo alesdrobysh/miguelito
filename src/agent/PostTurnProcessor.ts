@@ -174,7 +174,8 @@ export class PostTurnProcessor {
       const cat = this.clean(e.category).toLowerCase();
       return morphologyTypes.has(cat);
     }).length;
-    const annotation = this.normalizeAnnotation(evaluation.annotation, _input, morphologyErrors);
+    const { session } = await this.deps.session.getConversationState();
+    const annotation = this.normalizeAnnotation(evaluation.annotation, _input, morphologyErrors, session.session_id, session.turn_count);
     await this.deps.competency.insertTurnAnnotation(annotation);
     await this.recordDifficultyWeightedEvidence(annotation, _input);
     annotationInserted = true;
@@ -315,7 +316,7 @@ export class PostTurnProcessor {
     };
   }
 
-  private normalizeAnnotation(raw: Partial<TurnAnnotationInput> | undefined, input: PostTurnProcessInput, morphologyErrors: number): TurnAnnotationInput {
+  private normalizeAnnotation(raw: Partial<TurnAnnotationInput> | undefined, input: PostTurnProcessInput, morphologyErrors: number, sessionId?: string, turnNumber?: number): TurnAnnotationInput {
     const validCategories = new Set(this.deps.lang.errorCategories);
     const morphologyTypes = new Set(this.deps.lang.morphologyCategories);
     const obligatory = Array.isArray(raw?.obligatory)
@@ -334,6 +335,8 @@ export class PostTurnProcessor {
     const modelRarity = Math.max(0, Math.min(1, Number(raw?.lexical_rarity ?? 0) || 0));
     const morphObligatoryCount = obligatory.filter((o) => morphologyTypes.has(o.type)).length;
     return {
+      session_id: sessionId,
+      turn_number: turnNumber,
       obligatory,
       used,
       naturalness,
