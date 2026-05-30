@@ -27,7 +27,7 @@ export interface LanguageConfig {
   promptText: {
     languageBlock: string;
     postHistoryReminder: string;
-    learnerProfileConfigured: (name: string, goal: string, correctionStyle: string) => string;
+    learnerProfileConfigured: (name: string, goal: string) => string;
     learnerProfileUnconfigured: string;
     conversationState: (turnCount: number, lastModes: string, moodHint: string, topicsTouched: string) => string;
     currentLearnerProfile: (args: {

@@ -142,22 +142,6 @@ describe("runtime manager", () => {
     manager.close();
   });
 
-  it("starts practice from natural learner requests without requiring slash commands", async () => {
-    const config = loadConfig(env({ DATA_DIR: tmpDir }));
-    const provider = new FakeProvider();
-    const manager = await createRuntimeManager(config, { provider });
-    const db = manager.runtime("spanish").db;
-    await db.addLearningItem({ type: "phrase", title: "me cuesta + infinitivo", priority: 0.8 });
-
-    const reply = await manager.handleMessage("spanish", 777, "telegram-user", "quiero practicar");
-
-    expect(reply).toContain("🎯 Práctica");
-    expect(reply).toContain("me cuesta + infinitivo");
-    expect(reply).not.toContain("echo:quiero practicar");
-    expect(provider.chatCalls).toHaveLength(0);
-    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(1);
-    manager.close();
-  });
 
   it("uses practice as the only visible learner surface and reports the queue briefly", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));

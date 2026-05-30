@@ -82,12 +82,11 @@ export class PromptBuilder {
     const langProfile = await this.repos.langProfile.getProfile();
 
     const name = sharedProfile?.name ?? null;
-    const correctionStyle = sharedProfile?.correction_style ?? null;
     const goal = langProfile?.goal ?? null;
-    const hasProfile = name || correctionStyle || goal;
+    const hasProfile = name || goal;
 
     const basicProfile = hasProfile
-      ? this.lang.promptText.learnerProfileConfigured(name ?? "—", goal ?? "—", correctionStyle ?? "inline")
+      ? this.lang.promptText.learnerProfileConfigured(name ?? "—", goal ?? "—")
       : this.lang.promptText.learnerProfileUnconfigured;
 
     let calibration: string | null = null;

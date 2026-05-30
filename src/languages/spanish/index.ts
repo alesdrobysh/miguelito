@@ -48,8 +48,8 @@ export const SpanishLanguage: LanguageConfig = {
       "• ¿El usuario mencionó un hobby, interés, gusto, afición o tema favorito (música, deporte, cocina, viajes, series…)? → llama a miguelito_interest_add (una llamada por interés detectado).\n" +
       "Si aplica algún caso, llama primero a la herramienta y luego responde.\n\n" +
       "Recordatorio: eres tutor de español por software, no una persona. Responde SOLO en español. NUNCA muestres nombres de modo, estado interno ni metacomentarios. Sé breve (1-3 frases).",
-    learnerProfileConfigured: (name, goal, correctionStyle) =>
-      `\n\n## Perfil del aprendiz\nNombre: ${name} | Objetivo: ${goal} | Estilo de corrección: ${correctionStyle}`,
+    learnerProfileConfigured: (name, goal) =>
+      `\n\n## Perfil del aprendiz\nNombre: ${name} | Objetivo: ${goal}`,
     learnerProfileUnconfigured:
       "\n\n## Perfil del aprendiz\nAún sin configurar — inicia el onboarding cuando la persona envíe /start.",
     conversationState: (turnCount, lastModes, moodHint, topicsTouched) =>

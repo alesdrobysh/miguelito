@@ -9,13 +9,12 @@ function profileSet(ctx: ToolContext) {
       properties: {
         name: { type: "string", description: "User's preferred name." },
         goal: { type: "string", description: "Main learning goal." },
-        correction_style: { type: "string", description: "inline, soft, or direct." },
       },
     },
     execute: async (args: Record<string, string>) => {
       const sharedFields: Record<string, string> = {};
       const langFields: Record<string, string> = {};
-      for (const key of ["name", "correction_style"]) {
+      for (const key of ["name"]) {
         const val = (args[key] ?? "").trim();
         if (val) sharedFields[key] = val;
       }
