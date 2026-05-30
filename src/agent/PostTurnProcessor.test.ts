@@ -73,7 +73,7 @@ describe("PostTurnProcessor", () => {
       annotation: { obligatory: [], used: [], naturalness: 1, comprehension: "smooth" },
       mode: "TEACH",
       errors: [{ user_text: "yo es", correct: "yo soy", category: "verb_conjugation", note: "ser conjugation" }],
-      vocabulary: [{ word: "me cuesta + [inf]", context: "Me cuesta levantarme temprano", anchor: "costar", reason: "corrective chunk", priority: 0.8 }],
+      vocabulary: [{ word: "me cuesta + [inf]", context: "Me cuesta levantarme temprano", anchor: "costar", reason: "corrective chunk", priority: 0.6 }],
       learning_items: [{ type: "grammar_point", title: "fui vs voy", explanation: "past vs present", priority: 0.9, practice_modes: ["short_drill"] }],
       reviews: [],
     });
@@ -95,7 +95,7 @@ describe("PostTurnProcessor", () => {
       annotation: { obligatory: [], used: [], naturalness: 1, comprehension: "smooth" },
       mode: "REACT",
       errors: [{ user_text: "yo es", correct: "yo soy", category: "verb_conjugation", note: "ser conjugation" }],
-      vocabulary: [{ word: "me cuesta + [inf]", context: "Me cuesta levantarme temprano", anchor: "costar", reason: "corrective chunk", priority: 0.8 }],
+      vocabulary: [{ word: "me cuesta + [inf]", context: "Me cuesta levantarme temprano", anchor: "costar", reason: "corrective chunk", priority: 0.6 }],
       reviews: [],
     });
 

@@ -124,12 +124,12 @@ export class PostTurnProcessor {
           context: "L2 context",
           anchor: "optional lemma",
           reason: "why it is useful",
-          priority: 0.8,
+          priority: "0.9=correction/explicitly asked, 0.7=useful conversational, 0.5=niche/too advanced",
           topic_tags: ["optional topic"],
           acceptable_variants: ["optional variant"],
           elicitation_cues: ["optional production cue"]
         }],
-        learning_items: [{ type: "grammar_point|correction|phrase|word|collocation|idiom|register_note|pronunciation", title: "por vs para", prompt_l2: "optional L2 prompt", explanation_l1: "short explanation", source_type: "user_question|conversation|correction", priority: 0.8, practice_modes: ["short_drill"] }],
+        learning_items: [{ type: "grammar_point|correction|phrase|word|collocation|idiom|register_note|pronunciation", title: "por vs para", prompt_l2: "optional L2 prompt", explanation_l1: "short explanation", source_type: "user_question|conversation|correction", priority: "0.9=correction/explicitly asked, 0.7=useful, 0.5=niche", practice_modes: ["short_drill"] }],
         reviews: [{ attempt_id: 123, word: "exact chunk_l2 from vocabulary", mode: "productive|receptive", user_response: "learner answer", target_used: true, accepted_variant: "actual form", hint_level: 0, grade: 3, note: "why" }],
       }),
       "Use empty arrays when there is nothing to extract. Grade reviews 1..3 only.",
@@ -244,7 +244,7 @@ export class PostTurnProcessor {
       if (learningId !== null) learningItemsAdded++;
     }
 
-    const promoted = await this.deps.vocab.promoteVocabCandidates({ maxPromotions: 2, minPriority: 0.85, maxActiveLearningItems: 40 });
+    const promoted = await this.deps.vocab.promoteVocabCandidates({ maxPromotions: 2, minPriority: 0.75, maxActiveLearningItems: 40 });
     vocabAdded += promoted.length;
 
     const activeAttempts = await this.deps.vocab.listActiveVocabReviewAttempts(10);
