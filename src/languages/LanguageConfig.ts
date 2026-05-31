@@ -51,7 +51,6 @@ export interface LanguageConfig {
     source: string;
     topWords: readonly string[];
     lemmatize?: (word: string) => string;
-    cefrLevels?: ReadonlyMap<string, import("../domain/frequency.js").CefrLevel>;
   };
   soulPath: string;
 }

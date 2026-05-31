@@ -368,7 +368,7 @@ export class PostTurnProcessor {
       comprehension,
       tunit_length: Math.max(1, Math.round(Number(raw?.tunit_length ?? 1) || 1)),
       had_subordination: Boolean(raw?.had_subordination),
-      lexical_rarity: Math.max(modelRarity, assistantDifficulty.lexicalDifficulty),
+      lexical_rarity: Math.max(modelRarity, assistantDifficulty.lexicalRarity),
       self_correction: Boolean(raw?.self_correction),
       morphology_errors: Math.min(morphologyErrors, morphObligatoryCount),
     };
@@ -406,11 +406,11 @@ export class PostTurnProcessor {
     await this.deps.competency.insertProficiencyEvidence({
       skill: "reception",
       dimension: "lexical",
-      level: assistantChallenge.estimatedLevel,
+      level: assistantChallenge.highestBand,
       outcome,
       confidence: assistantChallenge.tokensConsidered > 0 ? Math.max(0.35, Math.min(0.9, assistantChallenge.coverage || 0.5)) : 0.35,
-      weight: 1 + assistantChallenge.lexicalDifficulty,
-      evidence_text: `Comprehension=${annotation.comprehension}; assistant lexical level=${assistantChallenge.estimatedLevel}${rareWords ? `; hard tokens: ${rareWords}` : ""}.`,
+      weight: 1 + assistantChallenge.lexicalRarity,
+      evidence_text: `Comprehension=${annotation.comprehension}; assistant lexical band=${assistantChallenge.highestBand}; rarity=${assistantChallenge.lexicalRarity.toFixed(2)}${rareWords ? `; rare tokens: ${rareWords}` : ""}.`,
       challenge_json: JSON.stringify(assistantChallenge),
     });
 
@@ -419,11 +419,11 @@ export class PostTurnProcessor {
       await this.deps.competency.insertProficiencyEvidence({
         skill: "production",
         dimension: "lexical",
-        level: learnerProduction.estimatedLevel,
+        level: learnerProduction.highestBand,
         outcome: annotation.naturalness == null || annotation.naturalness >= 0.75 ? "success" : annotation.naturalness >= 0.45 ? "partial" : "fail",
         confidence: Math.max(0.35, Math.min(0.85, learnerProduction.coverage || 0.5)),
-        weight: 0.75 + learnerProduction.lexicalDifficulty,
-        evidence_text: `Learner produced ${learnerProduction.estimatedLevel} lexical material; naturalness=${annotation.naturalness ?? "unknown"}.`,
+        weight: 0.75 + learnerProduction.lexicalRarity,
+        evidence_text: `Learner produced lexical band=${learnerProduction.highestBand}; rarity=${learnerProduction.lexicalRarity.toFixed(2)}; naturalness=${annotation.naturalness ?? "unknown"}.`,
         challenge_json: JSON.stringify(learnerProduction),
       });
     }

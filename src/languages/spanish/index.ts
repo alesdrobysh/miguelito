@@ -2,7 +2,6 @@ import fs from "fs";
 import path from "path";
 import type { LanguageConfig } from "../LanguageConfig.js";
 import { lemmatize } from "./lemmatize.js";
-import { loadCefrLevels } from "./cefr.js";
 
 export const SpanishLanguage: LanguageConfig = {
   id: "spanish",
@@ -93,7 +92,6 @@ Céntrate en: progreso de vocabulario, patrones de error persistentes, fortaleza
     source: "hermitdave/FrequencyWords OpenSubtitles 2018 es_50k + PCIC CEFR levels",
     topWords: fs.readFileSync(path.join(__dirname, "frequency.txt"), "utf8").split(/\s+/).filter(Boolean),
     lemmatize,
-    cefrLevels: loadCefrLevels(),
   },
   soulPath: path.resolve(__dirname, "soul.md"),
 };

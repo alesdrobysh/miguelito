@@ -677,25 +677,25 @@ describe("BuddyDb turn annotations and competency vector", () => {
     expect(vec.syntax.confidence).toBe("low");
   });
 
-  it("stores difficulty-weighted proficiency evidence and exposes reception by level", async () => {
+  it("stores frequency-weighted proficiency evidence and exposes reception by frequency band", async () => {
     await db.insertProficiencyEvidence({
       skill: "reception",
       dimension: "lexical",
-      level: "B2",
+      level: "top_10k",
       outcome: "success",
       confidence: 0.9,
       weight: 1.7,
-      evidence_text: "Understood a B2 lexical challenge",
-      challenge_json: JSON.stringify({ lexicalDifficulty: 0.7 }),
+      evidence_text: "Understood a top_10k lexical-frequency challenge",
+      challenge_json: JSON.stringify({ lexicalRarity: 0.7 }),
     });
 
     const rows = await db.listProficiencyEvidence(10);
-    expect(rows[0].level).toBe("B2");
+    expect(rows[0].level).toBe("top_10k");
 
     const cv = await getCompetencyVector({ competency: db, vocab: db });
-    expect(cv.reception.byLevel.B2.score).toBeCloseTo(1);
-    expect(cv.reception.byLevel.B2.obs).toBe(1);
-    expect(cv.reception.byLevel.C1.score).toBeNull();
+    expect(cv.reception.byFrequencyBand.top_10k.score).toBeCloseTo(1);
+    expect(cv.reception.byFrequencyBand.top_10k.obs).toBe(1);
+    expect(cv.reception.byFrequencyBand.top_50k.score).toBeNull();
   });
 
   it("updateCompetencyVector patches specific fields", async () => {

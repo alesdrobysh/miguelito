@@ -283,7 +283,7 @@ export interface CompetencyVectorRow {
 export type ProficiencySkill = "reception" | "production" | "interaction";
 export type ProficiencyDimension = "lexical" | "syntax" | "idiom" | "abstraction" | "fluency";
 export type ProficiencyOutcome = "success" | "partial" | "fail";
-export type ProficiencyLevel = "A1" | "A2" | "B1" | "B2" | "C1" | "C2";
+export type ProficiencyLevel = "top_1k" | "top_3k" | "top_6k" | "top_10k" | "top_50k" | "rare_or_unknown";
 
 export interface ProficiencyEvidenceInput {
   skill: ProficiencySkill;

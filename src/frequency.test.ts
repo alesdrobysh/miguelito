@@ -8,13 +8,15 @@ describe("frequency-based difficulty", () => {
     const rare = analyzeTextDifficulty("prefiero soslayar la cuestión con parsimonia", SpanishLanguage);
 
     expect(SpanishLanguage.frequency?.topWords.length).toBeGreaterThanOrEqual(10_000);
-    expect(common.lexicalDifficulty).toBeLessThan(rare.lexicalDifficulty);
+    expect(common.lexicalRarity).toBeLessThan(rare.lexicalRarity);
     expect(rare.rareTokens.length).toBeGreaterThan(0);
+    expect(rare.highestBand).not.toBe("top_1k");
   });
 
-  it("does not treat OOV proper nouns and typos as C2 evidence by themselves", () => {
+  it("treats OOV proper nouns and typos as unknown frequency, not CEFR evidence", () => {
     const profile = analyzeTextDifficulty("Teide powerbank opcioces mapa-tyrystyczna", SpanishLanguage);
-    expect(["A1", "A2", "B1", "B2"]).toContain(profile.estimatedLevel);
+    expect(profile.highestBand).toBe("rare_or_unknown");
     expect(profile.rareTokens.map((t) => t.token)).toContain("teide");
+    expect(profile).not.toHaveProperty("estimatedLevel");
   });
 });

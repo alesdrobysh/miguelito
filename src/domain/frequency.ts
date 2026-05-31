@@ -1,18 +1,19 @@
 import type { LanguageConfig } from "../languages/LanguageConfig.js";
 
-export type CefrLevel = "A1" | "A2" | "B1" | "B2" | "C1" | "C2";
 export type FrequencyBand = "top_1k" | "top_3k" | "top_6k" | "top_10k" | "top_50k" | "rare_or_unknown";
 
 export interface TokenDifficulty {
   token: string;
   rank: number | null;
   band: FrequencyBand;
-  level: CefrLevel;
+  rarityScore: number;
 }
 
 export interface TextDifficultyProfile {
+  /** Frequency/rarity score in [0, 1], where 0 is very common and 1 is rare. */
+  lexicalRarity: number;
+  /** Back-compat alias for older callers; use lexicalRarity for new code. */
   lexicalDifficulty: number;
-  estimatedLevel: CefrLevel;
   highestBand: FrequencyBand;
   rareTokens: TokenDifficulty[];
   tokensConsidered: number;
@@ -20,27 +21,24 @@ export interface TextDifficultyProfile {
   source: string;
 }
 
-const LEVEL_SCORE: Record<CefrLevel, number> = { A1: 1, A2: 2, B1: 3, B2: 4, C1: 5, C2: 6 };
-const SCORE_LEVEL: CefrLevel[] = ["A1", "A2", "B1", "B2", "C1", "C2"];
 const BAND_SCORE: Record<FrequencyBand, number> = {
   top_1k: 0.10,
   top_3k: 0.25,
   top_6k: 0.45,
   top_10k: 0.62,
   top_50k: 0.80,
+  // Unknown/OOV is deliberately not treated as maximally rare evidence: it can
+  // be a typo, proper noun, foreign token, or unlisted inflection.
   rare_or_unknown: 0.50,
 };
-const BAND_LEVEL: Record<FrequencyBand, CefrLevel> = {
-  top_1k: "A1",
-  top_3k: "A2",
-  top_6k: "B1",
-  top_10k: "B2",
-  top_50k: "C1",
-  rare_or_unknown: "B2",
-};
-// Reverse map used when a CEFR override lowers the band.
-const LEVEL_BAND: Record<CefrLevel, FrequencyBand> = {
-  A1: "top_1k", A2: "top_3k", B1: "top_6k", B2: "top_10k", C1: "top_50k", C2: "top_50k",
+
+const BAND_RANK: Record<FrequencyBand, number> = {
+  top_1k: 1,
+  top_3k: 2,
+  top_6k: 3,
+  top_10k: 4,
+  top_50k: 5,
+  rare_or_unknown: 3,
 };
 
 const STOPLIKE = new Set([
@@ -53,7 +51,6 @@ export function analyzeTextDifficulty(text: string, lang: LanguageConfig): TextD
   const words = lang.frequency?.topWords ?? [];
   const source = lang.frequency?.source ?? "no frequency list configured";
   const lemmatize = lang.frequency?.lemmatize;
-  const cefrLevels = lang.frequency?.cefrLevels;
 
   const rank = new Map<string, number>();
   words.forEach((w, i) => rank.set(w.toLowerCase(), i + 1));
@@ -73,7 +70,7 @@ export function analyzeTextDifficulty(text: string, lang: LanguageConfig): TextD
   const rawTokens = tokenize(text);
   const tokens = rawTokens.filter((t) => t.length > 2 && !STOPLIKE.has(t));
   if (tokens.length === 0) {
-    return { lexicalDifficulty: 0.1, estimatedLevel: "A1", highestBand: "top_1k", rareTokens: [], tokensConsidered: 0, coverage: words.length ? 1 : 0, source };
+    return { lexicalRarity: 0.1, lexicalDifficulty: 0.1, highestBand: "top_1k", rareTokens: [], tokensConsidered: 0, coverage: words.length ? 1 : 0, source };
   }
 
   const analyzed = tokens.map((token): TokenDifficulty => {
@@ -81,36 +78,22 @@ export function analyzeTextDifficulty(text: string, lang: LanguageConfig): TextD
     const lemma = lemmatize ? lemmatize(token) : token;
     if (r === null && lemma !== token) r = lemmaRank.get(lemma) ?? null;
 
-    let band = rankToBand(r);
-    let level = BAND_LEVEL[band];
-
-    // CEFR override: if a curated level list assigns a lower (easier) level,
-    // use it — taking the minimum prevents mis-assignments from thematic lists
-    // where a common word appears only in an advanced domain context.
-    if (cefrLevels) {
-      const override = cefrLevels.get(token) ?? (lemma !== token ? cefrLevels.get(lemma) : undefined);
-      if (override && LEVEL_SCORE[override] < LEVEL_SCORE[level]) {
-        level = override;
-        band = LEVEL_BAND[override];
-      }
-    }
-
-    return { token, rank: r, band, level };
+    const band = rankToBand(r);
+    return { token, rank: r, band, rarityScore: BAND_SCORE[band] };
   });
 
   const known = analyzed.filter((x) => x.rank !== null).length;
-  const top = analyzed.reduce((best, x) => LEVEL_SCORE[x.level] > LEVEL_SCORE[best.level] ? x : best, analyzed[0]);
-  const avg = analyzed.reduce((s, x) => s + BAND_SCORE[x.band], 0) / analyzed.length;
+  const top = analyzed.reduce((best, x) => BAND_RANK[x.band] > BAND_RANK[best.band] ? x : best, analyzed[0]);
+  const avg = analyzed.reduce((s, x) => s + x.rarityScore, 0) / analyzed.length;
   const hardShare = analyzed.filter((x) => x.band === "top_10k" || x.band === "top_50k" || x.band === "rare_or_unknown").length / analyzed.length;
-  const lexicalDifficulty = clamp01(avg * 0.75 + hardShare * 0.25);
-  const level = SCORE_LEVEL[Math.max(0, Math.min(SCORE_LEVEL.length - 1, Math.round(lexicalDifficulty * 5)))] ?? top.level;
+  const lexicalRarity = clamp01(avg * 0.75 + hardShare * 0.25);
   const rareTokens = analyzed
     .filter((x) => x.band === "top_10k" || x.band === "top_50k" || x.band === "rare_or_unknown")
     .slice(0, 8);
 
   return {
-    lexicalDifficulty,
-    estimatedLevel: LEVEL_SCORE[top.level] > LEVEL_SCORE[level] ? top.level : level,
+    lexicalRarity,
+    lexicalDifficulty: lexicalRarity,
     highestBand: top.band,
     rareTokens,
     tokensConsidered: analyzed.length,
@@ -126,14 +109,15 @@ export function outcomeScore(comprehension: string): number {
   return 0.5;
 }
 
-// Thresholds calibrated against PCIC CEFR distribution in the 50k corpus.
+// Frequency thresholds over the bundled Spanish corpus. These are not CEFR
+// claims; they only describe where a token sits on the common↔rare gradient.
 function rankToBand(rank: number | null): FrequencyBand {
-  if (rank === null) return "rare_or_unknown";   // OOV: insufficient evidence, do not promote to C2 by itself
-  if (rank <= 2000) return "top_1k";             // A1
-  if (rank <= 5000) return "top_3k";             // A2
-  if (rank <= 12000) return "top_6k";            // B1
-  if (rank <= 25000) return "top_10k";           // B2
-  return "top_50k";                              // C1: ranks 25001–50000
+  if (rank === null) return "rare_or_unknown";
+  if (rank <= 2000) return "top_1k";
+  if (rank <= 5000) return "top_3k";
+  if (rank <= 12000) return "top_6k";
+  if (rank <= 25000) return "top_10k";
+  return "top_50k";
 }
 
 function tokenize(text: string): string[] {
