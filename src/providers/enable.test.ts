@@ -63,14 +63,14 @@ describe("config provider field", () => {
   });
 
   it("supports a separate evaluator model for deterministic post-turn checks", () => {
-    const config = loadConfig(env({ OPENROUTER_MODEL: "main-model", EVALUATOR_MODEL: "eval-model" }));
-    expect(config.openrouterModel).toBe("main-model");
+    const config = loadConfig(env({ CHAT_MODEL: "main-model", EVALUATOR_MODEL: "eval-model" }));
+    expect(config.chatModel).toBe("main-model");
     expect(config.evaluatorModel).toBe("eval-model");
   });
 
-  it("defaults evaluator model to Gemini 2.5 Flash Lite independent of the main OpenRouter model", () => {
-    const config = loadConfig(env({ OPENROUTER_MODEL: "main-model" }));
-    expect(config.evaluatorModel).toBe("google/gemini-2.5-flash-lite");
+  it("defaults evaluator model to DeepSeek v4 Flash independent of the main chat model", () => {
+    const config = loadConfig(env({ CHAT_MODEL: "main-model" }));
+    expect(config.evaluatorModel).toBe("deepseek/deepseek-v4-flash");
   });
 
   it("defaults ollamaApiKey to empty string", () => {

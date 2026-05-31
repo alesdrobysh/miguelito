@@ -36,7 +36,7 @@ export function createProvider(config: Config): LLMProvider {
   }
   return new OpenRouterProvider({
     apiKey: config.openrouterApiKey,
-    model: config.openrouterModel,
+    model: config.chatModel,
     baseUrl: config.openrouterBaseUrl,
   });
 }
@@ -105,7 +105,7 @@ export class RuntimeManager {
       lang,
     );
     const agentRunner = new AgentRunner({ provider: this.provider, evaluatorProvider: this.evaluatorProvider, session: db, promptBuilder, toolCtx, lang, dreamMemoryPath });
-    const dreamService = new DreamService(db, db, db, this.provider, {
+    const dreamService = new DreamService(db, db, db, this.evaluatorProvider, {
       timezone: this.config.timezone,
       dreamMemoryPath,
       dreamSystemPrompt: lang.prompts.dream,

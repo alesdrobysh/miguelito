@@ -10,7 +10,7 @@ export interface Config {
   telegramToken: string;
   telegramBotTokens: Record<string, string | undefined>;
   openrouterApiKey: string;
-  openrouterModel: string;
+  chatModel: string;
   evaluatorModel: string;
   openrouterBaseUrl: string;
   ollamaBaseUrl: string;
@@ -44,8 +44,8 @@ export function loadConfig(
     activeLanguages.map((lang) => [lang.id, env[`TELEGRAM_${lang.id.toUpperCase().replace(/[^A-Z0-9]/g, "_")}_BOT_TOKEN`] ?? undefined]),
   );
   const openrouterApiKey = env.OPENROUTER_API_KEY ?? "";
-  const openrouterModel = env.OPENROUTER_MODEL ?? "google/gemini-2.0-flash-lite";
-  const evaluatorModel = env.EVALUATOR_MODEL ?? "google/gemini-2.5-flash-lite";
+  const chatModel = env.CHAT_MODEL ?? env.OPENROUTER_MODEL ?? "google/gemini-3.1-flash-lite-preview";
+  const evaluatorModel = env.EVALUATOR_MODEL ?? "deepseek/deepseek-v4-flash";
   const openrouterBaseUrl = env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1";
   const ollamaBaseUrl = env.OLLAMA_BASE_URL ?? "http://localhost:11434/v1";
   const ollamaModel = env.OLLAMA_MODEL ?? "llama3.2";
@@ -84,7 +84,7 @@ export function loadConfig(
     telegramToken,
     telegramBotTokens,
     openrouterApiKey,
-    openrouterModel,
+    chatModel,
     evaluatorModel,
     openrouterBaseUrl,
     ollamaBaseUrl,

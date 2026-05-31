@@ -19,7 +19,7 @@ async function main() {
   const config = loadConfig();
   const manager = await createRuntimeManager(config);
   const defaultLanguage = process.env.LANGUAGE ?? "spanish";
-  const model = config.provider === "ollama" ? config.ollamaModel : config.openrouterModel;
+  const model = config.provider === "ollama" ? config.ollamaModel : config.chatModel;
 
   log.info({
     provider: config.provider,
