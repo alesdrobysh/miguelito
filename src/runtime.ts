@@ -61,8 +61,13 @@ const MODEL_HISTORY_LIMIT = 50;
 
 function formatStart(_lang: LanguageConfig): string {
   return [
-    "Hola — soy Miguelito. Escribe de forma natural en español.",
-    "Recordaré lo útil y lo traeré de vuelta suavemente en la conversación.",
+    "Hola — soy Miguelito, tu tutor de español.",
+    "Para empezar, cuéntame en español, aunque sea con frases simples:",
+    "1. ¿Por qué quieres practicar español?",
+    "2. ¿Qué temas te interesan?",
+    "3. ¿Cómo prefieres que te corrija: suave, normal o directo?",
+    "",
+    "Con eso adaptaré la conversación y recordaré lo útil para traerlo de vuelta suavemente.",
   ].join("\n");
 }
 

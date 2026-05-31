@@ -66,8 +66,8 @@ describe("AgentRunner post-turn evaluation", () => {
 
     expect(result.text).toBe("Vale, seguimos.");
     expect(main.chatCalls).toBe(1);
-    expect(evaluator.completeJsonCalls).toBe(1);
-    expect((await db.getRecentAnnotations(10))).toHaveLength(1);
+    await expect.poll(() => evaluator.completeJsonCalls).toBe(1);
+    await expect.poll(async () => (await db.getRecentAnnotations(10)).length).toBe(1);
     expect((await db.getConversationState()).session.last_mode).toBe("OFFER");
   });
 
