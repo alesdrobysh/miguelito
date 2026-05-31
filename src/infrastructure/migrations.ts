@@ -11,10 +11,17 @@ export function runMigrations(db: Database): void {
 
   const verRow = db.exec("SELECT value FROM _buddy_meta WHERE key = 'schema_version'");
   const ver = verRow[0]?.values[0]?.[0] as string | undefined;
-  if (ver === "12") return;
+  if (ver === "13") return;
+  if (ver === "12") {
+    migrateProficiencyEvidenceChallengeBand(db);
+    dropLegacyProficiencyEvidenceLevelColumn(db);
+    db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '13')");
+    return;
+  }
   if (ver === "11") {
     migrateProficiencyEvidenceChallengeBand(db);
-    db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '12')");
+    dropLegacyProficiencyEvidenceLevelColumn(db);
+    db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '13')");
     return;
   }
 
@@ -214,7 +221,8 @@ export function runMigrations(db: Database): void {
   db.run("UPDATE vocabulary_items SET pro_due = COALESCE(pro_due, first_seen_at, datetime('now')), rec_due = COALESCE(rec_due, first_seen_at, datetime('now'))");
 
   migrateProficiencyEvidenceChallengeBand(db);
-  db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '12')");
+  dropLegacyProficiencyEvidenceLevelColumn(db);
+  db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '13')");
 
   // v9: language-scoping for all teaching-related tables
   const tablesToScope = [
@@ -320,5 +328,32 @@ function migrateProficiencyEvidenceChallengeBand(db: Database): void {
     db.run("UPDATE proficiency_evidence SET challenge_band = level WHERE challenge_band = 'top_1k' AND level IS NOT NULL AND level <> ''");
   }
   db.run("DROP INDEX IF EXISTS idx_proficiency_evidence_language_skill");
+  db.run("CREATE INDEX IF NOT EXISTS idx_proficiency_evidence_language_skill ON proficiency_evidence(language, skill, dimension, challenge_band, created_at)");
+}
+
+function dropLegacyProficiencyEvidenceLevelColumn(db: Database): void {
+  const info = db.exec("PRAGMA table_info(proficiency_evidence)");
+  const cols = (info[0]?.values ?? []).map((r) => r[1] as string);
+  if (!cols.includes("level")) return;
+
+  db.run(`CREATE TABLE proficiency_evidence_new (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    language TEXT NOT NULL DEFAULT '',
+    skill TEXT NOT NULL,
+    dimension TEXT NOT NULL,
+    challenge_band TEXT NOT NULL,
+    outcome TEXT NOT NULL,
+    confidence REAL NOT NULL DEFAULT 0.5,
+    weight REAL NOT NULL DEFAULT 1.0,
+    evidence_text TEXT NOT NULL DEFAULT '',
+    challenge_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  db.run(`INSERT INTO proficiency_evidence_new
+    (id, language, skill, dimension, challenge_band, outcome, confidence, weight, evidence_text, challenge_json, created_at)
+    SELECT id, language, skill, dimension, challenge_band, outcome, confidence, weight, evidence_text, challenge_json, created_at
+    FROM proficiency_evidence`);
+  db.run("DROP TABLE proficiency_evidence");
+  db.run("ALTER TABLE proficiency_evidence_new RENAME TO proficiency_evidence");
   db.run("CREATE INDEX IF NOT EXISTS idx_proficiency_evidence_language_skill ON proficiency_evidence(language, skill, dimension, challenge_band, created_at)");
 }

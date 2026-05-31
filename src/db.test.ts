@@ -574,7 +574,7 @@ describe("BuddyDb turn annotations and competency vector", () => {
     expect(names).toContain("competency_vector");
 
     const ver = db.db.exec("SELECT value FROM _buddy_meta WHERE key = 'schema_version'");
-    expect(ver[0].values[0][0]).toBe("12");
+    expect(ver[0].values[0][0]).toBe("13");
   });
 
   it("competency_vector row is seeded with defaults", async () => {
