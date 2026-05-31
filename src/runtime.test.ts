@@ -125,6 +125,15 @@ describe("runtime manager", () => {
     expect(start).toContain("¿Por qué quieres practicar español?");
     expect(start).toContain("¿Qué temas te interesan?");
     expect(start).toContain("¿Cómo prefieres que te corrija");
+
+    const startWithBotMention = await manager.handleMessage("spanish", 777, "telegram-user", "/start@my_spanish_buddy_bot");
+    expect(startWithBotMention).toContain("Para empezar");
+    expect(startWithBotMention).toContain("¿Por qué quieres practicar español?");
+
+    const startWithPayload = await manager.handleMessage("spanish", 777, "telegram-user", "/start onboarding");
+    expect(startWithPayload).toContain("Para empezar");
+    expect(startWithPayload).toContain("¿Cómo prefieres que te corrija");
+
     expect(start).not.toContain("inglés");
     expect(start).not.toContain("ruso");
     expect(start).not.toContain("English");

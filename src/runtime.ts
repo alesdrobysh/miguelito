@@ -148,7 +148,8 @@ export class RuntimeManager {
 
   private async handleCommand(rt: LanguageRuntime, text: string): Promise<string | undefined> {
     const { lang } = rt;
-    if (text === "/start") return formatStart(lang);
+    const commandToken = text.split(/\s+/, 1)[0]?.replace(/@[^\s]+$/, "");
+    if (commandToken === "/start") return formatStart(lang);
     if (text.startsWith("/")) return formatCommandRedirect(lang);
     return undefined;
   }
