@@ -122,6 +122,7 @@ describe("runtime manager", () => {
 
     expect(start).toContain("soy Miguelito");
     expect(start).toContain("Para empezar");
+    expect(start).toContain("¿Cómo te llamas?");
     expect(start).toContain("¿Por qué quieres practicar español?");
     expect(start).toContain("¿Qué temas te interesan?");
     expect(start).toContain("¿Cómo prefieres que te corrija");
@@ -132,6 +133,7 @@ describe("runtime manager", () => {
 
     const startWithPayload = await manager.handleMessage("spanish", 777, "telegram-user", "/start onboarding");
     expect(startWithPayload).toContain("Para empezar");
+    expect(startWithPayload).toContain("¿Cómo te llamas?");
     expect(startWithPayload).toContain("¿Cómo prefieres que te corrija");
 
     expect(start).not.toContain("inglés");

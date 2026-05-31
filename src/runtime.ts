@@ -63,9 +63,10 @@ function formatStart(_lang: LanguageConfig): string {
   return [
     "Hola — soy Miguelito, tu tutor de español.",
     "Para empezar, cuéntame en español, aunque sea con frases simples:",
-    "1. ¿Por qué quieres practicar español?",
-    "2. ¿Qué temas te interesan?",
-    "3. ¿Cómo prefieres que te corrija: suave, normal o directo?",
+    "1. ¿Cómo te llamas?",
+    "2. ¿Por qué quieres practicar español?",
+    "3. ¿Qué temas te interesan?",
+    "4. ¿Cómo prefieres que te corrija: suave, normal o directo?",
     "",
     "Con eso adaptaré la conversación y recordaré lo útil para traerlo de vuelta suavemente.",
   ].join("\n");

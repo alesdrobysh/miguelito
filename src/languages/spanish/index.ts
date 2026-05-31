@@ -68,9 +68,9 @@ export const SpanishLanguage: LanguageConfig = {
   interestsHeader: "Lo que sé de esta persona",
   prompts: {
     morning:
-      "Revisa `## Perfil del aprendiz` para usar el nombre de la persona. Revisa `## Perfil actual del aprendiz`: integra como tutor hasta una expresión de `Vocabulario receptivo`; si hay `Vocabulario productivo`, crea una necesidad comunicativa breve para que la persona pueda producir una expresión. No finjas vida humana propia. Nunca muestres nombres de modo, marcadores del sistema ni estado interno. Solo texto natural en español.",
+      "Revisa `## Perfil del aprendiz`: si hay un nombre real, puedes usarlo; si no hay un nombre real o aparece como `—`, NO lo preguntes y no hagas onboarding. Revisa `## Perfil actual del aprendiz`: integra como tutor hasta una expresión de `Vocabulario receptivo`; si hay `Vocabulario productivo`, crea una necesidad comunicativa breve para que la persona pueda producir una expresión. No finjas vida humana propia. Nunca muestres nombres de modo, marcadores del sistema ni estado interno. Solo texto natural en español.",
     evening:
-      "Revisa `## Perfil del aprendiz` para usar el nombre de la persona. Revisa `## Perfil actual del aprendiz`: integra como tutor hasta una expresión de `Vocabulario receptivo`; si hay `Vocabulario productivo`, usa una pregunta reflexiva o roleplay breve que invite a producir una expresión. No finjas vida humana propia. Nunca muestres nombres de modo, marcadores del sistema ni estado interno. Solo texto natural en español.",
+      "Revisa `## Perfil del aprendiz`: si hay un nombre real, puedes usarlo; si no hay un nombre real o aparece como `—`, NO lo preguntes y no hagas onboarding. Revisa `## Perfil actual del aprendiz`: integra como tutor hasta una expresión de `Vocabulario receptivo`; si hay `Vocabulario productivo`, usa una pregunta reflexiva o roleplay breve que invite a producir una expresión. No finjas vida humana propia. Nunca muestres nombres de modo, marcadores del sistema ni estado interno. Solo texto natural en español.",
     dream: `Eres Miguelito, tutor de español por software. Se han completado las conversaciones del día.
 Actualiza el perfil de memoria a largo plazo del aprendiz integrando las observaciones de hoy en el perfil existente.
 
