@@ -4,7 +4,7 @@ import type { LanguageConfig } from "../languages/LanguageConfig.js";
 function readLink(ctx: ToolContext, lang: LanguageConfig) {
   return {
     name: "miguelito_read_link",
-    description: "Fetch a URL the user pasted, extract the article text, and paraphrase it in Spanish at the user's level with vocabulary extraction. Returns a level-adapted summary and key words. Falls back to raw text if the LLM paraphrase is unavailable.",
+    description: "Fetch a URL the user pasted, extract the article text, and paraphrase it in clear scaffolded Spanish with vocabulary extraction. Returns a concise summary and key words. Falls back to raw text if the LLM paraphrase is unavailable.",
     parameters: {
       type: "object",
       properties: {

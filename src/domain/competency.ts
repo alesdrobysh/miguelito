@@ -50,7 +50,7 @@ async function buildReceptionByFrequencyBand(repo: CompetencyRepository): Promis
   const rows = await repo.listProficiencyEvidence(200);
   const outcomeScore: Record<string, number> = { success: 1, partial: 0.5, fail: 0 };
   for (const band of bands) {
-    const bucket = rows.filter((r) => r.skill === "reception" && r.dimension === "lexical" && r.level === band);
+    const bucket = rows.filter((r) => r.skill === "reception" && r.dimension === "lexical" && r.challenge_band === band);
     const denom = bucket.reduce((s, r) => s + Math.max(0, r.weight) * Math.max(0, Math.min(1, r.confidence)), 0);
     if (denom <= 0) continue;
     const score = bucket.reduce((s, r) => s + (outcomeScore[r.outcome] ?? 0.5) * Math.max(0, r.weight) * Math.max(0, Math.min(1, r.confidence)), 0) / denom;

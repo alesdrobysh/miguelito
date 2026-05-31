@@ -13,10 +13,10 @@ describe("frequency-based difficulty", () => {
     expect(rare.highestBand).not.toBe("top_1k");
   });
 
-  it("treats OOV proper nouns and typos as unknown frequency, not CEFR evidence", () => {
+  it("treats OOV proper nouns and typos as unknown frequency evidence", () => {
     const profile = analyzeTextDifficulty("Teide powerbank opcioces mapa-tyrystyczna", SpanishLanguage);
     expect(profile.highestBand).toBe("rare_or_unknown");
     expect(profile.rareTokens.map((t) => t.token)).toContain("teide");
-    expect(profile).not.toHaveProperty("estimatedLevel");
+    expect(Object.keys(profile)).toEqual(expect.arrayContaining(["lexicalRarity", "highestBand", "rareTokens"]));
   });
 });

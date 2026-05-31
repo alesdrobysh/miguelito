@@ -17,7 +17,6 @@ export interface LanguageConfig {
   };
   productPolicy: {
     name: string;
-    learnerLevel: string;
     mission: string;
     inputPolicy: string;
     correctionPolicy: string;

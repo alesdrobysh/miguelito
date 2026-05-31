@@ -205,7 +205,7 @@ CREATE TABLE IF NOT EXISTS proficiency_evidence (
     language TEXT NOT NULL DEFAULT '',
     skill TEXT NOT NULL,
     dimension TEXT NOT NULL,
-    level TEXT NOT NULL,
+    challenge_band TEXT NOT NULL,
     outcome TEXT NOT NULL,
     confidence REAL NOT NULL DEFAULT 0.5,
     weight REAL NOT NULL DEFAULT 1.0,
@@ -213,5 +213,5 @@ CREATE TABLE IF NOT EXISTS proficiency_evidence (
     challenge_json TEXT NOT NULL DEFAULT '{}',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX IF NOT EXISTS idx_proficiency_evidence_language_skill ON proficiency_evidence(language, skill, dimension, level, created_at);
+CREATE INDEX IF NOT EXISTS idx_proficiency_evidence_language_skill ON proficiency_evidence(language, skill, dimension, challenge_band, created_at);
 `;

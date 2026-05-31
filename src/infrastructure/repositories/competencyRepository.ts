@@ -130,13 +130,13 @@ export class SqlCompetencyRepository extends SqlRepository implements Competency
   async insertProficiencyEvidence(evidence: ProficiencyEvidenceInput): Promise<number> {
     this.db.run(
       `INSERT INTO proficiency_evidence
-        (language, skill, dimension, level, outcome, confidence, weight, evidence_text, challenge_json)
+        (language, skill, dimension, challenge_band, outcome, confidence, weight, evidence_text, challenge_json)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         this.languageId,
         evidence.skill,
         evidence.dimension,
-        evidence.level,
+        evidence.challenge_band,
         evidence.outcome,
         Math.max(0, Math.min(1, evidence.confidence)),
         Math.max(0, evidence.weight),

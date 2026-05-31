@@ -574,7 +574,7 @@ describe("BuddyDb turn annotations and competency vector", () => {
     expect(names).toContain("competency_vector");
 
     const ver = db.db.exec("SELECT value FROM _buddy_meta WHERE key = 'schema_version'");
-    expect(ver[0].values[0][0]).toBe("11");
+    expect(ver[0].values[0][0]).toBe("12");
   });
 
   it("competency_vector row is seeded with defaults", async () => {
@@ -681,7 +681,7 @@ describe("BuddyDb turn annotations and competency vector", () => {
     await db.insertProficiencyEvidence({
       skill: "reception",
       dimension: "lexical",
-      level: "top_10k",
+      challenge_band: "top_10k",
       outcome: "success",
       confidence: 0.9,
       weight: 1.7,
@@ -690,7 +690,7 @@ describe("BuddyDb turn annotations and competency vector", () => {
     });
 
     const rows = await db.listProficiencyEvidence(10);
-    expect(rows[0].level).toBe("top_10k");
+    expect(rows[0].challenge_band).toBe("top_10k");
 
     const cv = await getCompetencyVector({ competency: db, vocab: db });
     expect(cv.reception.byFrequencyBand.top_10k.score).toBeCloseTo(1);

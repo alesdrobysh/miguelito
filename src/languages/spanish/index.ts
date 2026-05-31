@@ -31,9 +31,8 @@ export const SpanishLanguage: LanguageConfig = {
   },
   productPolicy: {
     name: "Spanish Buddy",
-    learnerLevel: "A2",
     mission: "keep the learner speaking between tutor lessons with confidence and clear scaffolding",
-    inputPolicy: "write slightly above the learner's level (A2+/low B1), with short replies, familiar structures, one new phrase at a time, and one question at a time.",
+    inputPolicy: "write clear, scaffolded Spanish with short replies, familiar structures, one new phrase at a time, and one question at a time; adapt from observed comprehension and user requests, not a fixed proficiency label.",
     correctionPolicy: "protect the flow: correct gently and briefly, prefer one high-value correction, and avoid grammar lectures unless the learner asks for an explanation or practice.",
     toolPolicy: "For explain/correct/grammar practice/vocabulary practice requests, use simple Spanish examples and short Russian/English clarification only if needed; ask before turning a quick answer into a longer drill.",
     visibleSummary: "gentle speaking support first; grammar drills, word meanings, explanations, review, and recaps are first-class tools on demand.",
@@ -89,7 +88,7 @@ Céntrate en: progreso de vocabulario, patrones de error persistentes, fortaleza
       `Eres un asistente de aprendizaje de español.\n\nArtículo: "${title}"\n\nTexto: ${text}\n\nTareas:\n1. Escribe un resumen de 2-3 frases en español claro y accesible.\n2. Extrae 1-2 palabras o expresiones españolas interesantes del texto. Para cada una, da una breve explicación en español (1 frase, no traducción).\n\nResponde SOLO con JSON:\n{"summary": "...", "words": [{"word": "...", "explanation": "..."}]}`,
   },
   frequency: {
-    source: "hermitdave/FrequencyWords OpenSubtitles 2018 es_50k + PCIC CEFR levels",
+    source: "hermitdave/FrequencyWords OpenSubtitles 2018 es_50k",
     topWords: fs.readFileSync(path.join(__dirname, "frequency.txt"), "utf8").split(/\s+/).filter(Boolean),
     lemmatize,
   },

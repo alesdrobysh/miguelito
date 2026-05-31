@@ -283,12 +283,12 @@ export interface CompetencyVectorRow {
 export type ProficiencySkill = "reception" | "production" | "interaction";
 export type ProficiencyDimension = "lexical" | "syntax" | "idiom" | "abstraction" | "fluency";
 export type ProficiencyOutcome = "success" | "partial" | "fail";
-export type ProficiencyLevel = "top_1k" | "top_3k" | "top_6k" | "top_10k" | "top_50k" | "rare_or_unknown";
+export type ProficiencyChallengeBand = "top_1k" | "top_3k" | "top_6k" | "top_10k" | "top_50k" | "rare_or_unknown";
 
 export interface ProficiencyEvidenceInput {
   skill: ProficiencySkill;
   dimension: ProficiencyDimension;
-  level: ProficiencyLevel;
+  challenge_band: ProficiencyChallengeBand;
   outcome: ProficiencyOutcome;
   confidence: number;
   weight: number;

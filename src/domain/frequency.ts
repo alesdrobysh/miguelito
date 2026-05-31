@@ -109,8 +109,7 @@ export function outcomeScore(comprehension: string): number {
   return 0.5;
 }
 
-// Frequency thresholds over the bundled Spanish corpus. These are not CEFR
-// claims; they only describe where a token sits on the common↔rare gradient.
+// Frequency thresholds over the bundled Spanish corpus: a common↔rare gradient.
 function rankToBand(rank: number | null): FrequencyBand {
   if (rank === null) return "rare_or_unknown";
   if (rank <= 2000) return "top_1k";

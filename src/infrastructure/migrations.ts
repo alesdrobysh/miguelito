@@ -11,7 +11,12 @@ export function runMigrations(db: Database): void {
 
   const verRow = db.exec("SELECT value FROM _buddy_meta WHERE key = 'schema_version'");
   const ver = verRow[0]?.values[0]?.[0] as string | undefined;
-  if (ver === "11") return;
+  if (ver === "12") return;
+  if (ver === "11") {
+    migrateProficiencyEvidenceChallengeBand(db);
+    db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '12')");
+    return;
+  }
 
   // v3: rebuild vocabulary_items — word+translation → chunk_l2 (L2-only) + FSRS state
   const vocabInfo = db.exec("PRAGMA table_info(vocabulary_items)");
@@ -208,7 +213,8 @@ export function runMigrations(db: Database): void {
 
   db.run("UPDATE vocabulary_items SET pro_due = COALESCE(pro_due, first_seen_at, datetime('now')), rec_due = COALESCE(rec_due, first_seen_at, datetime('now'))");
 
-  db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '11')");
+  migrateProficiencyEvidenceChallengeBand(db);
+  db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '12')");
 
   // v9: language-scoping for all teaching-related tables
   const tablesToScope = [
@@ -300,4 +306,19 @@ export function runMigrations(db: Database): void {
     )`);
     db.run("CREATE INDEX IF NOT EXISTS idx_vocab_attempts_active ON vocab_review_attempts(language, status, created_at)");
   } catch {}
+}
+
+function migrateProficiencyEvidenceChallengeBand(db: Database): void {
+  const info = db.exec("PRAGMA table_info(proficiency_evidence)");
+  const cols = (info[0]?.values ?? []).map((r) => r[1] as string);
+  if (cols.length === 0) return;
+
+  if (!cols.includes("challenge_band")) {
+    db.run("ALTER TABLE proficiency_evidence ADD COLUMN challenge_band TEXT NOT NULL DEFAULT 'top_1k'");
+  }
+  if (cols.includes("level")) {
+    db.run("UPDATE proficiency_evidence SET challenge_band = level WHERE challenge_band = 'top_1k' AND level IS NOT NULL AND level <> ''");
+  }
+  db.run("DROP INDEX IF EXISTS idx_proficiency_evidence_language_skill");
+  db.run("CREATE INDEX IF NOT EXISTS idx_proficiency_evidence_language_skill ON proficiency_evidence(language, skill, dimension, challenge_band, created_at)");
 }

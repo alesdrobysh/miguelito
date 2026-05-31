@@ -76,7 +76,7 @@ describe("PromptBuilder interest injection", () => {
 
 
 describe("PromptBuilder product coaching policy", () => {
-  it("positions Spanish as an A2 buddy with tool intents for explain, correct, practice, review, and recap", async () => {
+  it("positions Spanish as a scaffolded buddy with tool intents for explain, correct, practice, review, and recap", async () => {
     const builder = new PromptBuilder(
       { vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db },
       SpanishLanguage,
@@ -86,8 +86,8 @@ describe("PromptBuilder product coaching policy", () => {
 
     expect(prompt).toContain("## Product policy");
     expect(prompt).toContain("Spanish Buddy");
-    expect(prompt).toContain("A2");
-    expect(prompt).toContain("slightly above the learner's level");
+    expect(prompt).not.toContain("Learner level:");
+    expect(prompt).toContain("clear, scaffolded Spanish");
     expect(prompt).toContain("one question at a time");
     expect(prompt).toContain("## Tutor tools");
     for (const intent of ["conversation", "correct", "explain", "grammar practice", "vocabulary practice", "review", "recap"]) {

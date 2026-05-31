@@ -406,7 +406,7 @@ export class PostTurnProcessor {
     await this.deps.competency.insertProficiencyEvidence({
       skill: "reception",
       dimension: "lexical",
-      level: assistantChallenge.highestBand,
+      challenge_band: assistantChallenge.highestBand,
       outcome,
       confidence: assistantChallenge.tokensConsidered > 0 ? Math.max(0.35, Math.min(0.9, assistantChallenge.coverage || 0.5)) : 0.35,
       weight: 1 + assistantChallenge.lexicalRarity,
@@ -419,7 +419,7 @@ export class PostTurnProcessor {
       await this.deps.competency.insertProficiencyEvidence({
         skill: "production",
         dimension: "lexical",
-        level: learnerProduction.highestBand,
+        challenge_band: learnerProduction.highestBand,
         outcome: annotation.naturalness == null || annotation.naturalness >= 0.75 ? "success" : annotation.naturalness >= 0.45 ? "partial" : "fail",
         confidence: Math.max(0.35, Math.min(0.85, learnerProduction.coverage || 0.5)),
         weight: 0.75 + learnerProduction.lexicalRarity,

@@ -60,7 +60,6 @@ export class PromptBuilder {
     return [
       "\n\n## Product policy",
       `${policy.name}: ${policy.mission}`,
-      `Learner level: ${policy.learnerLevel}.`,
       `Input policy: ${policy.inputPolicy}`,
       `Correction policy: ${policy.correctionPolicy}`,
       `Session stance: ${policy.visibleSummary}`,
