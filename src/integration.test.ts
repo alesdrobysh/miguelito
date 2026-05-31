@@ -62,15 +62,17 @@ describe("integration: profile set cycle", () => {
     const tools = createTools({ vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, provider: null }, SpanishLanguage);
     const setTool = tools.get("miguelito_profile_set")!;
 
-    const setResult = await setTool.execute({ name: "Alice", goal: "travel" });
+    const setResult = await setTool.execute({ name: "Alice", goal: "travel", correction_style: "suave" });
     expect((setResult as any).ok).toBe(true);
     expect((setResult as any).updated_fields).toContain("name");
     expect((setResult as any).updated_fields).toContain("goal");
+    expect((setResult as any).updated_fields).toContain("correction_style");
 
     const profile = await db.getProfile();
     expect(profile).not.toBeNull();
     expect(profile!.name).toBe("Alice");
     expect(profile!.goal).toBe("travel");
+    expect(profile!.correction_style).toBe("suave");
   });
 
   it("partial updates preserve existing fields", async () => {

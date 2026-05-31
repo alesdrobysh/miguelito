@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type { BuddyDb } from "./infrastructure/db.js";
 import { getCompetencyVector } from "./domain/competency.js";
 import { createTestDb, type TestDbHandle } from "./test/dbHelpers.js";
+import { runMigrations } from "./infrastructure/migrations.js";
 
 let db: BuddyDb;
 let handle: TestDbHandle;
@@ -58,11 +59,14 @@ describe("BuddyDb vocabulary (chunk-based)", () => {
     expect(learning).toHaveLength(0);
   });
 
-  it("dueVocab returns new items (pro_due IS NULL)", async () => {
+  it("addVocab initializes both due lanes immediately", async () => {
     await db.addVocab("echar de menos", "ctx");
     const due = await db.dueVocab(10);
     expect(due).toHaveLength(1);
     expect(due[0].chunk_l2).toBe("echar de menos");
+    const row = db.db.exec("SELECT pro_due, rec_due FROM vocabulary_items WHERE chunk_l2 = 'echar de menos'")[0].values[0];
+    expect(row[0]).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    expect(row[1]).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
   });
 
   it("dueVocab can select receptive due items independently of productive schedule", async () => {
@@ -435,7 +439,7 @@ describe("BuddyDb conversation state", () => {
     const first = await db.getConversationState();
     const oldTime = new Date(Date.now() - 31 * 60000);
     const pad = (n: number) => n.toString().padStart(2, "0");
-    const oldStr = `${oldTime.getFullYear()}-${pad(oldTime.getMonth() + 1)}-${pad(oldTime.getDate())} ${pad(oldTime.getHours())}:${pad(oldTime.getMinutes())}:${pad(oldTime.getSeconds())}`;
+    const oldStr = `${oldTime.getUTCFullYear()}-${pad(oldTime.getUTCMonth() + 1)}-${pad(oldTime.getUTCDate())} ${pad(oldTime.getUTCHours())}:${pad(oldTime.getUTCMinutes())}:${pad(oldTime.getUTCSeconds())}`;
 
     db.db.run(`UPDATE conversation_state SET updated_at = ? WHERE id = ?`, [oldStr, first.session.id]);
 
@@ -570,7 +574,7 @@ describe("BuddyDb turn annotations and competency vector", () => {
     expect(names).toContain("competency_vector");
 
     const ver = db.db.exec("SELECT value FROM _buddy_meta WHERE key = 'schema_version'");
-    expect(ver[0].values[0][0]).toBe("10");
+    expect(ver[0].values[0][0]).toBe("11");
   });
 
   it("competency_vector row is seeded with defaults", async () => {
@@ -700,5 +704,18 @@ describe("BuddyDb turn annotations and competency vector", () => {
     expect(vec.morph_successes).toBe(9.0);
     expect(vec.morph_trials).toBe(10.0);
     expect(vec.morph_obs).toBe(0);  // untouched
+  });
+});
+
+
+describe("BuddyDb migrations", () => {
+  it("backfills null due lanes on existing vocabulary rows", async () => {
+    await db.addVocab("fila antigua", "ctx");
+    db.db.run("UPDATE vocabulary_items SET pro_due = NULL, rec_due = NULL WHERE chunk_l2 = 'fila antigua'");
+    db.db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '10')");
+    runMigrations(db.db);
+    const row = db.db.exec("SELECT pro_due, rec_due FROM vocabulary_items WHERE chunk_l2 = 'fila antigua'")[0].values[0];
+    expect(row[0]).toBeTruthy();
+    expect(row[1]).toBeTruthy();
   });
 });

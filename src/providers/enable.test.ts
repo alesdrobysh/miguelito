@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { loadConfig } from "../infrastructure/config.js";
 import { createEvaluatorProvider, createProvider } from "../runtime.js";
 import { OllamaProvider } from "./OllamaProvider.js";
-import { OpenRouterProvider } from "./OpenRouterProvider.js";
+import { OpenRouterProvider, parseJsonResponse } from "./OpenRouterProvider.js";
 
 const MIN_ENV = {
   TRANSPORT: "tui",
@@ -97,6 +97,25 @@ describe("config provider field", () => {
     ).toThrow("OPENROUTER_API_KEY");
   });
 
+});
+
+
+describe("OpenRouter JSON completion", () => {
+  it("parses fenced JSON and prose-wrapped JSON", () => {
+    expect(parseJsonResponse<{ ok: boolean }>("```json\n{\"ok\":true}\n```")).toEqual({ ok: true });
+    expect(parseJsonResponse<{ ok: boolean }>("Here is the JSON: {\"ok\":true}")).toEqual({ ok: true });
+  });
+
+  it("retries once when the first JSON response is malformed", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ choices: [{ message: { content: "" } }] }) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ choices: [{ message: { content: "{\"ok\":true}" } }] }) });
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new OpenRouterProvider({ apiKey: "***", model: "eval-model", baseUrl: "https://openrouter.test/api/v1" });
+
+    await expect(provider.completeJson("system", "user")).resolves.toEqual({ ok: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("provider creation", () => {

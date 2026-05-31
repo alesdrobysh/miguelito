@@ -1,7 +1,7 @@
 import type { Database } from "sql.js";
 import type { ConversationStateData, ConversationStateResult, UpdateResult } from "../../domain/types.js";
 import type { SessionRepository } from "../../repositories/interfaces.js";
-import { SqlRepository, type SaveFn, nowIso } from "./sqlRepository.js";
+import { SqlRepository, type SaveFn, nowIso, parseSqlUtc } from "./sqlRepository.js";
 
 export class SqlSessionRepository extends SqlRepository implements SessionRepository {
   constructor(db: Database, languageId: string, save: SaveFn) {
@@ -60,7 +60,7 @@ export class SqlSessionRepository extends SqlRepository implements SessionReposi
     ) as ConversationStateData | undefined;
 
     if (row) {
-      const updatedAt = new Date(row.updated_at.replace(" ", "T"));
+      const updatedAt = parseSqlUtc(row.updated_at);
       const diffMin = (Date.now() - updatedAt.getTime()) / 60000;
       if (diffMin <= 30) {
         return { session: row, isNew: false };

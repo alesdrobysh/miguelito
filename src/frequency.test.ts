@@ -11,4 +11,10 @@ describe("frequency-based difficulty", () => {
     expect(common.lexicalDifficulty).toBeLessThan(rare.lexicalDifficulty);
     expect(rare.rareTokens.length).toBeGreaterThan(0);
   });
+
+  it("does not treat OOV proper nouns and typos as C2 evidence by themselves", () => {
+    const profile = analyzeTextDifficulty("Teide powerbank opcioces mapa-tyrystyczna", SpanishLanguage);
+    expect(["A1", "A2", "B1", "B2"]).toContain(profile.estimatedLevel);
+    expect(profile.rareTokens.map((t) => t.token)).toContain("teide");
+  });
 });

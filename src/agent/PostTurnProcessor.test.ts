@@ -31,6 +31,8 @@ beforeEach(async () => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "miguelito-postturn-"));
   dbPath = path.join(tmpDir, "test.db");
   db = await BuddyDb.open(dbPath, "spanish", SpanishLanguage.errorCategories, SpanishLanguage.morphologyCategories);
+
+
 });
 
 afterEach(() => {
@@ -61,6 +63,7 @@ describe("PostTurnProcessor", () => {
     expect(result.ok).toBe(true);
     expect(provider.calls).toHaveLength(1);
     expect(provider.calls[0].opts?.temperature).toBe(0);
+    expect(provider.calls[0].opts?.timeoutMs).toBe(60_000);
     const anns = await db.getRecentAnnotations(5);
     expect(anns).toHaveLength(1);
     expect(JSON.parse(anns[0].obligatory_json)).toEqual([{ type: "verb_conjugation" }]);
@@ -207,4 +210,25 @@ describe("PostTurnProcessor", () => {
     const row = db.db.exec("SELECT pro_reps, rec_reps FROM vocabulary_items WHERE chunk_l2 = 'coger el tren'")[0].values[0];
     expect(row).toEqual([1, 0]);
   });
+  it("does not duplicate evaluator-proposed correction learning items already captured from errors", async () => {
+    const provider = new JsonProvider({
+      annotation: { obligatory: [], used: [], naturalness: 0.9, comprehension: "smooth" },
+      mode: "TEACH",
+      errors: [{ user_text: "opcioces", correct: "opciones", category: "spelling", note: "forma correcta: opciones" }],
+      vocabulary: [],
+      learning_items: [
+        { type: "correction", title: "opcioces → opciones", source_type: "correction", priority: 0.9 },
+        { type: "grammar_point", title: "spelling of opciones", source_type: "correction", priority: 0.8 },
+      ],
+      reviews: [],
+    });
+
+    const processor = new PostTurnProcessor({ provider, vocab: db, errors: db, competency: db, session: db, learning: db, lang: SpanishLanguage });
+    const result = await processor.process({ userMessage: "Hay muchas opcioces", assistantText: "Se escribe opciones.", chatHistory: [] });
+
+    expect(result.learningItemsAdded).toBe(1);
+    const items = await db.listLearningItems("active", 10);
+    expect(items.map((i) => i.title)).toEqual(["opcioces → opciones"]);
+  });
+
 });

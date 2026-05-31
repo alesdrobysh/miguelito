@@ -39,6 +39,7 @@ export async function llmChat(
   maxTokens: number = 1024,
   structured: boolean = false,
   stop?: string[],
+  timeoutMs?: number,
 ): Promise<ChatResult> {
   return chatCompletion(
     {
@@ -46,11 +47,11 @@ export async function llmChat(
       baseUrl: config.baseUrl ?? DEFAULT_BASE_URL,
       model: config.model ?? BUDGET_MODEL,
       providerName: "openrouter",
-      timeoutMs: 30_000,
+      timeoutMs: timeoutMs ?? 30_000,
     },
     messages,
     tools,
-    { temperature, maxTokens, structured, stop },
+    { temperature, maxTokens, structured, stop, timeoutMs },
   );
 }
 

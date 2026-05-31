@@ -22,8 +22,8 @@ export class SqlVocabRepository extends SqlRepository implements VocabRepository
   async addVocab(chunk_l2: string, capture_context_l2: string, anchor?: string): Promise<number | null> {
     const now = nowIso();
     this.db.run(
-      `INSERT OR IGNORE INTO vocabulary_items (chunk_l2, capture_context_l2, anchor, language, first_seen_at, status) VALUES (?, ?, ?, ?, ?, 'active')`,
-      [chunk_l2.trim().toLowerCase(), capture_context_l2, anchor?.trim().toLowerCase() ?? null, this.languageId, now]
+      `INSERT OR IGNORE INTO vocabulary_items (chunk_l2, capture_context_l2, anchor, language, first_seen_at, pro_due, rec_due, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'active')`,
+      [chunk_l2.trim().toLowerCase(), capture_context_l2, anchor?.trim().toLowerCase() ?? null, this.languageId, now, now, now]
     );
     if (this.db.getRowsModified() === 0) return null;
     const rowidResult = this.db.exec("SELECT last_insert_rowid()");

@@ -11,7 +11,7 @@ export function runMigrations(db: Database): void {
 
   const verRow = db.exec("SELECT value FROM _buddy_meta WHERE key = 'schema_version'");
   const ver = verRow[0]?.values[0]?.[0] as string | undefined;
-  if (ver === "6") return;
+  if (ver === "11") return;
 
   // v3: rebuild vocabulary_items — word+translation → chunk_l2 (L2-only) + FSRS state
   const vocabInfo = db.exec("PRAGMA table_info(vocabulary_items)");
@@ -206,7 +206,9 @@ export function runMigrations(db: Database): void {
     db.run("ALTER TABLE competency_vector ADD COLUMN self_correction_obs INTEGER NOT NULL DEFAULT 0");
   }
 
-  db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '10')");
+  db.run("UPDATE vocabulary_items SET pro_due = COALESCE(pro_due, first_seen_at, datetime('now')), rec_due = COALESCE(rec_due, first_seen_at, datetime('now'))");
+
+  db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '11')");
 
   // v9: language-scoping for all teaching-related tables
   const tablesToScope = [

@@ -154,6 +154,7 @@ export class PostTurnProcessor {
         temperature: 0,
         maxTokens: 1200,
         structured: true,
+        timeoutMs: 60_000,
       });
     } catch (err) {
       log.warn({ err }, "post-turn evaluation failed");
@@ -243,9 +244,12 @@ export class PostTurnProcessor {
       if (learningId !== null) learningItemsAdded++;
     }
 
+    const appliedCorrections = (evaluation.errors ?? [])
+      .map((e) => ({ userText: this.clean(e.user_text), correct: this.clean(e.correct) }))
+      .filter((e) => e.userText && e.correct);
     for (const item of evaluation.learning_items ?? []) {
       const input = this.learningItemInput(item, _input);
-      if (!input) continue;
+      if (!input || this.isDuplicateCorrectionLearningItem(input, appliedCorrections)) continue;
       const learningId = await this.learningRepo().addLearningItem(input);
       if (learningId !== null) learningItemsAdded++;
     }
@@ -314,6 +318,27 @@ export class PostTurnProcessor {
       practice_modes: Array.isArray(item.practice_modes) ? item.practice_modes.map((x) => String(x)).filter(Boolean) : [],
       tags: Array.isArray(item.tags) ? item.tags.map((x) => String(x)).filter(Boolean) : [],
     };
+  }
+
+  private isDuplicateCorrectionLearningItem(input: LearningItemInput, corrections: Array<{ userText: string; correct: string }>): boolean {
+    if (corrections.length === 0) return false;
+    const title = this.normalizeForDedupe(input.title);
+    const sourceType = this.clean(input.source_type).toLowerCase();
+    if (input.type === "correction" || sourceType === "correction") return true;
+    return corrections.some((c) => {
+      const user = this.normalizeForDedupe(c.userText);
+      const correct = this.normalizeForDedupe(c.correct);
+      return (correct.length > 2 && title.includes(correct)) || (user.length > 2 && title.includes(user));
+    });
+  }
+
+  private normalizeForDedupe(value: unknown): string {
+    return this.clean(value)
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .trim();
   }
 
   private normalizeAnnotation(raw: Partial<TurnAnnotationInput> | undefined, input: PostTurnProcessInput, morphologyErrors: number, sessionId?: string, turnNumber?: number): TurnAnnotationInput {

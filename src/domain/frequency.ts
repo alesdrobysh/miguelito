@@ -28,7 +28,7 @@ const BAND_SCORE: Record<FrequencyBand, number> = {
   top_6k: 0.45,
   top_10k: 0.62,
   top_50k: 0.80,
-  rare_or_unknown: 0.95,
+  rare_or_unknown: 0.50,
 };
 const BAND_LEVEL: Record<FrequencyBand, CefrLevel> = {
   top_1k: "A1",
@@ -36,11 +36,11 @@ const BAND_LEVEL: Record<FrequencyBand, CefrLevel> = {
   top_6k: "B1",
   top_10k: "B2",
   top_50k: "C1",
-  rare_or_unknown: "C2",
+  rare_or_unknown: "B2",
 };
 // Reverse map used when a CEFR override lowers the band.
 const LEVEL_BAND: Record<CefrLevel, FrequencyBand> = {
-  A1: "top_1k", A2: "top_3k", B1: "top_6k", B2: "top_10k", C1: "top_50k", C2: "rare_or_unknown",
+  A1: "top_1k", A2: "top_3k", B1: "top_6k", B2: "top_10k", C1: "top_50k", C2: "top_50k",
 };
 
 const STOPLIKE = new Set([
@@ -128,7 +128,7 @@ export function outcomeScore(comprehension: string): number {
 
 // Thresholds calibrated against PCIC CEFR distribution in the 50k corpus.
 function rankToBand(rank: number | null): FrequencyBand {
-  if (rank === null) return "rare_or_unknown";   // C2: not in top 50k
+  if (rank === null) return "rare_or_unknown";   // OOV: insufficient evidence, do not promote to C2 by itself
   if (rank <= 2000) return "top_1k";             // A1
   if (rank <= 5000) return "top_3k";             // A2
   if (rank <= 12000) return "top_6k";            // B1

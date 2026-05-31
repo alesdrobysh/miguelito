@@ -7,6 +7,7 @@ export interface ChatOptions {
   maxTokens?: number;
   structured?: boolean;
   stop?: string[];
+  timeoutMs?: number;
 }
 
 export interface ChatResult {

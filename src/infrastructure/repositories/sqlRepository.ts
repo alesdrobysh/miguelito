@@ -3,20 +3,25 @@ import type { Database } from "sql.js";
 export type SaveFn = () => void;
 
 export function nowIso(): string {
-  const d = new Date();
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  return toSqlUtc(new Date());
 }
 
 export function computeNextReview(intervalDays: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + intervalDays);
+  const d = new Date(Date.now() + Math.max(0, intervalDays) * 86400000);
+  return toSqlUtc(d);
+}
+
+function toSqlUtc(d: Date): string {
   const pad = (n: number) => n.toString().padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+}
+
+export function parseSqlUtc(value: string): Date {
+  return new Date(value.includes("T") ? value : `${value.replace(" ", "T")}Z`);
 }
 
 export function computeElapsedDays(lastReviewIso: string): number {
-  const last = new Date(lastReviewIso.replace(" ", "T"));
+  const last = parseSqlUtc(lastReviewIso);
   return Math.max(0.1, (Date.now() - last.getTime()) / 86400000);
 }
 
