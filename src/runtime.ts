@@ -59,9 +59,9 @@ export function createEvaluatorProvider(config: Config): LLMProvider {
 const MODEL_HISTORY_LIMIT = 50;
 
 
-function formatStart(lang: LanguageConfig): string {
+function formatStart(_lang: LanguageConfig): string {
   return [
-    `Hola — soy ${lang.name}. Escribe de forma natural en español, o en inglés/ruso si necesitas una explicación.`,
+    "Hola — soy Miguelito. Escribe de forma natural en español.",
     "Recordaré lo útil y lo traeré de vuelta suavemente en la conversación.",
   ].join("\n");
 }
