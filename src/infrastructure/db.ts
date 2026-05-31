@@ -82,6 +82,7 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
     const db = new SQL.Database(buf);
     db.run(SCHEMA);
     runMigrations(db);
+    fs.writeFileSync(dbPath, Buffer.from(db.export()));
     return new BuddyDb(db, dbPath, languageId, errorCategories, morphologyCategories);
   }
 
