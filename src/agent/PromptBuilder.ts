@@ -27,7 +27,7 @@ export class PromptBuilder {
   constructor(private repos: PromptRepos, private lang: LanguageConfig) {}
 
   async build(userMessage?: string, dreamMemoryPath?: string): Promise<string> {
-    const soulContent = fs.readFileSync(this.lang.soulPath, "utf-8");
+    const soulContent = this.lang.soulContent ?? fs.readFileSync(this.lang.soulPath, "utf-8");
     const convState = await this.repos.session.getConversationState();
     const { basicProfile, learnerProfile, calibration, userInterests, dreamMemory } =
       await this._buildInjection(userMessage, dreamMemoryPath, convState);

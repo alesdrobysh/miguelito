@@ -22,6 +22,7 @@ export interface LanguageRuntime {
   db: BuddyDb;
   sharedDb: BuddyDb;
   agentRunner: AgentRunner;
+  promptBuilder: PromptBuilder;
   dreamService: DreamService;
   dreamMemoryPath: string;
 }
@@ -89,6 +90,28 @@ export class RuntimeManager {
     return this.runtimes.has(language);
   }
 
+  async addLanguageConfig(lang: LanguageConfig, dreamMemoryPath: string): Promise<void> {
+    if (this.runtimes.has(lang.id)) return;
+    const db = this.sharedDb.withLanguage(lang.id, lang.errorCategories, lang.morphologyCategories);
+    const toolCtx = {
+      vocab: db, errors: db, profile: this.sharedDb, langProfile: db,
+      interests: this.sharedDb, competency: db, session: db, learning: db,
+      provider: this.provider,
+    };
+    const promptBuilder = new PromptBuilder(
+      { vocab: db, errors: db, profile: this.sharedDb, langProfile: db, interests: this.sharedDb, competency: db, session: db },
+      lang,
+    );
+    const agentRunner = new AgentRunner({ provider: this.provider, evaluatorProvider: this.evaluatorProvider, session: db, promptBuilder, toolCtx, lang, dreamMemoryPath });
+    const dreamService = new DreamService(db, db, db, this.evaluatorProvider, {
+      timezone: this.config.timezone,
+      dreamMemoryPath,
+      dreamSystemPrompt: lang.prompts.dream,
+      morphologyCategories: new Set(lang.morphologyCategories),
+    });
+    this.runtimes.set(lang.id, { lang, db, sharedDb: this.sharedDb, agentRunner, promptBuilder, dreamService, dreamMemoryPath });
+  }
+
   async addLanguage(language: string): Promise<void> {
     if (this.runtimes.has(language)) return;
     const lang = loadLanguage(language);
@@ -118,7 +141,7 @@ export class RuntimeManager {
       morphologyCategories: new Set(lang.morphologyCategories),
     });
 
-    this.runtimes.set(lang.id, { lang, db, sharedDb: this.sharedDb, agentRunner, dreamService, dreamMemoryPath });
+    this.runtimes.set(lang.id, { lang, db, sharedDb: this.sharedDb, agentRunner, promptBuilder, dreamService, dreamMemoryPath });
   }
 
   runtime(language: string): LanguageRuntime {

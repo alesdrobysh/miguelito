@@ -1,4 +1,4 @@
-import { statusOf } from "../domain/fsrs.js";
+import { statusOf as _statusOf } from "../domain/fsrs.js";
 import type { ToolContext } from "./index.js";
 
 function vocabAdd(ctx: ToolContext) {

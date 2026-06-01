@@ -1,4 +1,9 @@
-import initSqlJs, { Database } from "sql.js";
+import initSqlJs, { type SqlJsConfig, Database } from "sql.js";
+
+let _sqlJsConfig: SqlJsConfig = {};
+export function configureSqlJs(config: SqlJsConfig): void {
+  _sqlJsConfig = config;
+}
 import fs from "fs";
 import path from "path";
 import type {
@@ -30,8 +35,6 @@ export type { ChunkItem, DueChunkItem, ErrorItem, UserProfile, ConversationState
 export class BuddyDb implements VocabRepository, ErrorRepository, SessionRepository, ProfileRepository, InterestRepository, CompetencyRepository, LearningRepository {
   readonly db: Database;
   private dbPath: string;
-  private languageId: string;
-
   private readonly vocab: VocabRepository;
   private readonly errors: ErrorRepository;
   private readonly sessions: SessionRepository;
@@ -49,7 +52,6 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
   ) {
     this.db = db;
     this.dbPath = dbPath;
-    this.languageId = languageId;
     const save = () => this.save();
     this.vocab = new SqlVocabRepository(db, languageId, save);
     this.errors = new SqlErrorRepository(db, languageId, save, validCategories);
@@ -70,7 +72,7 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
     errorCategories: readonly string[],
     morphologyCategories: readonly string[],
   ): Promise<BuddyDb> {
-    const SQL = await initSqlJs();
+    const SQL = await initSqlJs(_sqlJsConfig);
     const dir = path.dirname(dbPath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });

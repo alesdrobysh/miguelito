@@ -52,4 +52,6 @@ export interface LanguageConfig {
     lemmatize?: (word: string) => string;
   };
   soulPath: string;
+  /** Browser-only: bundled soul content; used instead of reading soulPath from fs */
+  soulContent?: string;
 }

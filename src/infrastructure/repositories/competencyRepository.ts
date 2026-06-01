@@ -1,7 +1,6 @@
 import type { Database } from "sql.js";
 import type {
   CompetencyVectorRow,
-  ErrorItem,
   ProficiencyEvidenceInput,
   ProficiencyEvidenceRow,
   TurnAnnotation,
@@ -16,11 +15,6 @@ export class SqlCompetencyRepository extends SqlRepository implements Competency
   constructor(db: Database, languageId: string, save: SaveFn, morphologyCategories: readonly string[]) {
     super(db, languageId, save);
     this.morphologyTypes = new Set(morphologyCategories);
-  }
-
-  private static utcAgoIso(seconds: number): string {
-    const d = new Date(Date.now() - seconds * 1000);
-    return d.toISOString().slice(0, 19).replace("T", " ");
   }
 
   private updateVectorFromAnnotation(ann: TurnAnnotationInput): void {
