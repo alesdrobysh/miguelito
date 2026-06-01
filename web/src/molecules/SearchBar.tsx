@@ -94,7 +94,7 @@ export function SearchBar({ searchQuery, searchResults, onSearch, onJumpToMessag
             >
               <div className="flex items-center gap-2 text-xs text-text-secondary">
                 <span className={cn('rounded px-1 py-0.5 text-[10px] font-semibold text-white', msg.role === 'ai' ? 'bg-accent-ai' : 'bg-primary')}>
-                  {msg.role === 'ai' ? 'M' : 'ME'}
+                  {msg.role === 'ai' ? 'MI' : 'TÚ'}
                 </span>
                 <span>{new Date(msg.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
               </div>
