@@ -89,15 +89,15 @@ export async function streamingHandleMessage(
   // 2. Build full system prompt
   const systemPrompt = await promptBuilder.build(text, DREAM_PATH)
   const postReminder = promptBuilder.buildPostHistoryReminder()
+  const fullSystemPrompt = postReminder ? `${systemPrompt}\n\n${postReminder}` : systemPrompt
 
   const messages = [
-    { role: 'system' as const, content: systemPrompt },
+    { role: 'system' as const, content: fullSystemPrompt },
     ...history.map((m) => ({
       role: (m.role === 'assistant' ? 'assistant' : 'user') as 'user' | 'assistant',
       content: m.content,
     })),
     { role: 'user' as const, content: text },
-    { role: 'system' as const, content: postReminder },
   ]
 
   // 3. Stream response
