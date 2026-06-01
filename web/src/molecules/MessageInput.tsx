@@ -1,5 +1,4 @@
 import { useState, useRef, useCallback, useEffect, type KeyboardEvent } from 'react'
-import { Button } from '../atoms/Button'
 
 interface MessageInputProps {
   onSend: (text: string) => Promise<void>
@@ -31,7 +30,7 @@ export function MessageInput({ onSend, disabled }: MessageInputProps) {
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault()
-        handleSend()
+        handleSend()  
       }
     },
     [handleSend],
