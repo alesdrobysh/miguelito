@@ -10,6 +10,7 @@ import {
 import type { Message, Profile } from '../lib/types'
 import { DEFAULT_MODEL_ID } from '../lib/types'
 import * as appDb from '../storage/db'
+import type { ProviderType } from '../storage/db'
 import { initEngine, type InitProgressReport } from '../providers/WebLLMProvider'
 import {
   createBrowserRuntime,
@@ -17,6 +18,7 @@ import {
   resetBrowserRuntime,
   streamingHandleMessage,
   setProviderTemperature,
+  setProviderConfig,
   DREAM_PATH,
 } from '../runtime/BrowserRuntime'
 import type { RuntimeManager } from '../../../src/runtime.js'
@@ -38,6 +40,8 @@ interface AppContextValue {
   messages: Message[]
   profile: Profile | null
   modelId: string
+  providerType: ProviderType
+  openrouterKey: string
   temperature: number
   searchQuery: string
   searchResults: Message[]
@@ -51,6 +55,7 @@ interface AppContextValue {
   advanceToModel: () => void
   saveProfileAndAdvance: (profile: Profile) => Promise<void>
   downloadAndStart: (modelId: string) => Promise<void>
+  startWithOpenRouter: (key: string, model: string) => Promise<void>
   // Chat
   sendMessage: (text: string) => Promise<void>
   searchMessages: (query: string) => void
@@ -60,6 +65,7 @@ interface AppContextValue {
   updateTemperature: (t: number) => void
   updateProfile: (profile: Profile) => Promise<void>
   changeModel: (newModelId: string) => Promise<void>
+  changeProvider: (type: ProviderType, modelId: string, key?: string) => Promise<void>
   runDream: () => Promise<string>
 }
 
@@ -92,6 +98,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<Message[]>([])
   const [profile, setProfile] = useState<Profile | null>(null)
   const [modelId, setModelId] = useState(DEFAULT_MODEL_ID)
+  const [providerType, setProviderType] = useState<ProviderType>('webllm')
+  const [openrouterKey, setOpenrouterKey] = useState('')
   const [temperature, setTemperature] = useState(0.7)
   const [searchQuery, setSearchQuery] = useState('')
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null)
@@ -121,9 +129,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       const mid = appState.modelId ?? DEFAULT_MODEL_ID
+      const pType = appState.providerType ?? 'webllm'
+      const orKey = appState.openrouterKey ?? ''
       setModelId(mid)
+      setProviderType(pType)
+      setOpenrouterKey(orKey)
       if (appState.temperature) setTemperature(appState.temperature)
       setProviderTemperature(appState.temperature ?? 0.7)
+      if (pType === 'openrouter') {
+        setProviderConfig({ type: 'openrouter', key: orKey, model: mid })
+      }
+
+      if (pType === 'openrouter') {
+        // OpenRouter: skip model download, go straight to runtime
+        const runtime = await createBrowserRuntime()
+        const [msgs, prof] = await Promise.all([
+          loadMessagesFromRuntime(runtime),
+          loadProfileFromRuntime(runtime),
+        ])
+        setMessages(msgs)
+        setProfile(prof)
+        setIsInitialLoading(false)
+        setPhase({ type: 'chat' })
+        return
+      }
 
       setPhase({ type: 'initializing', modelId: mid, progress: 0, text: 'Cargando modelo…' })
 
@@ -170,7 +199,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await runtime.runtime('spanish').sharedDb.setProfile({ name: profile.name, goal: profile.goal })
     }
 
-    await appDb.saveAppState({ onboardingComplete: true, modelId: mid, temperature })
+    await appDb.saveAppState({ onboardingComplete: true, providerType: 'webllm', modelId: mid, openrouterKey: '', temperature })
+    setProviderType('webllm')
+    setIsInitialLoading(false)
+    setPhase({ type: 'chat' })
+  }, [profile, temperature])
+
+  const startWithOpenRouter = useCallback(async (key: string, model: string) => {
+    setProviderConfig({ type: 'openrouter', key, model })
+    setProviderType('openrouter')
+    setOpenrouterKey(key)
+    setModelId(model)
+
+    const runtime = await createBrowserRuntime()
+    if (profile) {
+      await runtime.runtime('spanish').sharedDb.setProfile({ name: profile.name, goal: profile.goal })
+    }
+
+    await appDb.saveAppState({ onboardingComplete: true, providerType: 'openrouter', modelId: model, openrouterKey: key, temperature })
     setIsInitialLoading(false)
     setPhase({ type: 'chat' })
   }, [profile, temperature])
@@ -254,6 +300,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const changeProvider = useCallback(async (type: ProviderType, newModelId: string, key = '') => {
+    setIsChangingModel(true)
+    resetBrowserRuntime()
+    try {
+      if (type === 'openrouter') {
+        setProviderConfig({ type: 'openrouter', key, model: newModelId })
+      } else {
+        setProviderConfig({ type: 'webllm' })
+        await initEngine(newModelId, () => {})
+      }
+      setProviderType(type)
+      setOpenrouterKey(key)
+      setModelId(newModelId)
+      await createBrowserRuntime()
+      const appState = await appDb.getAppState()
+      if (appState) await appDb.saveAppState({ ...appState, providerType: type, modelId: newModelId, openrouterKey: key })
+    } finally {
+      setIsChangingModel(false)
+    }
+  }, [])
+
   const runDream = useCallback(async (): Promise<string> => {
     const runtime = getBrowserRuntime()
     if (!runtime) return 'No runtime'
@@ -271,6 +338,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         messages,
         profile,
         modelId,
+        providerType,
+        openrouterKey,
         temperature,
         searchQuery,
         searchResults,
@@ -283,6 +352,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         advanceToModel,
         saveProfileAndAdvance,
         downloadAndStart,
+        startWithOpenRouter,
         sendMessage,
         searchMessages,
         jumpToMessage,
@@ -291,6 +361,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         updateTemperature,
         updateProfile,
         changeModel,
+        changeProvider,
         runDream,
       }}
     >

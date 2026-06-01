@@ -10,14 +10,19 @@ interface OnboardingFlowProps {
 }
 
 export function OnboardingFlow({ step }: OnboardingFlowProps) {
-  const { advanceToProfile, saveProfileAndAdvance, downloadAndStart } = useApp()
+  const { advanceToProfile, saveProfileAndAdvance, downloadAndStart, startWithOpenRouter } = useApp()
 
   return (
     <div className="flex min-h-screen flex-col bg-white">
       <div className="mx-auto w-full max-w-md flex-1">
         {step === 'welcome' && <WelcomeStep onNext={advanceToProfile} />}
         {step === 'profile' && <ProfileStep onSave={saveProfileAndAdvance} />}
-        {step === 'model' && <ModelStep onSelect={downloadAndStart} />}
+        {step === 'model' && (
+          <ModelStep
+            onSelectWebLLM={downloadAndStart}
+            onSelectOpenRouter={startWithOpenRouter}
+          />
+        )}
         {step === 'download' && <DownloadStep />}
       </div>
     </div>

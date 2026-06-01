@@ -5,7 +5,7 @@ import { SearchBar } from '../molecules/SearchBar'
 import { SettingsDrawer } from '../molecules/SettingsDrawer'
 import { MessageInput } from '../molecules/MessageInput'
 import { MessagesList } from './MessagesList'
-import { AVAILABLE_MODELS } from '../lib/types'
+import { AVAILABLE_MODELS, OPENROUTER_MODELS } from '../lib/types'
 
 export function Chat() {
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -13,6 +13,8 @@ export function Chat() {
     searchQuery,
     searchResults,
     modelId,
+    providerType,
+    openrouterKey,
     isChangingModel,
     temperature,
     profile,
@@ -22,16 +24,19 @@ export function Chat() {
     jumpToMessage,
     updateTemperature,
     changeModel,
+    changeProvider,
     updateProfile,
     clearChat,
   } = useChat()
 
-  const model = AVAILABLE_MODELS.find((m) => m.id === modelId)
+  const modelName = providerType === 'openrouter'
+    ? (OPENROUTER_MODELS.find((m) => m.id === modelId)?.name ?? modelId)
+    : (AVAILABLE_MODELS.find((m) => m.id === modelId)?.name ?? modelId)
 
   return (
     <div className="flex h-screen flex-col bg-white">
       <ChatHeader
-        modelName={model?.name ?? modelId}
+        modelName={modelName}
         isInitializing={isChangingModel}
         onSettingsClick={() => setSettingsOpen(true)}
       />
@@ -47,11 +52,14 @@ export function Chat() {
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         modelId={modelId}
+        providerType={providerType}
+        openrouterKey={openrouterKey}
         isChangingModel={isChangingModel}
         temperature={temperature}
         profile={profile}
         onUpdateTemperature={updateTemperature}
         onChangeModel={changeModel}
+        onChangeProvider={changeProvider}
         onUpdateProfile={updateProfile}
         onClearChat={clearChat}
       />

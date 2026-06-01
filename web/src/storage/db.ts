@@ -4,9 +4,13 @@
 
 import { openDB, type IDBPDatabase } from 'idb'
 
-interface AppStateValue {
+export type ProviderType = 'webllm' | 'openrouter'
+
+export interface AppStateValue {
   onboardingComplete: boolean
+  providerType: ProviderType
   modelId: string
+  openrouterKey: string
   temperature: number
 }
 

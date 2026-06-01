@@ -2,18 +2,22 @@ import { useState, useCallback } from 'react'
 import { Drawer } from '../atoms/Drawer'
 import { Button } from '../atoms/Button'
 import { cn } from '../lib/cn'
-import { AVAILABLE_MODELS } from '../lib/types'
+import { AVAILABLE_MODELS, OPENROUTER_MODELS, DEFAULT_OPENROUTER_MODEL_ID } from '../lib/types'
 import type { Profile } from '../lib/types'
+import type { ProviderType } from '../storage/db'
 
 interface SettingsDrawerProps {
   open: boolean
   onClose: () => void
   modelId: string
+  providerType: ProviderType
+  openrouterKey: string
   isChangingModel: boolean
   temperature: number
   profile: Profile | null
   onUpdateTemperature: (t: number) => void
   onChangeModel: (modelId: string) => Promise<void>
+  onChangeProvider: (type: ProviderType, modelId: string, key?: string) => Promise<void>
   onUpdateProfile: (profile: Profile) => Promise<void>
   onClearChat: () => void
 }
@@ -22,11 +26,14 @@ export function SettingsDrawer({
   open,
   onClose,
   modelId,
+  providerType,
+  openrouterKey,
   isChangingModel,
   temperature,
   profile,
   onUpdateTemperature,
   onChangeModel,
+  onChangeProvider,
   onUpdateProfile,
   onClearChat,
 }: SettingsDrawerProps) {
@@ -35,6 +42,12 @@ export function SettingsDrawer({
   const [nameInput, setNameInput] = useState(profile?.name ?? '')
   const [goalInput, setGoalInput] = useState(profile?.goal ?? '')
   const [savingProfile, setSavingProfile] = useState(false)
+  const [orKeyInput, setOrKeyInput] = useState(openrouterKey)
+  const [orModelInput, setOrModelInput] = useState(
+    providerType === 'openrouter' ? modelId : DEFAULT_OPENROUTER_MODEL_ID
+  )
+  const [showOrKey, setShowOrKey] = useState(false)
+  const [editingProvider, setEditingProvider] = useState(false)
 
   const handleClearClick = useCallback(() => {
     if (confirmClear) {
@@ -111,9 +124,114 @@ export function SettingsDrawer({
 
         <hr className="border-border" />
 
-        {/* Modelo */}
+        {/* Proveedor */}
         <div>
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-tertiary">Modelo</p>
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs font-medium uppercase tracking-wide text-text-tertiary">Proveedor</p>
+            {!editingProvider && (
+              <button onClick={() => setEditingProvider(true)} className="text-xs text-primary hover:underline">
+                Cambiar
+              </button>
+            )}
+          </div>
+
+          {!editingProvider ? (
+            <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm">
+              {providerType === 'webllm' ? (
+                <p className="font-medium text-text-primary">En tu navegador (WebLLM)</p>
+              ) : (
+                <>
+                  <p className="font-medium text-text-primary">OpenRouter</p>
+                  <p className="text-xs text-text-secondary">{modelId}</p>
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <div className="flex rounded-xl border border-border bg-surface-input p-1">
+                <button
+                  onClick={() => setOrKeyInput('')}
+                  className={cn(
+                    'flex-1 rounded-lg py-1.5 text-xs font-medium transition-colors',
+                    'text-text-secondary hover:text-text-primary',
+                  )}
+                >
+                  WebLLM
+                </button>
+                <button
+                  className={cn(
+                    'flex-1 rounded-lg py-1.5 text-xs font-medium transition-colors',
+                    'text-text-secondary hover:text-text-primary',
+                  )}
+                >
+                  OpenRouter
+                </button>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-text-secondary">API Key de OpenRouter</label>
+                <div className="relative">
+                  <input
+                    type={showOrKey ? 'text' : 'password'}
+                    value={orKeyInput}
+                    onChange={(e) => setOrKeyInput(e.target.value)}
+                    placeholder="sk-or-v1-... (vacío = usar WebLLM)"
+                    className="w-full rounded-lg border border-border-input bg-surface-input px-3 py-2 pr-14 text-xs text-text-primary placeholder-text-tertiary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowOrKey((v) => !v)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-text-tertiary hover:text-text-secondary"
+                  >
+                    {showOrKey ? 'Ocultar' : 'Ver'}
+                  </button>
+                </div>
+              </div>
+
+              {orKeyInput.trim() && (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-text-secondary">Modelo</label>
+                  <select
+                    value={orModelInput}
+                    onChange={(e) => setOrModelInput(e.target.value)}
+                    className="w-full rounded-lg border border-border-input bg-surface-input px-3 py-2 text-xs text-text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    {OPENROUTER_MODELS.map((m) => (
+                      <option key={m.id} value={m.id}>{m.name} — {m.description}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  disabled={isChangingModel}
+                  onClick={async () => {
+                    if (orKeyInput.trim()) {
+                      await onChangeProvider('openrouter', orModelInput, orKeyInput.trim())
+                    } else {
+                      // Switch back to WebLLM — pick first model
+                      await onChangeProvider('webllm', AVAILABLE_MODELS[0].id)
+                    }
+                    setEditingProvider(false)
+                  }}
+                  className="flex-1"
+                >
+                  {isChangingModel ? 'Cambiando…' : 'Guardar'}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setEditingProvider(false)} className="flex-1">
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Modelo (WebLLM only) */}
+        {providerType === 'webllm' && (
+        <div>
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-tertiary">Modelo local</p>
           <div className="flex flex-col gap-1.5">
             {AVAILABLE_MODELS.map((m) => {
               const isActive = m.id === modelId
@@ -141,6 +259,7 @@ export function SettingsDrawer({
             <p className="mt-2 text-xs text-text-tertiary">Cargando modelo…</p>
           )}
         </div>
+        )}
 
         <hr className="border-border" />
 

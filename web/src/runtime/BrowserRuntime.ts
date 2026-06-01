@@ -1,9 +1,10 @@
 // Creates the real miguelito RuntimeManager for browser use.
-// - WebLLM as LLM provider
+// - WebLLM or OpenRouter as LLM provider (selected by ProviderConfig)
 // - BuddyDb (sql.js) with IndexedDB persistence via the fs shim
 // - Real PromptBuilder, AgentRunner, tools, DreamService
 
 import { getEngine, streamChat } from '../providers/WebLLMProvider'
+import { streamChatOpenRouter, makeOpenRouterProvider } from '../providers/OpenRouterProvider'
 import { loadDbFromIdb, registerText } from '../browser-shims/fs'
 import soulRaw from '../languages/spanish/soul.md?raw'
 import { configureSqlJs, BuddyDb } from '../../../src/infrastructure/db.js'
@@ -21,14 +22,27 @@ export const DREAM_PATH = '/virtual/memory/MEMORY-spanish.md'
 const CHAT_ID = 0
 const MODEL_HISTORY_LIMIT = 50
 
+// ── Provider config ───────────────────────────────────────────────────────────
+
+export type ProviderConfig =
+  | { type: 'webllm' }
+  | { type: 'openrouter'; key: string; model: string }
+
+let _providerConfig: ProviderConfig = { type: 'webllm' }
+export function setProviderConfig(cfg: ProviderConfig) { _providerConfig = cfg }
+export function getProviderConfig(): ProviderConfig { return _providerConfig }
+
 // ── Temperature ───────────────────────────────────────────────────────────────
 
 let _temperature = 0.7
 export function setProviderTemperature(t: number) { _temperature = t }
 
-// ── LLM Provider (non-streaming) ─────────────────────────────────────────────
+// ── LLM Provider (non-streaming, for PostTurnProcessor) ──────────────────────
 
-function makeWebLLMProvider(): LLMProvider {
+function makeProvider(): LLMProvider {
+  if (_providerConfig.type === 'openrouter') {
+    return makeOpenRouterProvider(_providerConfig.key, _providerConfig.model)
+  }
   return {
     async chat(messages: ChatMessage[], _tools?: object[], opts?: ChatOptions): Promise<ChatResult> {
       const engine = getEngine()
@@ -41,7 +55,6 @@ function makeWebLLMProvider(): LLMProvider {
       })
       return { content: response.choices[0]?.message?.content ?? null, toolCalls: [] }
     },
-
     async complete(systemPrompt: string | null, userPrompt: string, opts?: ChatOptions): Promise<string> {
       const msgs: ChatMessage[] = []
       if (systemPrompt) msgs.push({ role: 'system', content: systemPrompt })
@@ -49,7 +62,6 @@ function makeWebLLMProvider(): LLMProvider {
       const r = await this.chat(msgs, undefined, opts)
       return r.content ?? ''
     },
-
     async completeJson<T>(systemPrompt: string | null, userPrompt: string, opts?: ChatOptions): Promise<T> {
       const text = await this.complete(systemPrompt, userPrompt, opts)
       try { return JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] ?? '{}') as T }
@@ -59,8 +71,6 @@ function makeWebLLMProvider(): LLMProvider {
 }
 
 // ── Streaming message handler (used by AppContext) ────────────────────────────
-// Builds the real system prompt via PromptBuilder, streams via WebLLM,
-// then runs PostTurnProcessor in background for vocab/error logging.
 
 export async function streamingHandleMessage(
   runtime: RuntimeManager,
@@ -75,7 +85,7 @@ export async function streamingHandleMessage(
   const history = await db.getSessionTranscript(convState.session_id, MODEL_HISTORY_LIMIT) as ChatMessage[]
   await db.addChatMessage(CHAT_ID, 'user', text, convState.session_id)
 
-  // 2. Build full system prompt (profile, vocab context, competency calibration, etc.)
+  // 2. Build full system prompt
   const systemPrompt = await promptBuilder.build(text, DREAM_PATH)
   const postReminder = promptBuilder.buildPostHistoryReminder()
 
@@ -91,17 +101,24 @@ export async function streamingHandleMessage(
 
   // 3. Stream response
   let fullContent = ''
-  await streamChat(messages, _temperature, (delta) => {
-    fullContent += delta
-    onChunk(delta)
-  })
+  if (_providerConfig.type === 'openrouter') {
+    await streamChatOpenRouter(messages, _providerConfig.key, _providerConfig.model, _temperature, (delta) => {
+      fullContent += delta
+      onChunk(delta)
+    })
+  } else {
+    await streamChat(messages, _temperature, (delta) => {
+      fullContent += delta
+      onChunk(delta)
+    })
+  }
 
   // 4. Persist AI response
   await db.addChatMessage(CHAT_ID, 'assistant', fullContent, convState.session_id)
   await db.updateConversationState('conversation')
 
-  // 5. Run PostTurnProcessor in background (vocab extraction, error logging, competency update)
-  const provider = makeWebLLMProvider()
+  // 5. Run PostTurnProcessor in background
+  const provider = makeProvider()
   const postTurn = new PostTurnProcessor({
     provider,
     vocab: db,
@@ -129,7 +146,7 @@ export async function createBrowserRuntime(): Promise<RuntimeManager> {
   await loadDbFromIdb(DB_PATH)
 
   const sharedDb = await BuddyDb.open(DB_PATH, 'shared', [], [])
-  const provider = makeWebLLMProvider()
+  const provider = makeProvider()
 
   const config: Partial<Config> = {
     dataDir: '/virtual',
