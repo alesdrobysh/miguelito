@@ -5,13 +5,15 @@ import { AVAILABLE_MODELS, DEFAULT_MODEL_ID, OPENROUTER_MODELS, DEFAULT_OPENROUT
 
 interface ModelStepProps {
   onSelectWebLLM: (modelId: string) => Promise<void>
-  onSelectOpenRouter: (key: string, model: string) => Promise<void>
+  onSelectOpenRouter: (key: string, model: string, evaluatorModel?: string) => Promise<void>
 }
 
 export function ModelStep({ onSelectWebLLM, onSelectOpenRouter }: ModelStepProps) {
   const [tab, setTab] = useState<'webllm' | 'openrouter'>('webllm')
   const [selectedWebLLM, setSelectedWebLLM] = useState(DEFAULT_MODEL_ID)
-  const [selectedOR, setSelectedOR] = useState(DEFAULT_OPENROUTER_MODEL_ID)
+  const [customWebLLM, setCustomWebLLM] = useState('')
+  const [customOR, setCustomOR] = useState(DEFAULT_OPENROUTER_MODEL_ID)
+  const [customEvaluator, setCustomEvaluator] = useState('')
   const [apiKey, setApiKey] = useState('')
   const [showKey, setShowKey] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -20,16 +22,29 @@ export function ModelStep({ onSelectWebLLM, onSelectOpenRouter }: ModelStepProps
   const handleContinue = async () => {
     setError('')
     if (tab === 'webllm') {
+      const modelId = selectedWebLLM === 'custom' ? customWebLLM.trim() : selectedWebLLM
+      if (!modelId) {
+        setError('Introduce un ID de modelo WebLLM')
+        return
+      }
       setLoading(true)
-      await onSelectWebLLM(selectedWebLLM)
+      await onSelectWebLLM(modelId)
       return
     }
     if (!apiKey.trim()) {
       setError('Introduce tu API key de OpenRouter')
       return
     }
+    const orModel = customOR.trim()
+    if (!orModel) {
+      setError('Introduce un ID de modelo de OpenRouter')
+      return
+    }
+
+    const orEvaluator = customEvaluator.trim() || orModel
+    
     setLoading(true)
-    await onSelectOpenRouter(apiKey.trim(), selectedOR)
+    await onSelectOpenRouter(apiKey.trim(), orModel, orEvaluator)
   }
 
   return (
@@ -86,6 +101,26 @@ export function ModelStep({ onSelectWebLLM, onSelectOpenRouter }: ModelStepProps
                 </div>
               </button>
             ))}
+            <button
+              onClick={() => setSelectedWebLLM('custom')}
+              className={cn(
+                'flex items-center justify-between rounded-xl border-2 px-4 py-3 text-left transition-colors',
+                selectedWebLLM === 'custom' ? 'border-primary bg-primary-light' : 'border-border bg-white hover:bg-slate-50',
+              )}
+            >
+              <div className="flex flex-col gap-0.5">
+                <span className="text-sm font-semibold text-text-primary">Otro...</span>
+                <span className="text-xs text-text-secondary">Introduce un ID de modelo WebLLM</span>
+              </div>
+            </button>
+            {selectedWebLLM === 'custom' && (
+              <input
+                value={customWebLLM}
+                onChange={(e) => setCustomWebLLM(e.target.value)}
+                placeholder="Ej: Llama-3-8B-Instruct-v0.1-q4f16_1-MLC"
+                className="w-full rounded-lg border border-border-input bg-surface-input px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            )}
           </div>
           <p className="text-center text-xs text-text-tertiary">
             Requiere WebGPU (Chrome 113+ o Edge 113+). Se descarga una vez y queda guardado.
@@ -121,29 +156,26 @@ export function ModelStep({ onSelectWebLLM, onSelectOpenRouter }: ModelStepProps
             </div>
 
             <div>
-              <label className="mb-1 block text-xs font-medium text-text-secondary">Modelo</label>
-              <div className="flex flex-col gap-1.5">
-                {OPENROUTER_MODELS.map((m) => (
-                  <button
-                    key={m.id}
-                    onClick={() => setSelectedOR(m.id)}
-                    className={cn(
-                      'flex items-center justify-between rounded-lg border-2 px-3 py-2 text-left transition-colors',
-                      selectedOR === m.id ? 'border-primary bg-primary-light' : 'border-border bg-white hover:bg-slate-50',
-                    )}
-                  >
-                    <div>
-                      <span className="text-sm font-medium text-text-primary">{m.name}</span>
-                      <span className="ml-2 text-xs text-text-secondary">{m.description}</span>
-                    </div>
-                    {m.id === DEFAULT_OPENROUTER_MODEL_ID && (
-                      <span className="rounded bg-accent-ai-light px-1.5 py-0.5 text-[10px] font-semibold text-accent-ai">
-                        Recomendado
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
+              <label className="mb-1 block text-xs font-medium text-text-secondary">Modelo de Chat</label>
+              <input
+                value={customOR}
+                onChange={(e) => setCustomOR(e.target.value)}
+                placeholder="Ej: google/gemini-2.0-flash-001"
+                className="w-full rounded-lg border border-border-input bg-surface-input px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text-secondary">Modelo Evaluador (Post-procesamiento)</label>
+              <input
+                value={customEvaluator}
+                onChange={(e) => setCustomEvaluator(e.target.value)}
+                placeholder="Ej: deepseek/deepseek-chat"
+                className="w-full rounded-lg border border-border-input bg-surface-input px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              <p className="mt-1 text-[10px] text-text-tertiary">
+                Vacio = usar el mismo que el de chat
+              </p>
             </div>
           </div>
           <p className="text-center text-xs text-text-tertiary">

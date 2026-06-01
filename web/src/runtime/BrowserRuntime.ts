@@ -26,7 +26,7 @@ const MODEL_HISTORY_LIMIT = 50
 
 export type ProviderConfig =
   | { type: 'webllm' }
-  | { type: 'openrouter'; key: string; model: string }
+  | { type: 'openrouter'; key: string; model: string; evaluatorModel?: string }
 
 let _providerConfig: ProviderConfig = { type: 'webllm' }
 export function setProviderConfig(cfg: ProviderConfig) { _providerConfig = cfg }
@@ -39,9 +39,10 @@ export function setProviderTemperature(t: number) { _temperature = t }
 
 // ── LLM Provider (non-streaming, for PostTurnProcessor) ──────────────────────
 
-function makeProvider(): LLMProvider {
+function makeProvider(modelId?: string): LLMProvider {
   if (_providerConfig.type === 'openrouter') {
-    return makeOpenRouterProvider(_providerConfig.key, _providerConfig.model)
+    const finalModel = modelId || _providerConfig.model
+    return makeOpenRouterProvider(_providerConfig.key, finalModel)
   }
   return {
     async chat(messages: ChatMessage[], _tools?: object[], opts?: ChatOptions): Promise<ChatResult> {
@@ -118,7 +119,8 @@ export async function streamingHandleMessage(
   await db.updateConversationState('conversation')
 
   // 5. Run PostTurnProcessor in background
-  const provider = makeProvider()
+  const evaluatorModel = _providerConfig.type === 'openrouter' ? _providerConfig.evaluatorModel : undefined
+  const provider = makeProvider(evaluatorModel)
   const postTurn = new PostTurnProcessor({
     provider,
     vocab: db,
@@ -146,18 +148,20 @@ export async function createBrowserRuntime(): Promise<RuntimeManager> {
   await loadDbFromIdb(DB_PATH)
 
   const sharedDb = await BuddyDb.open(DB_PATH, 'shared', [], [])
-  const provider = makeProvider()
+  const chatProvider = makeProvider()
+  const evaluatorModel = _providerConfig.type === 'openrouter' ? _providerConfig.evaluatorModel : undefined
+  const evalProvider = makeProvider(evaluatorModel)
 
   const config: Partial<Config> = {
     dataDir: '/virtual',
     dbPath: DB_PATH,
     provider: 'openrouter',
-    chatModel: 'webllm',
-    evaluatorModel: 'webllm',
+    chatModel: _providerConfig.type === 'openrouter' ? _providerConfig.model : 'webllm',
+    evaluatorModel: (_providerConfig.type === 'openrouter' && _providerConfig.evaluatorModel) ? _providerConfig.evaluatorModel : 'webllm',
     ollamaModel: '',
     ollamaBaseUrl: '',
     ollamaApiKey: '',
-    openrouterApiKey: '',
+    openrouterApiKey: _providerConfig.type === 'openrouter' ? _providerConfig.key : '',
     openrouterBaseUrl: '',
     telegramToken: '',
     telegramBotTokens: {},
@@ -165,7 +169,7 @@ export async function createBrowserRuntime(): Promise<RuntimeManager> {
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   }
 
-  _runtime = new RuntimeManager(config as Config, provider, provider, sharedDb)
+  _runtime = new RuntimeManager(config as Config, chatProvider, evalProvider, sharedDb)
   await _runtime.addLanguageConfig(SpanishLanguage, DREAM_PATH)
   return _runtime
 }

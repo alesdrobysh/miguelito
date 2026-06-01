@@ -40,6 +40,7 @@ interface AppContextValue {
   messages: Message[]
   profile: Profile | null
   modelId: string
+  evaluatorModelId: string
   providerType: ProviderType
   openrouterKey: string
   temperature: number
@@ -55,7 +56,7 @@ interface AppContextValue {
   advanceToModel: () => void
   saveProfileAndAdvance: (profile: Profile) => Promise<void>
   downloadAndStart: (modelId: string) => Promise<void>
-  startWithOpenRouter: (key: string, model: string) => Promise<void>
+  startWithOpenRouter: (key: string, model: string, evaluatorModel?: string) => Promise<void>
   // Chat
   sendMessage: (text: string) => Promise<void>
   searchMessages: (query: string) => void
@@ -65,7 +66,7 @@ interface AppContextValue {
   updateTemperature: (t: number) => void
   updateProfile: (profile: Profile) => Promise<void>
   changeModel: (newModelId: string) => Promise<void>
-  changeProvider: (type: ProviderType, modelId: string, key?: string) => Promise<void>
+  changeProvider: (type: ProviderType, modelId: string, evaluatorModelId?: string, key?: string) => Promise<void>
   runDream: () => Promise<string>
 }
 
@@ -98,6 +99,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<Message[]>([])
   const [profile, setProfile] = useState<Profile | null>(null)
   const [modelId, setModelId] = useState(DEFAULT_MODEL_ID)
+  const [evaluatorModelId, setEvaluatorModelId] = useState(DEFAULT_MODEL_ID)
   const [providerType, setProviderType] = useState<ProviderType>('webllm')
   const [openrouterKey, setOpenrouterKey] = useState('')
   const [temperature, setTemperature] = useState(0.7)
@@ -129,15 +131,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       const mid = appState.modelId ?? DEFAULT_MODEL_ID
+      const emid = appState.evaluatorModelId ?? mid
       const pType = appState.providerType ?? 'webllm'
       const orKey = appState.openrouterKey ?? ''
       setModelId(mid)
+      setEvaluatorModelId(emid)
       setProviderType(pType)
       setOpenrouterKey(orKey)
       if (appState.temperature) setTemperature(appState.temperature)
       setProviderTemperature(appState.temperature ?? 0.7)
       if (pType === 'openrouter') {
-        setProviderConfig({ type: 'openrouter', key: orKey, model: mid })
+        setProviderConfig({ type: 'openrouter', key: orKey, model: mid, evaluatorModel: emid })
       }
 
       if (pType === 'openrouter') {
@@ -185,6 +189,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const downloadAndStart = useCallback(async (mid: string) => {
     setModelId(mid)
+    setEvaluatorModelId(mid)
     setPhase({ type: 'onboarding', step: 'download' })
 
     await initEngine(mid, (report: InitProgressReport) => {
@@ -199,24 +204,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await runtime.runtime('spanish').sharedDb.setProfile({ name: profile.name, goal: profile.goal })
     }
 
-    await appDb.saveAppState({ onboardingComplete: true, providerType: 'webllm', modelId: mid, openrouterKey: '', temperature })
+    await appDb.saveAppState({ onboardingComplete: true, providerType: 'webllm', modelId: mid, evaluatorModelId: mid, openrouterKey: '', temperature })
     setProviderType('webllm')
     setIsInitialLoading(false)
     setPhase({ type: 'chat' })
   }, [profile, temperature])
 
-  const startWithOpenRouter = useCallback(async (key: string, model: string) => {
-    setProviderConfig({ type: 'openrouter', key, model })
+  const startWithOpenRouter = useCallback(async (key: string, model: string, evaluatorModel?: string) => {
+    const emid = evaluatorModel || model
+    setProviderConfig({ type: 'openrouter', key, model, evaluatorModel: emid })
     setProviderType('openrouter')
     setOpenrouterKey(key)
     setModelId(model)
+    setEvaluatorModelId(emid)
 
     const runtime = await createBrowserRuntime()
     if (profile) {
       await runtime.runtime('spanish').sharedDb.setProfile({ name: profile.name, goal: profile.goal })
     }
 
-    await appDb.saveAppState({ onboardingComplete: true, providerType: 'openrouter', modelId: model, openrouterKey: key, temperature })
+    await appDb.saveAppState({ onboardingComplete: true, providerType: 'openrouter', modelId: model, evaluatorModelId: emid, openrouterKey: key, temperature })
     setIsInitialLoading(false)
     setPhase({ type: 'chat' })
   }, [profile, temperature])
@@ -289,23 +296,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const changeModel = useCallback(async (newModelId: string) => {
     setIsChangingModel(true)
     setModelId(newModelId)
+    setEvaluatorModelId(newModelId)
     resetBrowserRuntime()
     try {
       await initEngine(newModelId, () => {})
       await createBrowserRuntime()
       const appState = await appDb.getAppState()
-      if (appState) await appDb.saveAppState({ ...appState, modelId: newModelId })
+      if (appState) await appDb.saveAppState({ ...appState, modelId: newModelId, evaluatorModelId: newModelId })
     } finally {
       setIsChangingModel(false)
     }
   }, [])
 
-  const changeProvider = useCallback(async (type: ProviderType, newModelId: string, key = '') => {
+  const changeProvider = useCallback(async (type: ProviderType, newModelId: string, newEvaluatorModelId?: string, key = '') => {
     setIsChangingModel(true)
     resetBrowserRuntime()
+    const emid = newEvaluatorModelId || newModelId
     try {
       if (type === 'openrouter') {
-        setProviderConfig({ type: 'openrouter', key, model: newModelId })
+        setProviderConfig({ type: 'openrouter', key, model: newModelId, evaluatorModel: emid })
       } else {
         setProviderConfig({ type: 'webllm' })
         await initEngine(newModelId, () => {})
@@ -313,9 +322,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setProviderType(type)
       setOpenrouterKey(key)
       setModelId(newModelId)
+      setEvaluatorModelId(emid)
       await createBrowserRuntime()
       const appState = await appDb.getAppState()
-      if (appState) await appDb.saveAppState({ ...appState, providerType: type, modelId: newModelId, openrouterKey: key })
+      if (appState) {
+        await appDb.saveAppState({ 
+          ...appState, 
+          providerType: type, 
+          modelId: newModelId, 
+          evaluatorModelId: emid,
+          openrouterKey: key 
+        })
+      }
     } finally {
       setIsChangingModel(false)
     }

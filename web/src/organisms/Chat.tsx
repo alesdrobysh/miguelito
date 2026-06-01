@@ -13,6 +13,7 @@ export function Chat() {
     searchQuery,
     searchResults,
     modelId,
+    evaluatorModelId,
     providerType,
     openrouterKey,
     isChangingModel,
@@ -52,6 +53,7 @@ export function Chat() {
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         modelId={modelId}
+        evaluatorModelId={evaluatorModelId}
         providerType={providerType}
         openrouterKey={openrouterKey}
         isChangingModel={isChangingModel}

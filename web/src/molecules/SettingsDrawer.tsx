@@ -10,6 +10,7 @@ interface SettingsDrawerProps {
   open: boolean
   onClose: () => void
   modelId: string
+  evaluatorModelId: string
   providerType: ProviderType
   openrouterKey: string
   isChangingModel: boolean
@@ -17,7 +18,7 @@ interface SettingsDrawerProps {
   profile: Profile | null
   onUpdateTemperature: (t: number) => void
   onChangeModel: (modelId: string) => Promise<void>
-  onChangeProvider: (type: ProviderType, modelId: string, key?: string) => Promise<void>
+  onChangeProvider: (type: ProviderType, modelId: string, evaluatorModelId?: string, key?: string) => Promise<void>
   onUpdateProfile: (profile: Profile) => Promise<void>
   onClearChat: () => void
 }
@@ -31,6 +32,7 @@ export function SettingsDrawer({
   isChangingModel,
   temperature,
   profile,
+  evaluatorModelId,
   onUpdateTemperature,
   onChangeModel,
   onChangeProvider,
@@ -43,11 +45,15 @@ export function SettingsDrawer({
   const [goalInput, setGoalInput] = useState(profile?.goal ?? '')
   const [savingProfile, setSavingProfile] = useState(false)
   const [orKeyInput, setOrKeyInput] = useState(openrouterKey)
-  const [orModelInput, setOrModelInput] = useState(
-    providerType === 'openrouter' ? modelId : DEFAULT_OPENROUTER_MODEL_ID
-  )
   const [showOrKey, setShowOrKey] = useState(false)
   const [editingProvider, setEditingProvider] = useState(false)
+  const [customOrModel, setCustomOrModel] = useState(modelId)
+  const [customWebLLMModel, setCustomWebLLMModel] = useState(
+    providerType === 'webllm' && !AVAILABLE_MODELS.find(m => m.id === modelId) ? modelId : ''
+  )
+  const [customEvaluatorModel, setCustomEvaluatorModel] = useState(
+    evaluatorModelId === modelId ? '' : evaluatorModelId
+  )
 
   const handleClearClick = useCallback(() => {
     if (confirmClear) {
@@ -150,56 +156,72 @@ export function SettingsDrawer({
             <div className="flex flex-col gap-3">
               <div className="flex rounded-xl border border-border bg-surface-input p-1">
                 <button
-                  onClick={() => setOrKeyInput('')}
+                  onClick={() => {
+                    setOrKeyInput('')
+                    setEditingProvider(false) // Optionally auto-save? No, let's just update local state
+                  }}
                   className={cn(
                     'flex-1 rounded-lg py-1.5 text-xs font-medium transition-colors',
-                    'text-text-secondary hover:text-text-primary',
+                    !orKeyInput.trim() ? 'bg-white text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary',
                   )}
                 >
                   WebLLM
                 </button>
                 <button
+                  onClick={() => {
+                    if (!orKeyInput.trim()) setOrKeyInput(' ') // placeholder to toggle view
+                  }}
                   className={cn(
                     'flex-1 rounded-lg py-1.5 text-xs font-medium transition-colors',
-                    'text-text-secondary hover:text-text-primary',
+                    orKeyInput.trim() ? 'bg-white text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary',
                   )}
                 >
                   OpenRouter
                 </button>
               </div>
 
-              <div>
-                <label className="mb-1 block text-xs font-medium text-text-secondary">API Key de OpenRouter</label>
-                <div className="relative">
-                  <input
-                    type={showOrKey ? 'text' : 'password'}
-                    value={orKeyInput}
-                    onChange={(e) => setOrKeyInput(e.target.value)}
-                    placeholder="sk-or-v1-... (vacío = usar WebLLM)"
-                    className="w-full rounded-lg border border-border-input bg-surface-input px-3 py-2 pr-14 text-xs text-text-primary placeholder-text-tertiary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowOrKey((v) => !v)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-text-tertiary hover:text-text-secondary"
-                  >
-                    {showOrKey ? 'Ocultar' : 'Ver'}
-                  </button>
-                </div>
-              </div>
-
               {orKeyInput.trim() && (
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-text-secondary">Modelo</label>
-                  <select
-                    value={orModelInput}
-                    onChange={(e) => setOrModelInput(e.target.value)}
-                    className="w-full rounded-lg border border-border-input bg-surface-input px-3 py-2 text-xs text-text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    {OPENROUTER_MODELS.map((m) => (
-                      <option key={m.id} value={m.id}>{m.name} — {m.description}</option>
-                    ))}
-                  </select>
+                  <label className="mb-1 block text-xs font-medium text-text-secondary">API Key de OpenRouter</label>
+                  <div className="relative">
+                    <input
+                      type={showOrKey ? 'text' : 'password'}
+                      value={orKeyInput === ' ' ? '' : orKeyInput}
+                      onChange={(e) => setOrKeyInput(e.target.value)}
+                      placeholder="sk-or-v1-..."
+                      className="w-full rounded-lg border border-border-input bg-surface-input px-3 py-2 pr-14 text-xs text-text-primary placeholder-text-tertiary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowOrKey((v) => !v)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-text-tertiary hover:text-text-secondary"
+                    >
+                      {showOrKey ? 'Ocultar' : 'Ver'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {orKeyInput.trim() && (
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-text-secondary">Modelo de Chat</label>
+                    <input
+                      value={customOrModel}
+                      onChange={(e) => setCustomOrModel(e.target.value)}
+                      placeholder="Ej: google/gemini-2.0-flash-001"
+                      className="w-full rounded-lg border border-border-input bg-surface-input px-3 py-2 text-xs text-text-primary placeholder-text-tertiary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-text-secondary">Modelo Evaluador</label>
+                    <input
+                      value={customEvaluatorModel}
+                      onChange={(e) => setCustomEvaluatorModel(e.target.value)}
+                      placeholder="Vacío = usar el mismo que chat"
+                      className="w-full rounded-lg border border-border-input bg-surface-input px-3 py-2 text-xs text-text-primary placeholder-text-tertiary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
                 </div>
               )}
 
@@ -209,7 +231,12 @@ export function SettingsDrawer({
                   disabled={isChangingModel}
                   onClick={async () => {
                     if (orKeyInput.trim()) {
-                      await onChangeProvider('openrouter', orModelInput, orKeyInput.trim())
+                      const finalModel = customOrModel.trim()
+                      const finalEvaluator = customEvaluatorModel.trim() || finalModel
+                      
+                      if (finalModel) {
+                        await onChangeProvider('openrouter', finalModel, finalEvaluator, orKeyInput.trim())
+                      }
                     } else {
                       // Switch back to WebLLM — pick first model
                       await onChangeProvider('webllm', AVAILABLE_MODELS[0].id)
@@ -254,6 +281,44 @@ export function SettingsDrawer({
                 </button>
               )
             })}
+            
+            {/* Custom WebLLM model button */}
+            {(() => {
+              const isCustomActive = !AVAILABLE_MODELS.find(m => m.id === modelId)
+              return (
+                <>
+                  <button
+                    onClick={() => !isCustomActive && !isChangingModel && customWebLLMModel && onChangeModel(customWebLLMModel)}
+                    disabled={isChangingModel}
+                    className={cn(
+                      'flex items-center justify-between rounded-lg border-2 px-3 py-2 text-left text-sm transition-colors disabled:opacity-50',
+                      isCustomActive
+                        ? 'border-primary bg-primary-light'
+                        : 'border-border bg-white hover:bg-slate-50',
+                    )}
+                  >
+                    <span className={cn('font-medium', isCustomActive ? 'text-primary' : 'text-text-primary')}>
+                      Otro... {isCustomActive && `(${modelId})`}
+                    </span>
+                  </button>
+                  <div className="mt-1 flex gap-2">
+                    <input
+                      value={customWebLLMModel}
+                      onChange={(e) => setCustomWebLLMModel(e.target.value)}
+                      placeholder="ID de modelo WebLLM"
+                      className="flex-1 rounded-lg border border-border-input bg-surface-input px-3 py-2 text-xs text-text-primary placeholder-text-tertiary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                    <Button 
+                      size="sm" 
+                      onClick={() => onChangeModel(customWebLLMModel.trim())}
+                      disabled={isChangingModel || !customWebLLMModel.trim() || customWebLLMModel.trim() === modelId}
+                    >
+                      Cargar
+                    </Button>
+                  </div>
+                </>
+              )
+            })()}
           </div>
           {isChangingModel && (
             <p className="mt-2 text-xs text-text-tertiary">Cargando modelo…</p>

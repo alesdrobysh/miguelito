@@ -10,6 +10,7 @@ export interface AppStateValue {
   onboardingComplete: boolean
   providerType: ProviderType
   modelId: string
+  evaluatorModelId?: string
   openrouterKey: string
   temperature: number
 }
