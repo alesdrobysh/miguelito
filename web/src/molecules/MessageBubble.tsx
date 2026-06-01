@@ -33,26 +33,14 @@ export function MessageBubble({ message, isHighlighted, searchQuery, isStreaming
         isHighlighted && 'bg-yellow-50',
       )}
     >
-      <div
-        className={cn(
-          'flex shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white h-8 w-8',
-          isAi ? 'bg-accent-ai' : 'bg-primary',
-        )}
-      >
-        {isAi ? 'M' : 'ME'}
-      </div>
       <div className={cn('flex min-w-0 max-w-[75%] flex-col', isAi ? 'items-start' : 'items-end')}>
         <div
           className={cn(
-            'max-w-full rounded-2xl px-4 py-2.5',
             isAi
-              ? 'rounded-tl-sm bg-surface-ai ring-1 ring-border/50'
-              : 'rounded-tr-sm bg-primary text-white',
+              ? 'max-w-full py-1'
+              : 'max-w-full rounded-2xl rounded-tr-sm bg-primary px-4 py-2.5 text-white',
           )}
         >
-          {isAi && (
-            <p className="mb-1 text-xs font-semibold text-accent-ai">Miguelito</p>
-          )}
           {isEmpty ? (
             <span className="flex gap-1 py-1">
               <span className="h-2 w-2 animate-bounce rounded-full bg-text-tertiary [animation-delay:0ms]" />

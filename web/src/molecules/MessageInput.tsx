@@ -38,7 +38,8 @@ export function MessageInput({ onSend, disabled }: MessageInputProps) {
   )
 
   return (
-    <div className="flex items-end gap-2 border-t border-border bg-white px-4 py-3">
+    <div className="border-t border-border bg-white px-4 py-3">
+      <div className="mx-auto flex w-full max-w-3xl items-end gap-2">
       <textarea
         ref={textareaRef}
         value={text}
@@ -61,6 +62,7 @@ export function MessageInput({ onSend, disabled }: MessageInputProps) {
         </svg>
         Enviar
       </Button>
+      </div>
     </div>
   )
 }

@@ -42,12 +42,14 @@ export function MessagesList() {
 
   return (
     <div ref={containerRef} className="flex-1 overflow-y-auto">
-      {messages.map((message) => (
-        <div key={message.id} id={`msg-${message.id}`} className={highlightedMessageId === message.id ? 'ring-2 ring-yellow-400 ring-inset rounded-lg' : ''}>
-          <MessageBubble message={message} isHighlighted={highlightedMessageId === message.id} searchQuery={searchQuery} isStreaming={message.id === streamingId} />
-        </div>
-      ))}
-      <div ref={bottomRef} />
+      <div className="mx-auto w-full max-w-3xl">
+        {messages.map((message) => (
+          <div key={message.id} id={`msg-${message.id}`} className={highlightedMessageId === message.id ? 'ring-2 ring-yellow-400 ring-inset rounded-lg' : ''}>
+            <MessageBubble message={message} isHighlighted={highlightedMessageId === message.id} searchQuery={searchQuery} isStreaming={message.id === streamingId} />
+          </div>
+        ))}
+        <div ref={bottomRef} />
+      </div>
     </div>
   )
 }
