@@ -9,11 +9,12 @@ const CLITICS = [
 ];
 
 let lemmaMap: Map<string, string> | null = null;
+const _dir: string = typeof __dirname !== "undefined" ? __dirname : "";
 
 function getMap(): Map<string, string> {
   if (lemmaMap) return lemmaMap;
   // Format: lemma\tinflected_form (one pair per line, utf-8-sig BOM)
-  const filePath = path.join(__dirname, "lemmas.txt");
+  const filePath = path.join(_dir, "lemmas.txt");
   const content = fs.readFileSync(filePath, "utf8").replace(/^﻿/, "");
   lemmaMap = new Map();
   for (const line of content.split("\n")) {

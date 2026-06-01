@@ -3,10 +3,11 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 
-const root = path.resolve(__dirname, '..')
-
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  define: {
+    'process.env': '{}',
+  },
   server: {
     headers: {
       'Cross-Origin-Embedder-Policy': 'require-corp',
@@ -15,11 +16,6 @@ export default defineConfig({
   },
   resolve: {
     alias: [
-      // Redirect Spanish asset loading to browser adapter (?raw instead of fs)
-      {
-        find: path.resolve(root, 'src/languages/spanish/assets.ts'),
-        replacement: path.resolve(__dirname, 'src/languages/spanish/assets.ts'),
-      },
       // Node.js built-ins → browser shims
       { find: 'node:path', replacement: path.resolve(__dirname, 'src/browser-shims/path.ts') },
       { find: 'path',      replacement: path.resolve(__dirname, 'src/browser-shims/path.ts') },
@@ -30,6 +26,6 @@ export default defineConfig({
     ],
   },
   optimizeDeps: {
-    exclude: ['@mlc-ai/web-llm', 'sql.js'],
+    exclude: ['@mlc-ai/web-llm'],
   },
 })

@@ -4,11 +4,12 @@
 // - Real PromptBuilder, AgentRunner, tools, DreamService
 
 import { getEngine, streamChat } from '../providers/WebLLMProvider'
-import { loadDbFromIdb } from '../browser-shims/fs'
+import { loadDbFromIdb, registerText } from '../browser-shims/fs'
+import soulRaw from '../languages/spanish/soul.md?raw'
 import { configureSqlJs, BuddyDb } from '../../../src/infrastructure/db.js'
 import { RuntimeManager } from '../../../src/runtime.js'
 import { PostTurnProcessor } from '../../../src/agent/PostTurnProcessor.js'
-import { SpanishLanguage } from '../../../src/languages/spanish/index.js'
+import { SpanishLanguage } from '../languages/spanish/index'
 import type { LLMProvider, ChatResult, ChatOptions } from '../../../src/providers/interfaces.js'
 import type { ChatMessage } from '../../../src/llm.js'
 import type { Config } from '../../../src/infrastructure/config.js'
@@ -123,6 +124,7 @@ let _runtime: RuntimeManager | null = null
 export async function createBrowserRuntime(): Promise<RuntimeManager> {
   if (_runtime) return _runtime
 
+  registerText('/virtual/soul.md', soulRaw)
   configureSqlJs({ locateFile: () => sqlWasm })
   await loadDbFromIdb(DB_PATH)
 

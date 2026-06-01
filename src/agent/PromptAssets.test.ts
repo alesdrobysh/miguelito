@@ -20,7 +20,7 @@ const nonHumanIdentityPhrases = [
 ];
 
 const configIdentityPhrases = [
-  { path: "src/languages/spanish/index.ts", phrases: ["tutor de español por software", "No finjas ser una persona", "No finjas vida humana propia"] },
+  { path: "src/languages/spanish/config.ts", phrases: ["tutor de español por software", "No finjas ser una persona", "No finjas vida humana propia"] },
 ];
 
 describe("language prompt assets", () => {

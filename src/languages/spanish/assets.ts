@@ -9,6 +9,7 @@ export interface FrequencyData {
 
 // `__dirname` is not defined in browser ESM. Guard so the canonical index.ts
 // degrades gracefully when loaded via runtime.ts in browser context.
+// The browser `web/src/languages/spanish/index.ts` wrapper overrides with ?raw data.
 const _dir: string = typeof __dirname !== "undefined" ? __dirname : "";
 
 export function loadFrequency(): FrequencyData {
