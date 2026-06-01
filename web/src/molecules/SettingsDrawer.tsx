@@ -47,6 +47,7 @@ export function SettingsDrawer({
   const [orKeyInput, setOrKeyInput] = useState(openrouterKey)
   const [showOrKey, setShowOrKey] = useState(false)
   const [editingProvider, setEditingProvider] = useState(false)
+  const [providerTab, setProviderTab] = useState<ProviderType>(providerType)
   const [customOrModel, setCustomOrModel] = useState(modelId)
   const [customWebLLMModel, setCustomWebLLMModel] = useState(
     providerType === 'webllm' && !AVAILABLE_MODELS.find(m => m.id === modelId) ? modelId : ''
@@ -156,37 +157,32 @@ export function SettingsDrawer({
             <div className="flex flex-col gap-3">
               <div className="flex rounded-xl border border-border bg-surface-input p-1">
                 <button
-                  onClick={() => {
-                    setOrKeyInput('')
-                    setEditingProvider(false) // Optionally auto-save? No, let's just update local state
-                  }}
+                  onClick={() => setProviderTab('webllm')}
                   className={cn(
                     'flex-1 rounded-lg py-1.5 text-xs font-medium transition-colors',
-                    !orKeyInput.trim() ? 'bg-white text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary',
+                    providerTab === 'webllm' ? 'bg-white text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary',
                   )}
                 >
                   WebLLM
                 </button>
                 <button
-                  onClick={() => {
-                    if (!orKeyInput.trim()) setOrKeyInput(' ') // placeholder to toggle view
-                  }}
+                  onClick={() => setProviderTab('openrouter')}
                   className={cn(
                     'flex-1 rounded-lg py-1.5 text-xs font-medium transition-colors',
-                    orKeyInput.trim() ? 'bg-white text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary',
+                    providerTab === 'openrouter' ? 'bg-white text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary',
                   )}
                 >
                   OpenRouter
                 </button>
               </div>
 
-              {orKeyInput.trim() && (
+              {providerTab === 'openrouter' && (
                 <div>
                   <label className="mb-1 block text-xs font-medium text-text-secondary">API Key de OpenRouter</label>
                   <div className="relative">
                     <input
                       type={showOrKey ? 'text' : 'password'}
-                      value={orKeyInput === ' ' ? '' : orKeyInput}
+                      value={orKeyInput}
                       onChange={(e) => setOrKeyInput(e.target.value)}
                       placeholder="sk-or-v1-..."
                       className="w-full rounded-lg border border-border-input bg-surface-input px-3 py-2 pr-14 text-xs text-text-primary placeholder-text-tertiary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
@@ -202,7 +198,7 @@ export function SettingsDrawer({
                 </div>
               )}
 
-              {orKeyInput.trim() && (
+              {providerTab === 'openrouter' && (
                 <div className="flex flex-col gap-3">
                   <div>
                     <label className="mb-1 block text-xs font-medium text-text-secondary">Modelo de Chat</label>
@@ -230,15 +226,13 @@ export function SettingsDrawer({
                   size="sm"
                   disabled={isChangingModel}
                   onClick={async () => {
-                    if (orKeyInput.trim()) {
+                    if (providerTab === 'openrouter') {
                       const finalModel = customOrModel.trim()
                       const finalEvaluator = customEvaluatorModel.trim() || finalModel
-                      
                       if (finalModel) {
                         await onChangeProvider('openrouter', finalModel, finalEvaluator, orKeyInput.trim())
                       }
                     } else {
-                      // Switch back to WebLLM — pick first model
                       await onChangeProvider('webllm', AVAILABLE_MODELS[0].id)
                     }
                     setEditingProvider(false)
@@ -281,7 +275,7 @@ export function SettingsDrawer({
                 </button>
               )
             })}
-            
+
             {/* Custom WebLLM model button */}
             {(() => {
               const isCustomActive = !AVAILABLE_MODELS.find(m => m.id === modelId)
@@ -308,8 +302,8 @@ export function SettingsDrawer({
                       placeholder="ID de modelo WebLLM"
                       className="flex-1 rounded-lg border border-border-input bg-surface-input px-3 py-2 text-xs text-text-primary placeholder-text-tertiary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                     />
-                    <Button 
-                      size="sm" 
+                    <Button
+                      size="sm"
                       onClick={() => onChangeModel(customWebLLMModel.trim())}
                       disabled={isChangingModel || !customWebLLMModel.trim() || customWebLLMModel.trim() === modelId}
                     >
