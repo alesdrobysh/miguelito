@@ -171,6 +171,26 @@ export async function createBrowserRuntime(): Promise<RuntimeManager> {
 
   _runtime = new RuntimeManager(config as Config, chatProvider, evalProvider, sharedDb)
   await _runtime.addLanguageConfig(SpanishLanguage, DREAM_PATH)
+
+  const rawDb = sharedDb.db
+  const dbg = {
+    query(sql: string, params: unknown[] = []) {
+      const stmt = rawDb.prepare(sql)
+      stmt.bind(params)
+      const rows: Record<string, unknown>[] = []
+      while (stmt.step()) rows.push(stmt.getAsObject())
+      stmt.free()
+      return rows
+    },
+    tables() {
+      return dbg.query("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").map((r) => r['name'])
+    },
+    dump(table: string) {
+      return dbg.query(`SELECT * FROM ${table}`)
+    },
+  }
+  ;(window as Window & { __miguelito?: typeof dbg }).__miguelito = dbg
+
   return _runtime
 }
 
