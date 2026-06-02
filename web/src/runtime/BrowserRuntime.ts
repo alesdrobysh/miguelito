@@ -127,6 +127,7 @@ export async function streamingHandleMessage(
     errors: db,
     competency: db,
     session: db,
+    interests: rt.sharedDb,
     learning: db,
     lang: rt.lang,
   })

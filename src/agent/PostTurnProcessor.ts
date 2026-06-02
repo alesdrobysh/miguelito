@@ -1,7 +1,7 @@
 import type { ChatMessage } from "../llm.js";
 import type { LanguageConfig } from "../languages/LanguageConfig.js";
 import type { LLMProvider } from "../providers/interfaces.js";
-import type { CompetencyRepository, ErrorRepository, LearningRepository, SessionRepository, VocabRepository } from "../repositories/interfaces.js";
+import type { CompetencyRepository, ErrorRepository, InterestRepository, LearningRepository, SessionRepository, VocabRepository } from "../repositories/interfaces.js";
 import type { LearningItemInput, TurnAnnotationInput, VocabReviewAttempt, VocabReviewMode } from "../domain/types.js";
 import { analyzeTextDifficulty, outcomeScore } from "../domain/frequency.js";
 import { logger } from "../infrastructure/logger.js";
@@ -14,6 +14,7 @@ export interface PostTurnProcessorDeps {
   errors: ErrorRepository;
   competency: CompetencyRepository;
   session: SessionRepository;
+  interests?: InterestRepository;
   learning?: LearningRepository;
   lang: LanguageConfig;
 }
@@ -75,6 +76,7 @@ interface PostTurnEvaluation {
   vocabulary?: EvaluatedVocab[];
   learning_items?: EvaluatedLearningItem[];
   reviews?: EvaluatedReview[];
+  interests?: string[];
 }
 
 export interface PostTurnProcessResult {
@@ -85,6 +87,7 @@ export interface PostTurnProcessResult {
   learningItemsAdded: number;
   reviewsCompleted: number;
   annotationInserted: boolean;
+  interestsAdded: number;
 }
 
 const VALID_COMPREHENSION = new Set(["smooth", "asked_clarify", "requested_simpler"]);
@@ -131,8 +134,9 @@ export class PostTurnProcessor {
         }],
         learning_items: [{ type: "grammar_point|correction|phrase|word|collocation|idiom|register_note|pronunciation", title: "por vs para", prompt_l2: "optional L2 prompt", explanation_l1: "short explanation", source_type: "user_question|conversation|correction", priority: "0.9=correction/explicitly asked, 0.7=useful, 0.5=niche", practice_modes: ["short_drill"] }],
         reviews: [{ attempt_id: 123, word: "exact chunk_l2 from vocabulary", mode: "productive|receptive", user_response: "learner answer", target_used: true, accepted_variant: "actual form", hint_level: 0, grade: 3, note: "why" }],
+        interests: ["hobby or topic the learner mentioned (lowercase, e.g. 'fútbol', 'cocina')"],
       }),
-      "Use empty arrays when there is nothing to extract. Grade reviews 1..3 only.",
+      "Use empty arrays when there is nothing to extract. Grade reviews 1..3 only. For interests: extract hobbies, topics, or preferences the learner mentioned; use lowercase; omit generic words like 'español' or 'idiomas'.",
       "Add a review entry whenever the assistant created a vocabulary practice opportunity (e.g. asked the learner to produce or recognize a chunk) and the learner responded. Use word=exact chunk_l2, mode=productive if learner was asked to produce it, receptive if assistant used it for comprehension.",
       "If Active review attempts are provided and the latest learner message answers one of them, include that exact attempt_id in the review entry so the pending attempt is completed instead of creating a new attempt.",
     ].join("\n");
@@ -169,6 +173,7 @@ export class PostTurnProcessor {
     let learningItemsAdded = 0;
     let reviewsCompleted = 0;
     let annotationInserted = false;
+    let interestsAdded = 0;
 
     const morphologyTypes = new Set(this.deps.lang.morphologyCategories);
     const morphologyErrors = (evaluation.errors ?? []).filter((e) => {
@@ -297,7 +302,17 @@ export class PostTurnProcessor {
       }
     }
 
-    return { ok: true, errorsLogged, vocabAdded, vocabCandidatesAdded, learningItemsAdded, reviewsCompleted, annotationInserted };
+    if (this.deps.interests) {
+      for (const raw of evaluation.interests ?? []) {
+        const interest = this.clean(raw).toLowerCase();
+        if (interest && interest.length <= 100) {
+          const added = await this.deps.interests.addInterest(interest, "conversation", 0.7);
+          if (added) interestsAdded++;
+        }
+      }
+    }
+
+    return { ok: true, errorsLogged, vocabAdded, vocabCandidatesAdded, learningItemsAdded, reviewsCompleted, annotationInserted, interestsAdded };
   }
 
   private learningRepo(): LearningRepository {

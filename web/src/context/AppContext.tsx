@@ -22,6 +22,8 @@ import {
   DREAM_PATH,
 } from '../runtime/BrowserRuntime'
 import type { RuntimeManager } from '../../../src/runtime.js'
+import type { ErrorItem, CompetencyVectorRow } from '../../../src/domain/types.js'
+import { emitDownloadProgress } from './DownloadProgress'
 
 // ─── Phase machine ───────────────────────────────────────────────────────────
 
@@ -33,12 +35,20 @@ export type AppPhase =
   | { type: 'initializing'; modelId: string; progress: number; text: string }
   | { type: 'chat' }
 
+export interface PerfilData {
+  errors: ErrorItem[]
+  interests: string[]
+  competency: CompetencyVectorRow
+  soul: string
+}
+
 // ─── Context value ────────────────────────────────────────────────────────────
 
 interface AppContextValue {
   phase: AppPhase
   messages: Message[]
   profile: Profile | null
+  perfilData: PerfilData | null
   modelId: string
   evaluatorModelId: string
   providerType: ProviderType
@@ -61,6 +71,7 @@ interface AppContextValue {
   changeModel: (newModelId: string) => Promise<void>
   changeProvider: (type: ProviderType, modelId: string, evaluatorModelId?: string, key?: string) => Promise<void>
   runDream: () => Promise<string>
+  refreshPerfilData: () => Promise<void>
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -85,12 +96,24 @@ async function loadProfileFromRuntime(runtime: RuntimeManager): Promise<Profile 
   return { name: up.name ?? '', goal: up.goal ?? '' }
 }
 
+async function loadPerfilData(runtime: RuntimeManager): Promise<PerfilData> {
+  const rt = runtime.runtime('spanish')
+  const [errors, interests, competency, soul] = await Promise.all([
+    rt.db.listErrors('all', 10),
+    rt.db.listInterests(20),
+    rt.db.getCompetencyVector(),
+    import('../browser-shims/fs').then(fs => (fs.readFileSync(DREAM_PATH, 'utf8') as string) || 'No hay memoria aún.'),
+  ])
+  return { errors, interests, competency, soul }
+}
+
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [phase, setPhase] = useState<AppPhase>({ type: 'loading' })
   const [messages, setMessages] = useState<Message[]>([])
   const [profile, setProfile] = useState<Profile | null>(null)
+  const [perfilData, setPerfilData] = useState<PerfilData | null>(null)
   const [modelId, setModelId] = useState(DEFAULT_MODEL_ID)
   const [evaluatorModelId, setEvaluatorModelId] = useState(DEFAULT_MODEL_ID)
   const [providerType, setProviderType] = useState<ProviderType>('webllm')
@@ -145,6 +168,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setProfile(prof)
         setIsInitialLoading(false)
         setPhase({ type: 'chat' })
+        loadPerfilData(runtime).then(setPerfilData)
         return
       }
 
@@ -163,6 +187,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setProfile(prof)
       setIsInitialLoading(false)
       setPhase({ type: 'chat' })
+      loadPerfilData(runtime).then(setPerfilData)
     })()
   }, [])
 
@@ -183,9 +208,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPhase({ type: 'onboarding', step: 'download' })
 
     await initEngine(mid, (report: InitProgressReport) => {
-      _downloadProgress.progress = report.progress
-      _downloadProgress.text = report.text
-      _downloadProgressListeners.forEach((fn) => fn(report))
+      emitDownloadProgress(report)
     })
 
     // Init runtime and save profile to BuddyDb
@@ -274,18 +297,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const refreshPerfilData = useCallback(async () => {
+    const runtime = getBrowserRuntime()
+    if (runtime) {
+      const data = await loadPerfilData(runtime)
+      setPerfilData(data)
+    }
+  }, [])
+
   const changeModel = useCallback(async (newModelId: string) => {
     setIsChangingModel(true)
     setModelId(newModelId)
     setEvaluatorModelId(newModelId)
     resetBrowserRuntime()
-    _downloadProgress.progress = 0
-    _downloadProgress.text = ''
+    
     try {
       await initEngine(newModelId, (report: InitProgressReport) => {
-        _downloadProgress.progress = report.progress
-        _downloadProgress.text = report.text
-        _downloadProgressListeners.forEach((fn) => fn(report))
+        emitDownloadProgress(report)
       })
       await createBrowserRuntime()
       const appState = await appDb.getAppState()
@@ -307,12 +335,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // WebLLM: need to tear down the old runtime and init the new engine.
         resetBrowserRuntime()
         setProviderConfig({ type: 'webllm' })
-        _downloadProgress.progress = 0
-        _downloadProgress.text = ''
+        
         await initEngine(newModelId, (report: InitProgressReport) => {
-          _downloadProgress.progress = report.progress
-          _downloadProgress.text = report.text
-          _downloadProgressListeners.forEach((fn) => fn(report))
+          emitDownloadProgress(report)
         })
         await createBrowserRuntime()
       }
@@ -347,6 +372,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         phase,
         messages,
         profile,
+        perfilData,
         modelId,
         evaluatorModelId,
         providerType,
@@ -367,6 +393,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         changeModel,
         changeProvider,
         runDream,
+        refreshPerfilData,
       }}
     >
       {children}
@@ -374,18 +401,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   )
 }
 
-// ── Download progress bus ────────────────────────────────────────────────────
-const _downloadProgress = { progress: 0, text: '' }
-const _downloadProgressListeners = new Set<(r: InitProgressReport) => void>()
-
-export function subscribeDownloadProgress(fn: (r: InitProgressReport) => void) {
-  _downloadProgressListeners.add(fn)
-  return () => { _downloadProgressListeners.delete(fn) }
-}
-
-export function getDownloadProgress() { return _downloadProgress }
-
-// ── Hooks ─────────────────────────────────────────────────────────────────────
 export function useApp() {
   const ctx = useContext(AppContext)
   if (!ctx) throw new Error('useApp must be used within AppProvider')

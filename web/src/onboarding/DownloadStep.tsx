@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { subscribeDownloadProgress, getDownloadProgress } from '../context/AppContext'
+import { subscribeDownloadProgress, getDownloadProgress } from '../context/DownloadProgress'
 import type { InitProgressReport } from '../providers/WebLLMProvider'
 
 export function DownloadStep() {

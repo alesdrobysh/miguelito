@@ -23,6 +23,8 @@ export function Chat() {
     changeProvider,
     updateProfile,
     clearChat,
+    perfilData,
+    refreshPerfilData,
   } = useChat()
 
   const modelName = providerType === 'openrouter'
@@ -48,11 +50,13 @@ export function Chat() {
         isChangingModel={isChangingModel}
         temperature={temperature}
         profile={profile}
+        perfilData={perfilData}
         onUpdateTemperature={updateTemperature}
         onChangeModel={changeModel}
         onChangeProvider={changeProvider}
         onUpdateProfile={updateProfile}
         onClearChat={clearChat}
+        onRefreshPerfilData={refreshPerfilData}
       />
     </div>
   )

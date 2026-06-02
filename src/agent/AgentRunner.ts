@@ -41,6 +41,7 @@ export class AgentRunner {
       "miguelito_vocab_attempt_start",
       "miguelito_vocab_attempt_finish",
       "miguelito_progress_summary",
+      "miguelito_interest_add",
     ]);
     return new Map(Array.from(tools.entries()).filter(([name]) => !internalOnly.has(name)));
   }
@@ -101,6 +102,7 @@ export class AgentRunner {
         errors: toolCtx.errors,
         competency: toolCtx.competency,
         session: toolCtx.session,
+        interests: toolCtx.interests,
         learning: toolCtx.learning ?? (toolCtx.vocab as any),
         lang,
       });

@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
-import { subscribeDownloadProgress, getDownloadProgress } from '../context/AppContext'
+import { subscribeDownloadProgress } from '../context/DownloadProgress'
+import type { PerfilData } from '../context/AppContext'
 import { Drawer } from '../atoms/Drawer'
 import { Button } from '../atoms/Button'
 import { cn } from '../lib/cn'
@@ -17,11 +18,13 @@ interface SettingsDrawerProps {
   isChangingModel: boolean
   temperature: number
   profile: Profile | null
+  perfilData: PerfilData | null
   onUpdateTemperature: (t: number) => void
   onChangeModel: (modelId: string) => Promise<void>
   onChangeProvider: (type: ProviderType, modelId: string, evaluatorModelId?: string, key?: string) => Promise<void>
   onUpdateProfile: (profile: Profile) => Promise<void>
   onClearChat: () => void
+  onRefreshPerfilData: () => Promise<void>
 }
 
 export function SettingsDrawer({
@@ -33,15 +36,17 @@ export function SettingsDrawer({
   isChangingModel,
   temperature,
   profile,
+  perfilData,
   evaluatorModelId,
   onUpdateTemperature,
   onChangeModel,
   onChangeProvider,
   onUpdateProfile,
   onClearChat,
+  onRefreshPerfilData,
 }: SettingsDrawerProps) {
   const [activeTab, setActiveTab] = useState<'ia' | 'perfil'>('ia')
-  const [loadProgress, setLoadProgress] = useState(() => getDownloadProgress())
+  const [loadProgress, setLoadProgress] = useState({ progress: 0, text: '' })
   const [confirmClear, setConfirmClear] = useState(false)
   const [editingProfile, setEditingProfile] = useState(false)
   const [nameInput, setNameInput] = useState(profile?.name ?? '')
@@ -65,6 +70,14 @@ export function SettingsDrawer({
       ? (AVAILABLE_MODELS.find((m) => m.id === modelId) ? modelId : 'custom')
       : DEFAULT_MODEL_ID
   )
+
+  useEffect(() => {
+    console.log('useEffect trigger:', { open, activeTab })
+    if (open && activeTab === 'perfil') {
+      console.log('Refreshing perfil data...')
+      onRefreshPerfilData()
+    }
+  }, [open, activeTab, onRefreshPerfilData])
 
   useEffect(() => {
     if (!isChangingModel) return
@@ -418,63 +431,137 @@ export function SettingsDrawer({
           </div>
         ) : (
           <div className="flex flex-col gap-6">
-            {/* Perfil */}
-            <div>
-              <div className="mb-2 flex items-center justify-between">
-                <p className="text-xs font-medium uppercase tracking-wide text-text-tertiary">Tu Perfil</p>
-                {!editingProfile && (
-                  <button onClick={handleEditProfile} className="text-xs text-primary hover:underline">
-                    Editar
-                  </button>
-                )}
+            {!perfilData ? (
+              <div className="flex flex-col items-center justify-center py-10 text-text-tertiary">
+                <div className="mb-2 h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                <p className="text-xs">Cargando datos del perfil…</p>
               </div>
-              {editingProfile ? (
-                <div className="flex flex-col gap-2">
-                  <input
-                    value={nameInput}
-                    onChange={(e) => setNameInput(e.target.value)}
-                    placeholder="Tu nombre"
-                    autoFocus
-                    className="rounded-lg border border-border-input bg-surface-input px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                  <input
-                    value={goalInput}
-                    onChange={(e) => setGoalInput(e.target.value)}
-                    placeholder="Objetivo (viajes, trabajo, charla, cultura…)"
-                    className="rounded-lg border border-border-input bg-surface-input px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                  <div className="flex gap-2">
-                    <Button size="sm" onClick={handleSaveProfile} disabled={!nameInput.trim() || savingProfile} className="flex-1">
-                      {savingProfile ? 'Guardando…' : 'Guardar'}
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setEditingProfile(false)} className="flex-1">
-                      Cancelar
-                    </Button>
+            ) : (
+              <>
+                {/* Perfil */}
+                <div>
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-xs font-medium uppercase tracking-wide text-text-tertiary">Tu Perfil</p>
+                    {!editingProfile && (
+                      <button onClick={handleEditProfile} className="text-xs text-primary hover:underline">
+                        Editar
+                      </button>
+                    )}
                   </div>
+                  {editingProfile ? (
+                    <div className="flex flex-col gap-2">
+                      <input
+                        value={nameInput}
+                        onChange={(e) => setNameInput(e.target.value)}
+                        placeholder="Tu nombre"
+                        autoFocus
+                        className="rounded-lg border border-border-input bg-surface-input px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                      <input
+                        value={goalInput}
+                        onChange={(e) => setGoalInput(e.target.value)}
+                        placeholder="Objetivo (viajes, trabajo, charla, cultura…)"
+                        className="rounded-lg border border-border-input bg-surface-input px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={handleSaveProfile} disabled={!nameInput.trim() || savingProfile} className="flex-1">
+                          {savingProfile ? 'Guardando…' : 'Guardar'}
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setEditingProfile(false)} className="flex-1">
+                          Cancelar
+                        </Button>
+                      </div>
+                    </div>
+                  ) : profile ? (
+                    <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm">
+                      <p className="font-medium text-text-primary">{profile.name}</p>
+                      <p className="text-xs text-text-secondary">{profile.goal}</p>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-text-tertiary">Sin perfil configurado</p>
+                  )}
                 </div>
-              ) : profile ? (
-                <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm">
-                  <p className="font-medium text-text-primary">{profile.name}</p>
-                  <p className="text-xs text-text-secondary">{profile.goal}</p>
+
+                {/* Intereses */}
+                {perfilData?.interests && perfilData.interests.length > 0 && (
+                  <div>
+                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-tertiary">Intereses</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {perfilData.interests.map((int, i) => (
+                        <span key={i} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-text-secondary">
+                          {int}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Competencia */}
+                {perfilData?.competency && (
+                  <div>
+                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-tertiary">Progreso</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-lg border border-border p-3">
+                        <p className="text-[10px] font-bold uppercase tracking-tight text-text-tertiary">Morfología</p>
+                        <p className="text-lg font-semibold text-text-primary">
+                          {perfilData.competency.morph_trials > 0
+                            ? `${Math.round((perfilData.competency.morph_successes / perfilData.competency.morph_trials) * 100)}%`
+                            : '-%'}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-border p-3">
+                        <p className="text-[10px] font-bold uppercase tracking-tight text-text-tertiary">Fluidez</p>
+                        <p className="text-lg font-semibold text-text-primary">
+                          {perfilData.competency.idiom_trials > 0
+                            ? `${Math.round((perfilData.competency.idiom_successes / perfilData.competency.idiom_trials) * 100)}%`
+                            : '-%'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Errores */}
+                {perfilData?.errors && perfilData.errors.length > 0 && (
+                  <div>
+                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-tertiary">Errores Recientes</p>
+                    <div className="flex flex-col gap-2">
+                      {perfilData.errors.map((err, i) => (
+                        <div key={i} className="rounded-lg border border-red-100 bg-red-50/50 p-2 text-xs">
+                          <p className="font-medium text-red-800">" {err.user_text} "</p>
+                          <p className="mt-0.5 text-red-600">→ {err.correct_form}</p>
+                          {err.note && <p className="mt-1 text-[10px] italic text-red-500/80">{err.note}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Memoria (Soul) */}
+                {perfilData?.soul && (
+                  <div>
+                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-tertiary">Lo que sé de ti</p>
+                    <div className="max-h-40 overflow-y-auto rounded-lg border border-border bg-slate-50 p-3 text-xs leading-relaxed text-text-secondary whitespace-pre-wrap">
+                      {perfilData.soul}
+                    </div>
+                  </div>
+                )}
+
+                <hr className="border-border" />
+
+                {/* Acciones */}
+                <div>
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-tertiary">Acciones</p>
+                  <Button
+                    variant={confirmClear ? 'primary' : 'ghost'}
+                    onClick={handleClearClick}
+                    className={cn('w-full text-sm', confirmClear && 'bg-red-600 hover:bg-red-700')}
+                  >
+                    {confirmClear ? 'Confirmar borrado' : 'Borrar conversación'}
+                  </Button>
                 </div>
-              ) : (
-                <p className="text-sm text-text-tertiary">Sin perfil configurado</p>
-              )}
-            </div>
-
-            <hr className="border-border" />
-
-            {/* Acciones */}
-            <div>
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-tertiary">Acciones</p>
-              <Button
-                variant={confirmClear ? 'primary' : 'ghost'}
-                onClick={handleClearClick}
-                className={cn('w-full text-sm', confirmClear && 'bg-red-600 hover:bg-red-700')}
-              >
-                {confirmClear ? 'Confirmar borrado' : 'Borrar conversación'}
-              </Button>
-            </div>
+              </>
+            )}
           </div>
         )}
       </div>
