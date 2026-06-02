@@ -25,6 +25,8 @@ interface SettingsDrawerProps {
   onUpdateProfile: (profile: Profile) => Promise<void>
   onClearChat: () => void
   onRefreshPerfilData: () => Promise<void>
+  onAddInterest: (interest: string) => Promise<void>
+  onRemoveInterest: (interest: string) => Promise<void>
 }
 
 export function SettingsDrawer({
@@ -44,6 +46,8 @@ export function SettingsDrawer({
   onUpdateProfile,
   onClearChat,
   onRefreshPerfilData,
+  onAddInterest,
+  onRemoveInterest,
 }: SettingsDrawerProps) {
   const [activeTab, setActiveTab] = useState<'ia' | 'perfil'>('ia')
   const [loadProgress, setLoadProgress] = useState({ progress: 0, text: '' })
@@ -52,6 +56,7 @@ export function SettingsDrawer({
   const [nameInput, setNameInput] = useState(profile?.name ?? '')
   const [goalInput, setGoalInput] = useState(profile?.goal ?? '')
   const [savingProfile, setSavingProfile] = useState(false)
+  const [newInterestInput, setNewInterestInput] = useState('')
   const [orKeyInput, setOrKeyInput] = useState(openrouterKey)
   const [showOrKey, setShowOrKey] = useState(false)
   const [editingProvider, setEditingProvider] = useState(false)
@@ -440,14 +445,7 @@ export function SettingsDrawer({
               <>
                 {/* Perfil */}
                 <div>
-                  <div className="mb-2 flex items-center justify-between">
-                    <p className="text-xs font-medium uppercase tracking-wide text-text-tertiary">Tu Perfil</p>
-                    {!editingProfile && (
-                      <button onClick={handleEditProfile} className="text-xs text-primary hover:underline">
-                        Editar
-                      </button>
-                    )}
-                  </div>
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-tertiary">Tu Perfil</p>
                   {editingProfile ? (
                     <div className="flex flex-col gap-2">
                       <input
@@ -473,28 +471,75 @@ export function SettingsDrawer({
                       </div>
                     </div>
                   ) : profile ? (
-                    <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm">
-                      <p className="font-medium text-text-primary">{profile.name}</p>
+                    <button
+                      onClick={handleEditProfile}
+                      className="group w-full rounded-lg bg-slate-50 px-3 py-2 text-left text-sm hover:bg-slate-100 transition-colors"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-medium text-text-primary">{profile.name}</span>
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 16 16"
+                          fill="currentColor"
+                          className="h-3.5 w-3.5 flex-shrink-0 text-text-tertiary opacity-0 transition-opacity group-hover:opacity-100"
+                        >
+                          <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.79 2.115a.75.75 0 0 0 .96.96l2.115-.79a2.75 2.75 0 0 0 .892-.596l4.262-4.263a1.75 1.75 0 0 0 0-2.475ZM4.5 13.25a.75.75 0 0 0 0 1.5h7a.75.75 0 0 0 0-1.5h-7Z" />
+                        </svg>
+                      </div>
                       <p className="text-xs text-text-secondary">{profile.goal}</p>
-                    </div>
+                    </button>
                   ) : (
                     <p className="text-sm text-text-tertiary">Sin perfil configurado</p>
                   )}
                 </div>
 
                 {/* Intereses */}
-                {perfilData?.interests && perfilData.interests.length > 0 && (
-                  <div>
-                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-tertiary">Intereses</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {perfilData.interests.map((int, i) => (
-                        <span key={i} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-text-secondary">
-                          {int}
-                        </span>
-                      ))}
-                    </div>
+                <div>
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-tertiary">Intereses</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {perfilData?.interests?.map((int, i) => (
+                      <span key={i} className="group flex items-center gap-1 rounded-full bg-slate-100 pl-2.5 pr-1.5 py-1 text-xs text-text-secondary">
+                        {int}
+                        <button
+                          onClick={() => onRemoveInterest(int)}
+                          className="flex h-3.5 w-3.5 items-center justify-center rounded-full text-text-tertiary opacity-0 transition-opacity hover:bg-slate-300 hover:text-text-primary group-hover:opacity-100"
+                          aria-label={`Eliminar ${int}`}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12" fill="currentColor" className="h-2.5 w-2.5">
+                            <path d="M2.22 2.22a.75.75 0 0 1 1.06 0L6 4.94l2.72-2.72a.75.75 0 1 1 1.06 1.06L7.06 6l2.72 2.72a.75.75 0 1 1-1.06 1.06L6 7.06 3.28 9.78a.75.75 0 0 1-1.06-1.06L4.94 6 2.22 3.28a.75.75 0 0 1 0-1.06Z" />
+                          </svg>
+                        </button>
+                      </span>
+                    ))}
                   </div>
-                )}
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      value={newInterestInput}
+                      onChange={(e) => setNewInterestInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && newInterestInput.trim()) {
+                          onAddInterest(newInterestInput.trim())
+                          setNewInterestInput('')
+                        }
+                      }}
+                      placeholder="Añadir interés…"
+                      className="flex-1 rounded-lg border border-border-input bg-surface-input px-3 py-1.5 text-xs text-text-primary placeholder-text-tertiary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        if (newInterestInput.trim()) {
+                          onAddInterest(newInterestInput.trim())
+                          setNewInterestInput('')
+                        }
+                      }}
+                      disabled={!newInterestInput.trim()}
+                    >
+                      +
+                    </Button>
+                  </div>
+                </div>
 
                 {/* Competencia */}
                 {perfilData?.competency && (

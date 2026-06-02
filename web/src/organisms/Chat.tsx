@@ -25,6 +25,8 @@ export function Chat() {
     clearChat,
     perfilData,
     refreshPerfilData,
+    addInterest,
+    removeInterest,
   } = useChat()
 
   const modelName = providerType === 'openrouter'
@@ -57,6 +59,8 @@ export function Chat() {
         onUpdateProfile={updateProfile}
         onClearChat={clearChat}
         onRefreshPerfilData={refreshPerfilData}
+        onAddInterest={addInterest}
+        onRemoveInterest={removeInterest}
       />
     </div>
   )

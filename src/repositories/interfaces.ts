@@ -86,6 +86,7 @@ export interface ProfileRepository {
 
 export interface InterestRepository {
   addInterest(interest: string, source: string, confidence: number): Promise<boolean>;
+  removeInterest(interest: string): Promise<void>;
   listInterests(limit: number): Promise<string[]>;
 }
 

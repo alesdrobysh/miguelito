@@ -207,6 +207,10 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
     return this.interests.addInterest(interest, source, confidence);
   }
 
+  async removeInterest(interest: string): Promise<void> {
+    return this.interests.removeInterest(interest);
+  }
+
   async listInterests(limit: number): Promise<string[]> {
     return this.interests.listInterests(limit);
   }

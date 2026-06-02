@@ -72,6 +72,8 @@ interface AppContextValue {
   changeProvider: (type: ProviderType, modelId: string, evaluatorModelId?: string, key?: string) => Promise<void>
   runDream: () => Promise<string>
   refreshPerfilData: () => Promise<void>
+  addInterest: (interest: string) => Promise<void>
+  removeInterest: (interest: string) => Promise<void>
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -366,6 +368,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return runtime.runtime('spanish').dreamService.run()
   }, [])
 
+  const addInterest = useCallback(async (interest: string) => {
+    const runtime = getBrowserRuntime()
+    if (runtime) {
+      await runtime.runtime('spanish').db.addInterest(interest, 'manual', 1.0)
+      const data = await loadPerfilData(runtime)
+      setPerfilData(data)
+    }
+  }, [])
+
+  const removeInterest = useCallback(async (interest: string) => {
+    const runtime = getBrowserRuntime()
+    if (runtime) {
+      await runtime.runtime('spanish').db.removeInterest(interest)
+      const data = await loadPerfilData(runtime)
+      setPerfilData(data)
+    }
+  }, [])
+
   return (
     <AppContext.Provider
       value={{
@@ -394,6 +414,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         changeProvider,
         runDream,
         refreshPerfilData,
+        addInterest,
+        removeInterest,
       }}
     >
       {children}

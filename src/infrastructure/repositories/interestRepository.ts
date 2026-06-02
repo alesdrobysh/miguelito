@@ -31,6 +31,11 @@ export class SqlInterestRepository extends SqlRepository implements InterestRepo
     return true;
   }
 
+  async removeInterest(interest: string): Promise<void> {
+    this.db.run(`DELETE FROM user_interests WHERE interest = ? COLLATE NOCASE`, [interest]);
+    this.save();
+  }
+
   async listInterests(limit: number): Promise<string[]> {
     const rows = this.queryAll(
       `SELECT interest FROM user_interests ORDER BY last_seen_at DESC LIMIT ?`,
