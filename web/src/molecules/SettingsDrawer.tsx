@@ -77,9 +77,7 @@ export function SettingsDrawer({
   )
 
   useEffect(() => {
-    console.log('useEffect trigger:', { open, activeTab })
     if (open && activeTab === 'perfil') {
-      console.log('Refreshing perfil data...')
       onRefreshPerfilData()
     }
   }, [open, activeTab, onRefreshPerfilData])
