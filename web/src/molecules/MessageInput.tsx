@@ -18,6 +18,10 @@ export function MessageInput({ onSend, disabled }: MessageInputProps) {
 
   useEffect(() => { autoResize() }, [text, autoResize])
 
+  useEffect(() => {
+    if (!disabled) textareaRef.current?.focus()
+  }, [disabled])
+
   const handleSend = useCallback(async () => {
     const trimmed = text.trim()
     if (!trimmed || disabled) return
