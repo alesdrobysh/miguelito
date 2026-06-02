@@ -298,8 +298,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setModelId(newModelId)
     setEvaluatorModelId(newModelId)
     resetBrowserRuntime()
+    _downloadProgress.progress = 0
+    _downloadProgress.text = ''
     try {
-      await initEngine(newModelId, () => {})
+      await initEngine(newModelId, (report: InitProgressReport) => {
+        _downloadProgress.progress = report.progress
+        _downloadProgress.text = report.text
+        _downloadProgressListeners.forEach((fn) => fn(report))
+      })
       await createBrowserRuntime()
       const appState = await appDb.getAppState()
       if (appState) await appDb.saveAppState({ ...appState, modelId: newModelId, evaluatorModelId: newModelId })
@@ -320,7 +326,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // WebLLM: need to tear down the old runtime and init the new engine.
         resetBrowserRuntime()
         setProviderConfig({ type: 'webllm' })
-        await initEngine(newModelId, () => {})
+        _downloadProgress.progress = 0
+        _downloadProgress.text = ''
+        await initEngine(newModelId, (report: InitProgressReport) => {
+          _downloadProgress.progress = report.progress
+          _downloadProgress.text = report.text
+          _downloadProgressListeners.forEach((fn) => fn(report))
+        })
         await createBrowserRuntime()
       }
       setProviderType(type)

@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
+import { subscribeDownloadProgress, getDownloadProgress } from '../context/AppContext'
 import { Drawer } from '../atoms/Drawer'
 import { Button } from '../atoms/Button'
 import { cn } from '../lib/cn'
@@ -39,6 +40,7 @@ export function SettingsDrawer({
   onUpdateProfile,
   onClearChat,
 }: SettingsDrawerProps) {
+  const [loadProgress, setLoadProgress] = useState(() => getDownloadProgress())
   const [confirmClear, setConfirmClear] = useState(false)
   const [editingProfile, setEditingProfile] = useState(false)
   const [nameInput, setNameInput] = useState(profile?.name ?? '')
@@ -62,6 +64,12 @@ export function SettingsDrawer({
       ? (AVAILABLE_MODELS.find((m) => m.id === modelId) ? modelId : 'custom')
       : DEFAULT_MODEL_ID
   )
+
+  useEffect(() => {
+    if (!isChangingModel) return
+    setLoadProgress({ progress: 0, text: '' })
+    return subscribeDownloadProgress((r) => setLoadProgress({ progress: r.progress, text: r.text }))
+  }, [isChangingModel])
 
   const handleClearClick = useCallback(() => {
     if (confirmClear) {
@@ -296,10 +304,27 @@ export function SettingsDrawer({
                 >
                   {isChangingModel ? 'Cambiando…' : 'Guardar'}
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => setEditingProvider(false)} className="flex-1">
+                <Button size="sm" variant="ghost" onClick={() => setEditingProvider(false)} disabled={isChangingModel} className="flex-1">
                   Cancelar
                 </Button>
               </div>
+              {isChangingModel && providerTab === 'webllm' && (
+                <div className="flex flex-col gap-2">
+                  <div className="flex justify-between text-xs text-text-secondary">
+                    <span>Descargando modelo…</span>
+                    <span className="font-medium text-text-primary">{Math.round(loadProgress.progress * 100)}%</span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all duration-300"
+                      style={{ width: `${Math.round(loadProgress.progress * 100)}%` }}
+                    />
+                  </div>
+                  {loadProgress.text ? (
+                    <p className="text-[11px] text-text-tertiary break-all">{loadProgress.text}</p>
+                  ) : null}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -370,7 +395,21 @@ export function SettingsDrawer({
             })()}
           </div>
           {isChangingModel && (
-            <p className="mt-2 text-xs text-text-tertiary">Cargando modelo…</p>
+            <div className="mt-3 flex flex-col gap-2">
+              <div className="flex justify-between text-xs text-text-secondary">
+                <span>Cargando modelo…</span>
+                <span className="font-medium text-text-primary">{Math.round(loadProgress.progress * 100)}%</span>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-primary transition-all duration-300"
+                  style={{ width: `${Math.round(loadProgress.progress * 100)}%` }}
+                />
+              </div>
+              {loadProgress.text ? (
+                <p className="text-[11px] text-text-tertiary break-all">{loadProgress.text}</p>
+              ) : null}
+            </div>
           )}
         </div>
         )}
