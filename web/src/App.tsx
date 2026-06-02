@@ -9,7 +9,7 @@ function AppShell() {
   if (phase.type === 'loading') {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4">
-        <span className="text-3xl">🌮</span>
+        <img src="/SCR-20260603-jsmp.jpeg" className="w-12 h-12 rounded-full" alt="Miguelito" />
         <p className="text-sm text-text-secondary">Iniciando…</p>
       </div>
     )
@@ -24,7 +24,7 @@ function AppShell() {
     const pct = Math.round(phase.progress * 100)
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-8 text-center">
-        <span className="text-4xl">🌮</span>
+        <img src="/SCR-20260603-jsmp.jpeg" className="w-16 h-16 rounded-full" alt="Miguelito" />
         <div className="flex flex-col gap-1">
           <p className="text-base font-semibold text-text-primary">Iniciando Miguelito</p>
           <p className="text-sm text-text-secondary">Cargando {model?.name ?? modelId}…</p>

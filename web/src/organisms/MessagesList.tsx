@@ -48,9 +48,7 @@ export function MessagesList() {
   if (messages.length === 0) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center px-8">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent-ai-light text-2xl">
-          🌮
-        </div>
+        <img src="/SCR-20260603-jsmp.jpeg" className="h-14 w-14 rounded-full" alt="Miguelito" />
         <p className="text-base font-medium text-text-primary">¡Hola! Soy Miguelito</p>
         <p className="text-sm text-text-secondary">Escríbeme algo para empezar a practicar español.</p>
       </div>

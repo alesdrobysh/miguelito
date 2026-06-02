@@ -7,9 +7,7 @@ interface WelcomeStepProps {
 export function WelcomeStep({ onNext }: WelcomeStepProps) {
   return (
     <div className="flex flex-col items-center gap-5 px-6 py-8 text-center">
-      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent-ai-light text-3xl">
-        🌮
-      </div>
+      <img src="/SCR-20260603-jsmp.jpeg" className="h-16 w-16 rounded-full" alt="Miguelito" />
 
       <div className="flex flex-col gap-3">
         <h1 className="text-3xl font-bold text-text-primary">Hola, soy Miguelito</h1>
