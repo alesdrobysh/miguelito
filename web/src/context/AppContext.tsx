@@ -7,6 +7,16 @@ import {
   useEffect,
   type ReactNode,
 } from 'react'
+
+function uuid(): string {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  const b = new Uint8Array(16)
+  crypto.getRandomValues(b)
+  b[6] = (b[6] & 0x0f) | 0x40
+  b[8] = (b[8] & 0x3f) | 0x80
+  const h = Array.from(b, x => x.toString(16).padStart(2, '0'))
+  return `${h.slice(0,4).join('')}-${h.slice(4,6).join('')}-${h.slice(6,8).join('')}-${h.slice(8,10).join('')}-${h.slice(10).join('')}`
+}
 import type { Message, Profile } from '../lib/types'
 import { DEFAULT_MODEL_ID } from '../lib/types'
 import * as appDb from '../storage/db'
@@ -136,6 +146,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       if (!appState?.onboardingComplete) {
         if (import.meta.env.DEV && location.hash === '#dev') {
+          await createBrowserRuntime()
           setIsInitialLoading(false)
           setPhase({ type: 'chat' })
           return
@@ -247,17 +258,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const sendMessage = useCallback(async (text: string) => {
     const runtime = getBrowserRuntime()
-    if (!runtime) return
+    if (!runtime) throw new Error('Runtime not initialized — try reloading the page')
 
     const userMsg: Message = {
-      id: crypto.randomUUID(),
+      id: uuid(),
       role: 'user',
       content: text,
       createdAt: new Date().toISOString(),
     }
     setMessages((prev) => [...prev, userMsg])
 
-    const aiId = crypto.randomUUID()
+    const aiId = uuid()
     setMessages((prev) => [...prev, { id: aiId, role: 'ai', content: '', createdAt: new Date().toISOString() }])
     setIsSending(true)
 

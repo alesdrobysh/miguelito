@@ -3,6 +3,16 @@ import type { ConversationStateData, ConversationStateResult, UpdateResult } fro
 import type { SessionRepository } from "../../repositories/interfaces.js";
 import { SqlRepository, type SaveFn, nowIso, parseSqlUtc } from "./sqlRepository.js";
 
+function uuid(): string {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  const b = new Uint8Array(16)
+  crypto.getRandomValues(b)
+  b[6] = (b[6] & 0x0f) | 0x40
+  b[8] = (b[8] & 0x3f) | 0x80
+  const h = Array.from(b, x => x.toString(16).padStart(2, '0'))
+  return `${h.slice(0,4).join('')}-${h.slice(4,6).join('')}-${h.slice(6,8).join('')}-${h.slice(8,10).join('')}-${h.slice(10).join('')}`
+}
+
 export class SqlSessionRepository extends SqlRepository implements SessionRepository {
   constructor(db: Database, languageId: string, save: SaveFn) {
     super(db, languageId, save);
@@ -67,7 +77,7 @@ export class SqlSessionRepository extends SqlRepository implements SessionReposi
       }
     }
 
-    const sessionId = crypto.randomUUID();
+    const sessionId = uuid();
     const now = nowIso();
     this.db.run(
       `INSERT INTO conversation_state (session_id, turn_count, last_two_modes, topics_touched, language, started_at, updated_at)
