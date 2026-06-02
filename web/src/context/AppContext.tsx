@@ -336,7 +336,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await createBrowserRuntime()
       }
       setProviderType(type)
-      setOpenrouterKey(key)
+      if (type === 'openrouter') setOpenrouterKey(key)
       setModelId(newModelId)
       setEvaluatorModelId(emid)
       const appState = await appDb.getAppState()
@@ -346,7 +346,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           providerType: type,
           modelId: newModelId,
           evaluatorModelId: emid,
-          openrouterKey: key
+          openrouterKey: type === 'openrouter' ? key : appState.openrouterKey,
         })
       }
     } finally {
