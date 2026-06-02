@@ -16,6 +16,10 @@
   --color-border-input: #cbd5e1;
 }
 
+button {
+  cursor: pointer;
+}
+
 body {
   margin: 0;
 }

@@ -498,11 +498,11 @@ export function SettingsDrawer({
                   <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-tertiary">Intereses</p>
                   <div className="flex flex-wrap gap-1.5">
                     {perfilData?.interests?.map((int, i) => (
-                      <span key={i} className="group flex items-center gap-1 rounded-full bg-slate-100 pl-2.5 pr-1.5 py-1 text-xs text-text-secondary">
+                      <span key={i} className="flex items-center gap-1 rounded-full bg-slate-100 pl-2.5 pr-1.5 py-1 text-xs text-text-secondary">
                         {int}
                         <button
                           onClick={() => onRemoveInterest(int)}
-                          className="flex h-3.5 w-3.5 items-center justify-center rounded-full text-text-tertiary opacity-0 transition-opacity hover:bg-slate-300 hover:text-text-primary group-hover:opacity-100"
+                          className="flex h-3.5 w-3.5 items-center justify-center rounded-full text-text-tertiary hover:bg-slate-300 hover:text-text-primary"
                           aria-label={`Eliminar ${int}`}
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12" fill="currentColor" className="h-2.5 w-2.5">
