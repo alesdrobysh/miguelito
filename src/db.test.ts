@@ -698,6 +698,59 @@ describe("BuddyDb turn annotations and competency vector", () => {
     expect(cv.reception.byFrequencyBand.top_50k.score).toBeNull();
   });
 
+  it("getTypicalVocabBand returns weighted-mode band from production evidence", async () => {
+    await db.insertProficiencyEvidence({
+      skill: "production",
+      dimension: "lexical",
+      challenge_band: "top_3k",
+      outcome: "success",
+      confidence: 0.8,
+      weight: 1.5,
+      evidence_text: "produced top_3k vocab",
+      challenge_json: "{}",
+    });
+    await db.insertProficiencyEvidence({
+      skill: "production",
+      dimension: "lexical",
+      challenge_band: "top_10k",
+      outcome: "success",
+      confidence: 0.7,
+      weight: 2.0,
+      evidence_text: "produced top_10k vocab",
+      challenge_json: "{}",
+    });
+    await db.insertProficiencyEvidence({
+      skill: "production",
+      dimension: "lexical",
+      challenge_band: "top_3k",
+      outcome: "partial",
+      confidence: 0.6,
+      weight: 1.2,
+      evidence_text: "produced top_3k vocab again",
+      challenge_json: "{}",
+    });
+
+    const band = await db.getTypicalVocabBand(50);
+    // top_3k total weight = 2.7, top_10k = 2.0 → top_3k wins
+    expect(band).toBe("top_3k");
+  });
+
+  it("getTypicalVocabBand returns null when no production evidence exists", async () => {
+    await db.insertProficiencyEvidence({
+      skill: "reception",
+      dimension: "lexical",
+      challenge_band: "top_1k",
+      outcome: "success",
+      confidence: 0.9,
+      weight: 1.0,
+      evidence_text: "received top_1k",
+      challenge_json: "{}",
+    });
+
+    const band = await db.getTypicalVocabBand(50);
+    expect(band).toBeNull();
+  });
+
   it("updateCompetencyVector patches specific fields", async () => {
     await db.updateCompetencyVector({ morph_successes: 9.0, morph_trials: 10.0 });
     const vec = await db.getCompetencyVector();

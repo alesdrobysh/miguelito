@@ -17,6 +17,7 @@ import type {
   FinishVocabReviewAttemptInput,
   ProficiencyEvidenceInput,
   ProficiencyEvidenceRow,
+  ProficiencyChallengeBand,
   LearningItemInput,
   LearningItem,
   LearningPracticeAttempt,
@@ -97,4 +98,5 @@ export interface CompetencyRepository {
   getRecentAnnotations(limit: number): Promise<TurnAnnotation[]>;
   insertProficiencyEvidence(evidence: ProficiencyEvidenceInput): Promise<number>;
   listProficiencyEvidence(limit: number): Promise<ProficiencyEvidenceRow[]>;
+  getTypicalVocabBand(limit: number): Promise<ProficiencyChallengeBand | null>;
 }

@@ -1,6 +1,7 @@
 import type { Database } from "sql.js";
 import type {
   CompetencyVectorRow,
+  ProficiencyChallengeBand,
   ProficiencyEvidenceInput,
   ProficiencyEvidenceRow,
   TurnAnnotation,
@@ -148,5 +149,22 @@ export class SqlCompetencyRepository extends SqlRepository implements Competency
       `SELECT * FROM proficiency_evidence WHERE language = ? ORDER BY id DESC LIMIT ?`,
       [this.languageId, limit]
     ) as ProficiencyEvidenceRow[];
+  }
+
+  async getTypicalVocabBand(limit: number): Promise<ProficiencyChallengeBand | null> {
+    const row = this.queryRow(
+      `SELECT challenge_band
+       FROM (
+         SELECT challenge_band, weight
+         FROM proficiency_evidence
+         WHERE language = ? AND skill = 'production'
+         ORDER BY id DESC LIMIT ?
+       )
+       GROUP BY challenge_band
+       ORDER BY SUM(weight) DESC
+       LIMIT 1`,
+      [this.languageId, limit]
+    ) as { challenge_band: string } | undefined;
+    return row ? (row.challenge_band as ProficiencyChallengeBand) : null;
   }
 }

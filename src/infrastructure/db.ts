@@ -12,7 +12,7 @@ import type {
   TurnAnnotationInput, TurnAnnotation, CompetencyVectorRow,
   VocabReviewMode, VocabReviewAttempt, StartVocabReviewAttemptInput, FinishVocabReviewAttemptInput,
   VocabCandidateItem,
-  ProficiencyEvidenceInput, ProficiencyEvidenceRow,
+  ProficiencyEvidenceInput, ProficiencyEvidenceRow, ProficiencyChallengeBand,
   LearningItemInput, LearningItem, LearningPracticeAttempt, StartLearningPracticeAttemptInput, FinishLearningPracticeAttemptInput,
 } from "../domain/types.js";
 import type {
@@ -265,6 +265,10 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
 
   async listProficiencyEvidence(limit: number): Promise<ProficiencyEvidenceRow[]> {
     return this.competency.listProficiencyEvidence(limit);
+  }
+
+  async getTypicalVocabBand(limit: number): Promise<ProficiencyChallengeBand | null> {
+    return this.competency.getTypicalVocabBand(limit);
   }
 
   close(): void {
