@@ -14,6 +14,11 @@ export function MessagesList() {
   }, [messages.length])
 
   useEffect(() => {
+    if (!streamingId) return
+    bottomRef.current?.scrollIntoView({ behavior: 'instant' })
+  }, [streamingId, lastMsg?.content])
+
+  useEffect(() => {
     if (!scrollToMessageId) return
     const el = document.getElementById(`msg-${scrollToMessageId}`)
     el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
