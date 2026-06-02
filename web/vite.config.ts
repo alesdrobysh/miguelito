@@ -9,6 +9,7 @@ export default defineConfig({
     'process.env': '{}',
   },
   server: {
+    host: true,
     headers: {
       'Cross-Origin-Embedder-Policy': 'require-corp',
       'Cross-Origin-Opener-Policy': 'same-origin',

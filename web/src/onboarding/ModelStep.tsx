@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Button } from '../atoms/Button'
 import { cn } from '../lib/cn'
-import { AVAILABLE_MODELS, DEFAULT_MODEL_ID, OPENROUTER_MODELS, DEFAULT_OPENROUTER_MODEL_ID, DEFAULT_EVALUATOR_MODEL_ID } from '../lib/types'
+import { AVAILABLE_MODELS, DEFAULT_MODEL_ID, DEFAULT_OPENROUTER_MODEL_ID, DEFAULT_EVALUATOR_MODEL_ID } from '../lib/types'
 
 interface ModelStepProps {
   onSelectWebLLM: (modelId: string) => Promise<void>

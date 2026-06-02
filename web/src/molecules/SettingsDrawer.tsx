@@ -3,7 +3,7 @@ import { subscribeDownloadProgress, getDownloadProgress } from '../context/AppCo
 import { Drawer } from '../atoms/Drawer'
 import { Button } from '../atoms/Button'
 import { cn } from '../lib/cn'
-import { AVAILABLE_MODELS, OPENROUTER_MODELS, DEFAULT_MODEL_ID, DEFAULT_OPENROUTER_MODEL_ID, DEFAULT_EVALUATOR_MODEL_ID } from '../lib/types'
+import { AVAILABLE_MODELS, DEFAULT_MODEL_ID, DEFAULT_OPENROUTER_MODEL_ID, DEFAULT_EVALUATOR_MODEL_ID } from '../lib/types'
 import type { Profile } from '../lib/types'
 import type { ProviderType } from '../storage/db'
 
@@ -98,7 +98,7 @@ export function SettingsDrawer({
 
   return (
     <Drawer open={open} onClose={onClose} title="Ajustes">
-      <div className="flex flex-col gap-6">
+      <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
 
         {/* Perfil */}
         <div>

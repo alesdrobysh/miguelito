@@ -174,7 +174,7 @@ export async function createBrowserRuntime(): Promise<RuntimeManager> {
 
   const rawDb = sharedDb.db
   const dbg = {
-    query(sql: string, params: unknown[] = []) {
+    query(sql: string, params: (number | string | Uint8Array | null)[] = []) {
       const stmt = rawDb.prepare(sql)
       stmt.bind(params)
       const rows: Record<string, unknown>[] = []
