@@ -8,6 +8,7 @@ import { callTool } from "./ToolExecutor.js";
 import type { PromptBuilder } from "./PromptBuilder.js";
 import { logger } from "../infrastructure/logger.js";
 import { PostTurnProcessor } from "./PostTurnProcessor.js";
+import { buildConversationPlan } from "./ConversationPlanner.js";
 
 const log = logger.child({ ctx: 'agent' });
 
@@ -49,11 +50,13 @@ export class AgentRunner {
 
     const fullSystem = await promptBuilder.build(userMessage, dreamMemoryPath);
     const postHistoryReminder = promptBuilder.buildPostHistoryReminder();
+    const conversationPlan = buildConversationPlan({ userMessage, history: chatHistory });
 
     const messages: ChatMessage[] = [
       { role: "system", content: fullSystem },
       ...chatHistory,
       { role: "user", content: userMessage },
+      { role: "system", content: conversationPlan },
       { role: "system", content: postHistoryReminder },
     ];
 

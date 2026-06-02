@@ -11,9 +11,11 @@ import type { PromptBuilder } from "./PromptBuilder.js";
 class ChatProvider implements LLMProvider {
   public chatCalls = 0;
   public lastTools: object[] | undefined;
+  public lastMessages: ChatMessage[] | undefined;
   constructor(private content: string) {}
-  async chat(_messages: ChatMessage[], tools?: object[], _opts?: ChatOptions): Promise<ChatResult> {
+  async chat(messages: ChatMessage[], tools?: object[], _opts?: ChatOptions): Promise<ChatResult> {
     this.chatCalls++;
+    this.lastMessages = messages;
     this.lastTools = tools;
     return { content: this.content, toolCalls: [] };
   }
@@ -69,6 +71,29 @@ describe("AgentRunner post-turn evaluation", () => {
     await expect.poll(() => evaluator.completeJsonCalls).toBe(1);
     await expect.poll(async () => (await db.getRecentAnnotations(10)).length).toBe(1);
     expect((await db.getConversationState()).session.last_mode).toBe("OFFER");
+  });
+
+  it("injects a dialogue plan after history so the chat model does not only react to the latest message", async () => {
+    const main = new ChatProvider("Puedes probar sentadillas y subidas con mochila; eso conecta con el Teide.");
+    const evaluator = new EvaluatorProvider();
+    const promptBuilder = {
+      build: async () => "system",
+      buildPostHistoryReminder: () => "reminder",
+    } as unknown as PromptBuilder;
+    const toolCtx = { vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, provider: main };
+
+    const runner = new AgentRunner({ provider: main, evaluatorProvider: evaluator, session: db, promptBuilder, toolCtx, lang: SpanishLanguage });
+    await runner.run("¿Qué ejercicios me recomiendas?", [
+      { role: "user", content: "Quiero viajar a Canarias y subir al Teide." },
+      { role: "assistant", content: "Podemos hablar de rutas y preparación." },
+      { role: "user", content: "También voy al gimnasio para mejorar mi resistencia." },
+    ]);
+
+    const systemMessages = (main.lastMessages ?? []).filter((m) => m.role === "system").map((m) => m.content).join("\n---\n");
+    expect(systemMessages).toContain("## Plan de diálogo");
+    expect(systemMessages).toContain("Hilo activo");
+    expect(systemMessages).toContain("Teide");
+    expect(systemMessages).toContain("No termines siempre con una pregunta");
   });
 
   it("does not expose post-turn learning side-effect tools to the chat model", async () => {
