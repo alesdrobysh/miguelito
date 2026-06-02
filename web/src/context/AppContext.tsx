@@ -310,28 +310,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const changeProvider = useCallback(async (type: ProviderType, newModelId: string, newEvaluatorModelId?: string, key = '') => {
     setIsChangingModel(true)
-    resetBrowserRuntime()
     const emid = newEvaluatorModelId || newModelId
     try {
       if (type === 'openrouter') {
+        // OpenRouter: just swap the config — no engine download or runtime rebuild needed.
+        // streamingHandleMessage reads _providerConfig directly on every message.
         setProviderConfig({ type: 'openrouter', key, model: newModelId, evaluatorModel: emid })
       } else {
+        // WebLLM: need to tear down the old runtime and init the new engine.
+        resetBrowserRuntime()
         setProviderConfig({ type: 'webllm' })
         await initEngine(newModelId, () => {})
+        await createBrowserRuntime()
       }
       setProviderType(type)
       setOpenrouterKey(key)
       setModelId(newModelId)
       setEvaluatorModelId(emid)
-      await createBrowserRuntime()
       const appState = await appDb.getAppState()
       if (appState) {
-        await appDb.saveAppState({ 
-          ...appState, 
-          providerType: type, 
-          modelId: newModelId, 
+        await appDb.saveAppState({
+          ...appState,
+          providerType: type,
+          modelId: newModelId,
           evaluatorModelId: emid,
-          openrouterKey: key 
+          openrouterKey: key
         })
       }
     } finally {
@@ -356,6 +359,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         messages,
         profile,
         modelId,
+        evaluatorModelId,
         providerType,
         openrouterKey,
         temperature,

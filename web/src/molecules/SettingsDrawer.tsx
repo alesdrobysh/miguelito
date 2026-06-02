@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react'
 import { Drawer } from '../atoms/Drawer'
 import { Button } from '../atoms/Button'
 import { cn } from '../lib/cn'
-import { AVAILABLE_MODELS, OPENROUTER_MODELS, DEFAULT_OPENROUTER_MODEL_ID, DEFAULT_EVALUATOR_MODEL_ID } from '../lib/types'
+import { AVAILABLE_MODELS, OPENROUTER_MODELS, DEFAULT_MODEL_ID, DEFAULT_OPENROUTER_MODEL_ID, DEFAULT_EVALUATOR_MODEL_ID } from '../lib/types'
 import type { Profile } from '../lib/types'
 import type { ProviderType } from '../storage/db'
 
@@ -56,6 +56,11 @@ export function SettingsDrawer({
   )
   const [customEvaluatorModel, setCustomEvaluatorModel] = useState(
     providerType === 'openrouter' && evaluatorModelId !== modelId ? evaluatorModelId : DEFAULT_EVALUATOR_MODEL_ID
+  )
+  const [selectedWebLLMModelId, setSelectedWebLLMModelId] = useState<string>(
+    providerType === 'webllm'
+      ? (AVAILABLE_MODELS.find((m) => m.id === modelId) ? modelId : 'custom')
+      : DEFAULT_MODEL_ID
   )
 
   const handleClearClick = useCallback(() => {
@@ -178,6 +183,51 @@ export function SettingsDrawer({
                 </button>
               </div>
 
+              {providerTab === 'webllm' && (
+                <div className="flex flex-col gap-2">
+                  {AVAILABLE_MODELS.map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => setSelectedWebLLMModelId(m.id)}
+                      className={cn(
+                        'flex items-center justify-between rounded-xl border-2 px-3 py-2.5 text-left transition-colors',
+                        selectedWebLLMModelId === m.id ? 'border-primary bg-primary-light' : 'border-border bg-white hover:bg-slate-50',
+                      )}
+                    >
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-xs font-semibold text-text-primary">{m.name}</span>
+                        <span className="text-xs text-text-secondary">{m.description}</span>
+                      </div>
+                      <div className="flex flex-col items-end gap-0.5">
+                        <span className="text-xs text-text-tertiary">{m.size}</span>
+                        {m.id === DEFAULT_MODEL_ID && (
+                          <span className="rounded bg-accent-ai-light px-1.5 py-0.5 text-[10px] font-semibold text-accent-ai">
+                            Recomendado
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setSelectedWebLLMModelId('custom')}
+                    className={cn(
+                      'flex items-center justify-between rounded-xl border-2 px-3 py-2.5 text-left transition-colors',
+                      selectedWebLLMModelId === 'custom' ? 'border-primary bg-primary-light' : 'border-border bg-white hover:bg-slate-50',
+                    )}
+                  >
+                    <span className="text-xs font-semibold text-text-primary">Otro...</span>
+                  </button>
+                  {selectedWebLLMModelId === 'custom' && (
+                    <input
+                      value={customWebLLMModel}
+                      onChange={(e) => setCustomWebLLMModel(e.target.value)}
+                      placeholder="Ej: Llama-3-8B-Instruct-v0.1-q4f16_1-MLC"
+                      className="w-full rounded-lg border border-border-input bg-surface-input px-3 py-2 text-xs text-text-primary placeholder-text-tertiary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  )}
+                </div>
+              )}
+
               {providerTab === 'openrouter' && (
                 <div>
                   <label className="mb-1 block text-xs font-medium text-text-secondary">API Key de OpenRouter</label>
@@ -235,7 +285,10 @@ export function SettingsDrawer({
                         await onChangeProvider('openrouter', finalModel, finalEvaluator, orKeyInput.trim())
                       }
                     } else {
-                      await onChangeProvider('webllm', AVAILABLE_MODELS[0].id)
+                      const webllmModel = selectedWebLLMModelId === 'custom' ? customWebLLMModel.trim() : selectedWebLLMModelId
+                      if (webllmModel) {
+                        await onChangeProvider('webllm', webllmModel)
+                      }
                     }
                     setEditingProvider(false)
                   }}
