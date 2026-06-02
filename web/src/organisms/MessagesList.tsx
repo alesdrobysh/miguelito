@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import { useChat } from '../context/AppContext'
 import { MessageBubble } from '../molecules/MessageBubble'
 
@@ -8,8 +8,20 @@ export function MessagesList() {
   const streamingId = isSending && lastMsg?.role === 'ai' ? lastMsg.id : null
   const bottomRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const [visible, setVisible] = useState(false)
+  const initializedRef = useRef(false)
 
+  // On first render with messages: instant-scroll to bottom, then fade in
   useEffect(() => {
+    if (initializedRef.current || isInitialLoading || messages.length === 0) return
+    initializedRef.current = true
+    bottomRef.current?.scrollIntoView({ behavior: 'instant' })
+    requestAnimationFrame(() => setVisible(true))
+  }, [isInitialLoading, messages.length])
+
+  // Smooth scroll for each new message after initial reveal
+  useEffect(() => {
+    if (!initializedRef.current) return
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages.length])
 
@@ -46,7 +58,7 @@ export function MessagesList() {
   }
 
   return (
-    <div ref={containerRef} className="flex-1 overflow-y-auto">
+    <div ref={containerRef} className={`flex-1 overflow-y-auto transition-opacity duration-300 ${visible ? 'opacity-100' : 'opacity-0'}`}>
       <div className="mx-auto w-full max-w-3xl">
         {messages.map((message) => (
           <div key={message.id} id={`msg-${message.id}`} className={highlightedMessageId === message.id ? 'ring-2 ring-yellow-400 ring-inset rounded-lg' : ''}>
