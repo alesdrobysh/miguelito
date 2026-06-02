@@ -79,4 +79,5 @@ export const OPENROUTER_MODELS: OpenRouterModelInfo[] = [
   },
 ]
 
-export const DEFAULT_OPENROUTER_MODEL_ID = OPENROUTER_MODELS[0].id
+export const DEFAULT_OPENROUTER_MODEL_ID = 'google/gemini-3.1-flash-lite-preview'
+export const DEFAULT_EVALUATOR_MODEL_ID = 'deepseek/deepseek-v4-flash'

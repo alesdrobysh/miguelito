@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react'
 import { Drawer } from '../atoms/Drawer'
 import { Button } from '../atoms/Button'
 import { cn } from '../lib/cn'
-import { AVAILABLE_MODELS, OPENROUTER_MODELS, DEFAULT_OPENROUTER_MODEL_ID } from '../lib/types'
+import { AVAILABLE_MODELS, OPENROUTER_MODELS, DEFAULT_OPENROUTER_MODEL_ID, DEFAULT_EVALUATOR_MODEL_ID } from '../lib/types'
 import type { Profile } from '../lib/types'
 import type { ProviderType } from '../storage/db'
 
@@ -48,12 +48,14 @@ export function SettingsDrawer({
   const [showOrKey, setShowOrKey] = useState(false)
   const [editingProvider, setEditingProvider] = useState(false)
   const [providerTab, setProviderTab] = useState<ProviderType>(providerType)
-  const [customOrModel, setCustomOrModel] = useState(modelId)
+  const [customOrModel, setCustomOrModel] = useState(
+    providerType === 'openrouter' ? modelId : DEFAULT_OPENROUTER_MODEL_ID
+  )
   const [customWebLLMModel, setCustomWebLLMModel] = useState(
     providerType === 'webllm' && !AVAILABLE_MODELS.find(m => m.id === modelId) ? modelId : ''
   )
   const [customEvaluatorModel, setCustomEvaluatorModel] = useState(
-    evaluatorModelId === modelId ? '' : evaluatorModelId
+    providerType === 'openrouter' && evaluatorModelId !== modelId ? evaluatorModelId : DEFAULT_EVALUATOR_MODEL_ID
   )
 
   const handleClearClick = useCallback(() => {

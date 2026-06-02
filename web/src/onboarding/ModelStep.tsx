@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Button } from '../atoms/Button'
 import { cn } from '../lib/cn'
-import { AVAILABLE_MODELS, DEFAULT_MODEL_ID, OPENROUTER_MODELS, DEFAULT_OPENROUTER_MODEL_ID } from '../lib/types'
+import { AVAILABLE_MODELS, DEFAULT_MODEL_ID, OPENROUTER_MODELS, DEFAULT_OPENROUTER_MODEL_ID, DEFAULT_EVALUATOR_MODEL_ID } from '../lib/types'
 
 interface ModelStepProps {
   onSelectWebLLM: (modelId: string) => Promise<void>
@@ -13,7 +13,7 @@ export function ModelStep({ onSelectWebLLM, onSelectOpenRouter }: ModelStepProps
   const [selectedWebLLM, setSelectedWebLLM] = useState(DEFAULT_MODEL_ID)
   const [customWebLLM, setCustomWebLLM] = useState('')
   const [customOR, setCustomOR] = useState(DEFAULT_OPENROUTER_MODEL_ID)
-  const [customEvaluator, setCustomEvaluator] = useState('')
+  const [customEvaluator, setCustomEvaluator] = useState(DEFAULT_EVALUATOR_MODEL_ID)
   const [apiKey, setApiKey] = useState('')
   const [showKey, setShowKey] = useState(false)
   const [loading, setLoading] = useState(false)
