@@ -11,7 +11,7 @@ export function ChatHeader({ modelName, isInitializing, onSettingsClick }: ChatH
   return (
     <header className="flex items-center justify-between border-b border-border bg-white px-4 py-3">
       <div className="flex items-center gap-2">
-        <img src="/SCR-20260603-jsmp.jpeg" className="h-8 w-8 rounded-full" alt="Miguelito" />
+        <img src="/miguelito-avatar.png" className="h-8 w-8 rounded-full" alt="Miguelito" />
         {isInitializing ? (
           <span className="flex items-center gap-1 text-xs text-text-tertiary">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-yellow-400" />
