@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useChat } from '../context/AppContext'
 import { ChatHeader } from '../molecules/ChatHeader'
-import { SearchBar } from '../molecules/SearchBar'
 import { SettingsDrawer } from '../molecules/SettingsDrawer'
 import { MessageInput } from '../molecules/MessageInput'
 import { MessagesList } from './MessagesList'
@@ -10,8 +9,6 @@ import { AVAILABLE_MODELS, OPENROUTER_MODELS } from '../lib/types'
 export function Chat() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const {
-    searchQuery,
-    searchResults,
     modelId,
     evaluatorModelId,
     providerType,
@@ -21,8 +18,6 @@ export function Chat() {
     profile,
     isSending,
     sendMessage,
-    searchMessages,
-    jumpToMessage,
     updateTemperature,
     changeModel,
     changeProvider,
@@ -40,12 +35,6 @@ export function Chat() {
         modelName={modelName}
         isInitializing={isChangingModel}
         onSettingsClick={() => setSettingsOpen(true)}
-      />
-      <SearchBar
-        searchQuery={searchQuery}
-        searchResults={searchResults}
-        onSearch={searchMessages}
-        onJumpToMessage={jumpToMessage}
       />
       <MessagesList />
       <MessageInput onSend={sendMessage} disabled={isSending || isChangingModel} />

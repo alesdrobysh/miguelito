@@ -5,22 +5,10 @@ import type { Message } from '../lib/types'
 
 interface MessageBubbleProps {
   message: Message
-  isHighlighted?: boolean
-  searchQuery?: string
   isStreaming?: boolean
 }
 
-function highlightText(text: string, query: string) {
-  if (!query.trim()) return text
-  const parts = text.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'))
-  return parts.map((part, i) =>
-    part.toLowerCase() === query.toLowerCase() ? (
-      <mark key={i} className="rounded bg-yellow-200 px-0.5">{part}</mark>
-    ) : part,
-  )
-}
-
-export function MessageBubble({ message, isHighlighted, searchQuery, isStreaming }: MessageBubbleProps) {
+export function MessageBubble({ message, isStreaming }: MessageBubbleProps) {
   const isAi = message.role === 'ai'
   const isEmpty = !message.content && isAi
   const time = new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -28,9 +16,8 @@ export function MessageBubble({ message, isHighlighted, searchQuery, isStreaming
   return (
     <div
       className={cn(
-        'flex gap-3 px-4 py-3 transition-colors',
+        'flex gap-3 px-4 py-3',
         isAi ? 'flex-row' : 'flex-row-reverse',
-        isHighlighted && 'bg-yellow-50',
       )}
     >
       <div className={cn('flex min-w-0 max-w-[75%] flex-col', isAi ? 'items-start' : 'items-end')}>
@@ -49,22 +36,16 @@ export function MessageBubble({ message, isHighlighted, searchQuery, isStreaming
             </span>
           ) : isAi ? (
             <div className="prose prose-sm max-w-none text-text-primary [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs [&_pre]:rounded-lg [&_pre]:bg-slate-100 [&_pre]:p-3 [&_blockquote]:border-l-2 [&_blockquote]:border-accent-ai [&_blockquote]:pl-3 [&_blockquote]:text-text-secondary">
-              {searchQuery ? (
-                <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-                  {highlightText(message.content, searchQuery)}
-                </p>
-              ) : (
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {message.content}
-                </ReactMarkdown>
-              )}
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {message.content}
+              </ReactMarkdown>
               {isStreaming && (
                 <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-accent-ai align-middle" />
               )}
             </div>
           ) : (
             <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-              {searchQuery ? highlightText(message.content, searchQuery) : message.content}
+              {message.content}
             </p>
           )}
         </div>

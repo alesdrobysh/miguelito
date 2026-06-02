@@ -44,10 +44,6 @@ interface AppContextValue {
   providerType: ProviderType
   openrouterKey: string
   temperature: number
-  searchQuery: string
-  searchResults: Message[]
-  highlightedMessageId: string | null
-  scrollToMessageId: string | null
   isInitialLoading: boolean
   isSending: boolean
   isChangingModel: boolean
@@ -59,9 +55,6 @@ interface AppContextValue {
   startWithOpenRouter: (key: string, model: string, evaluatorModel?: string) => Promise<void>
   // Chat
   sendMessage: (text: string) => Promise<void>
-  searchMessages: (query: string) => void
-  jumpToMessage: (id: string) => void
-  clearScrollTarget: () => void
   clearChat: () => void
   updateTemperature: (t: number) => void
   updateProfile: (profile: Profile) => Promise<void>
@@ -103,9 +96,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [providerType, setProviderType] = useState<ProviderType>('webllm')
   const [openrouterKey, setOpenrouterKey] = useState('')
   const [temperature, setTemperature] = useState(0.7)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null)
-  const [scrollToMessageId, setScrollToMessageId] = useState<string | null>(null)
   const [isInitialLoading, setIsInitialLoading] = useState(true)
   const [isSending, setIsSending] = useState(false)
   const [isChangingModel, setIsChangingModel] = useState(false)
@@ -260,15 +250,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const searchMessages = useCallback((query: string) => setSearchQuery(query), [])
-
-  const jumpToMessage = useCallback((id: string) => {
-    setHighlightedMessageId(id)
-    setScrollToMessageId(id)
-  }, [])
-
-  const clearScrollTarget = useCallback(() => setScrollToMessageId(null), [])
-
   const clearChat = useCallback(async () => {
     // Start a fresh session in BuddyDb by resetting conversation state
     const runtime = getBrowserRuntime()
@@ -360,10 +341,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return runtime.runtime('spanish').dreamService.run()
   }, [])
 
-  const searchResults = searchQuery.trim()
-    ? messages.filter((m) => m.content.toLowerCase().includes(searchQuery.toLowerCase()))
-    : messages
-
   return (
     <AppContext.Provider
       value={{
@@ -375,10 +352,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         providerType,
         openrouterKey,
         temperature,
-        searchQuery,
-        searchResults,
-        highlightedMessageId,
-        scrollToMessageId,
         isInitialLoading,
         isSending,
         isChangingModel,
@@ -388,9 +361,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         downloadAndStart,
         startWithOpenRouter,
         sendMessage,
-        searchMessages,
-        jumpToMessage,
-        clearScrollTarget,
         clearChat,
         updateTemperature,
         updateProfile,

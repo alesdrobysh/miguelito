@@ -3,7 +3,7 @@ import { useChat } from '../context/AppContext'
 import { MessageBubble } from '../molecules/MessageBubble'
 
 export function MessagesList() {
-  const { messages, searchQuery, highlightedMessageId, scrollToMessageId, clearScrollTarget, isInitialLoading, isSending } = useChat()
+  const { messages, isInitialLoading, isSending } = useChat()
   const lastMsg = messages[messages.length - 1]
   const streamingId = isSending && lastMsg?.role === 'ai' ? lastMsg.id : null
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -30,13 +30,6 @@ export function MessagesList() {
     bottomRef.current?.scrollIntoView({ behavior: 'instant' })
   }, [streamingId, lastMsg?.content])
 
-  useEffect(() => {
-    if (!scrollToMessageId) return
-    const el = document.getElementById(`msg-${scrollToMessageId}`)
-    el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    clearScrollTarget()
-  }, [scrollToMessageId, clearScrollTarget])
-
   if (isInitialLoading) {
     return (
       <div className="flex flex-1 items-center justify-center">
@@ -59,9 +52,7 @@ export function MessagesList() {
     <div ref={containerRef} className={`flex-1 overflow-y-auto transition-opacity duration-300 ${visible ? 'opacity-100' : 'opacity-0'}`}>
       <div className="mx-auto w-full max-w-3xl">
         {messages.map((message) => (
-          <div key={message.id} id={`msg-${message.id}`} className={highlightedMessageId === message.id ? 'ring-2 ring-yellow-400 ring-inset rounded-lg' : ''}>
-            <MessageBubble message={message} isHighlighted={highlightedMessageId === message.id} searchQuery={searchQuery} isStreaming={message.id === streamingId} />
-          </div>
+          <MessageBubble key={message.id} message={message} isStreaming={message.id === streamingId} />
         ))}
         <div ref={bottomRef} />
       </div>
