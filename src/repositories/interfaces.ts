@@ -100,3 +100,8 @@ export interface CompetencyRepository {
   listProficiencyEvidence(limit: number): Promise<ProficiencyEvidenceRow[]>;
   getTypicalVocabBand(limit: number): Promise<ProficiencyChallengeBand | null>;
 }
+
+export interface MetaRepository {
+  getMetaValue(key: string): Promise<string | null>;
+  setMetaValue(key: string, value: string): Promise<void>;
+}

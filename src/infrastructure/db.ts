@@ -17,7 +17,7 @@ import type {
 } from "../domain/types.js";
 import type {
   VocabRepository, ErrorRepository, SessionRepository, ProfileRepository,
-  InterestRepository, CompetencyRepository, LearningRepository,
+  InterestRepository, CompetencyRepository, LearningRepository, MetaRepository,
 } from "../repositories/interfaces.js";
 
 import { SCHEMA } from "./schema.js";
@@ -32,7 +32,7 @@ import { SqlLearningRepository } from "./repositories/learningRepository.js";
 
 export type { ChunkItem, DueChunkItem, ErrorItem, UserProfile, ConversationStateResult, FsrsReviewResult, ProgressData, UpdateResult, TurnAnnotationInput, TurnAnnotation, CompetencyVectorRow } from "../domain/types.js";
 
-export class BuddyDb implements VocabRepository, ErrorRepository, SessionRepository, ProfileRepository, InterestRepository, CompetencyRepository, LearningRepository {
+export class BuddyDb implements VocabRepository, ErrorRepository, SessionRepository, ProfileRepository, InterestRepository, CompetencyRepository, LearningRepository, MetaRepository {
   readonly db: Database;
   private dbPath: string;
   private readonly vocab: VocabRepository;
@@ -269,6 +269,16 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
 
   async getTypicalVocabBand(limit: number): Promise<ProficiencyChallengeBand | null> {
     return this.competency.getTypicalVocabBand(limit);
+  }
+
+  async getMetaValue(key: string): Promise<string | null> {
+    const rows = this.db.exec("SELECT value FROM _buddy_meta WHERE key = ?", [key]);
+    return (rows[0]?.values[0]?.[0] as string | null) ?? null;
+  }
+
+  async setMetaValue(key: string, value: string): Promise<void> {
+    this.db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES (?, ?)", [key, value]);
+    this.save();
   }
 
   close(): void {
