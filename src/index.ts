@@ -2,7 +2,7 @@ import { loadConfig } from "./infrastructure/config.js";
 import { logger } from "./infrastructure/logger.js";
 import { createRuntimeManager } from "./runtime.js";
 import { TuiTransport } from "./transport/TuiTransport.js";
-import { createTelegramTransport, startLanguageScheduler, startTelegramTransport } from "./app/startup.js";
+import { createTelegramTransport, runDreamIfOverdue, startLanguageScheduler, startTelegramTransport } from "./app/startup.js";
 
 const log = logger.child({ ctx: "app" });
 
@@ -37,6 +37,7 @@ async function main() {
       const rt = manager.runtime(language);
       startLanguageScheduler(config, rt, transport);
       startTelegramTransport(manager, config, language, transport);
+      await runDreamIfOverdue(config, rt, rt.db);
     }
 
     return;
@@ -51,6 +52,7 @@ async function main() {
   if (config.transport === "telegram") {
     const rt = manager.runtime(defaultLanguage);
     startLanguageScheduler(config, rt, transport);
+    await runDreamIfOverdue(config, rt, rt.db);
     transport.start({
       onStart: (info: { username: string }) => log.info({ username: info.username, language: defaultLanguage }, "bot started"),
       allowed_updates: ["message"],
