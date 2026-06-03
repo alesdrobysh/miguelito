@@ -6,12 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "build:vercel": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
     "@mlc-ai/web-llm": "^0.2.73",
-    "@vercel/analytics": "^2.0.1",
     "buffer": "^6.0.3",
     "clsx": "^2.1.1",
     "idb": "^8.0.0",
