@@ -1,5 +1,5 @@
 {
-  "buildCommand": "cd web && npm ci && npm run build",
+  "buildCommand": "cd web && npm ci && npm run build:vercel",
   "outputDirectory": "web/dist",
   "installCommand": "cd web && npm ci",
   "headers": [
