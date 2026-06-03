@@ -21,7 +21,7 @@ export function Drawer({ open, onClose, title, children }: DrawerProps) {
       )}
       <div
         className={cn(
-          'fixed right-0 top-0 z-50 flex h-full w-full flex-col bg-white shadow-xl transition-transform duration-300 sm:w-[90vw] md:w-[80vw] lg:w-[70vw]',
+          'fixed right-0 top-0 z-50 flex h-full w-full flex-col bg-surface-user shadow-xl transition-transform duration-300 sm:w-[90vw] md:w-[80vw] lg:w-[70vw]',
           open ? 'translate-x-0' : 'translate-x-full',
         )}
       >

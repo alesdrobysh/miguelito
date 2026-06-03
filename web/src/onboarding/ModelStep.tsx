@@ -109,7 +109,7 @@ export function ModelStep({ onSelectWebLLM, onSelectOpenRouter }: ModelStepProps
           onClick={() => setTab('webllm')}
           className={cn(
             'flex-1 rounded-lg py-2 text-sm font-medium transition-colors',
-            tab === 'webllm' ? 'bg-white text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary',
+            tab === 'webllm' ? 'bg-surface-user text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary',
           )}
         >
           En tu navegador
@@ -118,7 +118,7 @@ export function ModelStep({ onSelectWebLLM, onSelectOpenRouter }: ModelStepProps
           onClick={() => setTab('openrouter')}
           className={cn(
             'flex-1 rounded-lg py-2 text-sm font-medium transition-colors',
-            tab === 'openrouter' ? 'bg-white text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary',
+            tab === 'openrouter' ? 'bg-surface-user text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary',
           )}
         >
           Con API (OpenRouter)
@@ -137,7 +137,7 @@ export function ModelStep({ onSelectWebLLM, onSelectOpenRouter }: ModelStepProps
           {/* Detected model card */}
           <div className={cn(
             'flex items-center justify-between rounded-xl border-2 px-4 py-3',
-            webGpuStatus === 'detecting' ? 'border-border bg-white opacity-60' : 'border-primary bg-primary-light',
+            webGpuStatus === 'detecting' ? 'border-border bg-surface-user opacity-60' : 'border-primary bg-primary-light',
           )}>
             <div className="flex flex-col gap-0.5">
               <span className="text-sm font-semibold text-text-primary">
@@ -172,7 +172,7 @@ export function ModelStep({ onSelectWebLLM, onSelectOpenRouter }: ModelStepProps
           </div>
 
           {/* WebLLM notice */}
-          <p className="rounded-lg bg-slate-50 px-3 py-2 text-center text-xs text-text-secondary">
+          <p className="rounded-lg bg-surface-ai px-3 py-2 text-center text-xs text-text-secondary">
             🔒 Todo funciona en tu navegador, sin enviar datos. Puede ser <strong>más lento</strong> y con <strong>menor calidad</strong> que una API externa.
           </p>
         </>

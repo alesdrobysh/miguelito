@@ -34,7 +34,7 @@ export function DownloadStep() {
           <span className="text-text-secondary">Progreso</span>
           <span className="font-medium text-text-primary">{pct}%</span>
         </div>
-        <div className="h-3 w-full overflow-hidden rounded-full bg-slate-100">
+        <div className="h-3 w-full overflow-hidden rounded-full bg-surface-input">
           <div
             className="h-full rounded-full bg-primary transition-all duration-300"
             style={{ width: `${pct}%` }}

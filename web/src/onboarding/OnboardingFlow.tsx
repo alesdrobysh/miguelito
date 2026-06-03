@@ -13,7 +13,7 @@ export function OnboardingFlow({ step }: OnboardingFlowProps) {
   const { advanceToProfile, saveProfileAndAdvance, downloadAndStart, startWithOpenRouter } = useApp()
 
   return (
-    <div className="flex min-h-screen flex-col bg-white">
+    <div className="flex min-h-screen flex-col bg-surface-user">
       <div className="mx-auto w-full max-w-md flex-1">
         {step === 'welcome' && <WelcomeStep onNext={advanceToProfile} />}
         {step === 'profile' && <ProfileStep onSave={saveProfileAndAdvance} />}

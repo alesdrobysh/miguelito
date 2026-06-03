@@ -165,7 +165,7 @@ export function SettingsDrawer({
               </div>
 
               {!editingProvider ? (
-                <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm">
+                <div className="rounded-lg bg-surface-ai px-3 py-2 text-sm">
                   {providerType === 'webllm' ? (
                     <p className="font-medium text-text-primary">En tu navegador (WebLLM)</p>
                   ) : (
@@ -182,7 +182,7 @@ export function SettingsDrawer({
                       onClick={() => setProviderTab('webllm')}
                       className={cn(
                         'flex-1 rounded-lg py-1.5 text-xs font-medium transition-colors',
-                        providerTab === 'webllm' ? 'bg-white text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary',
+                        providerTab === 'webllm' ? 'bg-surface-user text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary',
                       )}
                     >
                       WebLLM
@@ -191,7 +191,7 @@ export function SettingsDrawer({
                       onClick={() => setProviderTab('openrouter')}
                       className={cn(
                         'flex-1 rounded-lg py-1.5 text-xs font-medium transition-colors',
-                        providerTab === 'openrouter' ? 'bg-white text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary',
+                        providerTab === 'openrouter' ? 'bg-surface-user text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary',
                       )}
                     >
                       OpenRouter
@@ -206,7 +206,7 @@ export function SettingsDrawer({
                           onClick={() => setSelectedWebLLMModelId(m.id)}
                           className={cn(
                             'flex items-center justify-between rounded-xl border-2 px-3 py-2.5 text-left transition-colors',
-                            selectedWebLLMModelId === m.id ? 'border-primary bg-primary-light' : 'border-border bg-white hover:bg-slate-50',
+                            selectedWebLLMModelId === m.id ? 'border-primary bg-primary-light' : 'border-border bg-surface-user hover:bg-surface-ai',
                           )}
                         >
                           <div className="flex flex-col gap-0.5">
@@ -227,7 +227,7 @@ export function SettingsDrawer({
                         onClick={() => setSelectedWebLLMModelId('custom')}
                         className={cn(
                           'flex items-center justify-between rounded-xl border-2 px-3 py-2.5 text-left transition-colors',
-                          selectedWebLLMModelId === 'custom' ? 'border-primary bg-primary-light' : 'border-border bg-white hover:bg-slate-50',
+                          selectedWebLLMModelId === 'custom' ? 'border-primary bg-primary-light' : 'border-border bg-surface-user hover:bg-surface-ai',
                         )}
                       >
                         <span className="text-xs font-semibold text-text-primary">Otro...</span>
@@ -321,7 +321,7 @@ export function SettingsDrawer({
                         <span>Descargando modelo…</span>
                         <span className="font-medium text-text-primary">{Math.round(loadProgress.progress * 100)}%</span>
                       </div>
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-surface-input">
                         <div
                           className="h-full rounded-full bg-primary transition-all duration-300"
                           style={{ width: `${Math.round(loadProgress.progress * 100)}%` }}
@@ -352,7 +352,7 @@ export function SettingsDrawer({
                           'flex items-center justify-between rounded-lg border-2 px-3 py-2 text-left text-sm transition-colors disabled:opacity-50',
                           isActive
                             ? 'border-primary bg-primary-light'
-                            : 'border-border bg-white hover:bg-slate-50',
+                            : 'border-border bg-surface-user hover:bg-surface-ai',
                         )}
                       >
                         <span className={cn('font-medium', isActive ? 'text-primary' : 'text-text-primary')}>
@@ -375,7 +375,7 @@ export function SettingsDrawer({
                             'flex items-center justify-between rounded-lg border-2 px-3 py-2 text-left text-sm transition-colors disabled:opacity-50',
                             isCustomActive
                               ? 'border-primary bg-primary-light'
-                              : 'border-border bg-white hover:bg-slate-50',
+                              : 'border-border bg-surface-user hover:bg-surface-ai',
                           )}
                         >
                           <span className={cn('font-medium', isCustomActive ? 'text-primary' : 'text-text-primary')}>
@@ -407,7 +407,7 @@ export function SettingsDrawer({
                       <span>Cargando modelo…</span>
                       <span className="font-medium text-text-primary">{Math.round(loadProgress.progress * 100)}%</span>
                     </div>
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-surface-input">
                       <div
                         className="h-full rounded-full bg-primary transition-all duration-300"
                         style={{ width: `${Math.round(loadProgress.progress * 100)}%` }}
@@ -440,6 +440,7 @@ export function SettingsDrawer({
                 <span>Creativo</span>
               </div>
             </div>
+
           </div>
         ) : (
           <div className="flex flex-col gap-6">
@@ -480,7 +481,7 @@ export function SettingsDrawer({
                   ) : profile ? (
                     <button
                       onClick={handleEditProfile}
-                      className="group w-full rounded-lg bg-slate-50 px-3 py-2 text-left text-sm hover:bg-slate-100 transition-colors"
+                      className="group w-full rounded-lg bg-surface-ai px-3 py-2 text-left text-sm hover:bg-surface-input transition-colors"
                     >
                       <div className="flex items-center gap-1.5">
                         <span className="font-medium text-text-primary">{profile.name}</span>
@@ -505,11 +506,11 @@ export function SettingsDrawer({
                   <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-tertiary">Intereses</p>
                   <div className="flex flex-wrap gap-1.5">
                     {perfilData?.interests?.map((int, i) => (
-                      <span key={i} className="flex items-center gap-1 rounded-full bg-slate-100 pl-2.5 pr-1.5 py-1 text-xs text-text-secondary">
+                      <span key={i} className="flex items-center gap-1 rounded-full bg-surface-input pl-2.5 pr-1.5 py-1 text-xs text-text-secondary">
                         {int}
                         <button
                           onClick={() => onRemoveInterest(int)}
-                          className="flex h-3.5 w-3.5 items-center justify-center rounded-full text-text-tertiary hover:bg-slate-300 hover:text-text-primary"
+                          className="flex h-3.5 w-3.5 items-center justify-center rounded-full text-text-tertiary hover:bg-border-input hover:text-text-primary"
                           aria-label={`Eliminar ${int}`}
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12" fill="currentColor" className="h-2.5 w-2.5">
@@ -581,7 +582,7 @@ export function SettingsDrawer({
                 {perfilData?.soul && (
                   <div>
                     <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-tertiary">Lo que sé de ti</p>
-                    <div className="max-h-40 overflow-y-auto rounded-lg border border-border bg-slate-50 p-3 text-xs leading-relaxed text-text-secondary whitespace-pre-wrap">
+                    <div className="max-h-40 overflow-y-auto rounded-lg border border-border bg-surface-ai p-3 text-xs leading-relaxed text-text-secondary whitespace-pre-wrap">
                       {perfilData.soul}
                     </div>
                   </div>

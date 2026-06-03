@@ -17,21 +17,21 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
       </div>
 
       <div className="flex flex-col gap-3 w-full max-w-xs">
-        <div className="flex items-start gap-3 rounded-xl bg-slate-50 px-4 py-3 text-left">
+        <div className="flex items-start gap-3 rounded-xl bg-surface-ai px-4 py-3 text-left">
           <span className="text-xl">🔒</span>
           <div>
             <p className="text-sm font-medium text-text-primary">Privado por defecto</p>
             <p className="text-xs text-text-secondary">El modelo de IA corre en tu dispositivo</p>
           </div>
         </div>
-        <div className="flex items-start gap-3 rounded-xl bg-slate-50 px-4 py-3 text-left">
+        <div className="flex items-start gap-3 rounded-xl bg-surface-ai px-4 py-3 text-left">
           <span className="text-xl">💬</span>
           <div>
             <p className="text-sm font-medium text-text-primary">Conversación natural</p>
             <p className="text-xs text-text-secondary">Practica español con correcciones contextuales</p>
           </div>
         </div>
-        <div className="flex items-start gap-3 rounded-xl bg-slate-50 px-4 py-3 text-left">
+        <div className="flex items-start gap-3 rounded-xl bg-surface-ai px-4 py-3 text-left">
           <span className="text-xl">📱</span>
           <div>
             <p className="text-sm font-medium text-text-primary">Sin instalación</p>

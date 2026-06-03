@@ -34,7 +34,7 @@ export function Chat() {
     : (AVAILABLE_MODELS.find((m) => m.id === modelId)?.name ?? modelId)
 
   return (
-    <div className="flex h-screen flex-col bg-white">
+    <div className="flex h-screen flex-col bg-surface-user">
       <ChatHeader
         modelName={modelName}
         isInitializing={isChangingModel}

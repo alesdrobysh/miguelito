@@ -48,7 +48,7 @@ export function MessageInput({ onSend, disabled }: MessageInputProps) {
   )
 
   return (
-    <div className="border-t border-border bg-white px-4 py-3">
+    <div className="border-t border-border bg-surface-user px-4 py-3">
       {sendError && (
         <div className="mx-auto mb-2 w-full max-w-3xl">
           <p className="text-xs text-red-500">{sendError}</p>

@@ -1,4 +1,5 @@
 import { AppProvider, useApp } from './context/AppContext'
+import { ThemeProvider } from './context/ThemeContext'
 import { Chat } from './organisms/Chat'
 import { OnboardingFlow } from './onboarding/OnboardingFlow'
 import { AVAILABLE_MODELS } from './lib/types'
@@ -30,7 +31,7 @@ function AppShell() {
           <p className="text-sm text-text-secondary">Cargando {model?.name ?? modelId}…</p>
         </div>
         <div className="w-full max-w-xs flex flex-col gap-2">
-          <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+          <div className="h-2 w-full overflow-hidden rounded-full bg-surface-input">
             <div
               className="h-full rounded-full bg-primary transition-all duration-300"
               style={{ width: `${pct}%` }}
@@ -47,8 +48,10 @@ function AppShell() {
 
 export default function App() {
   return (
-    <AppProvider>
-      <AppShell />
-    </AppProvider>
+    <ThemeProvider>
+      <AppProvider>
+        <AppShell />
+      </AppProvider>
+    </ThemeProvider>
   )
 }

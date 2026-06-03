@@ -35,7 +35,7 @@ export function MessageBubble({ message, isStreaming }: MessageBubbleProps) {
               <span className="h-2 w-2 animate-bounce rounded-full bg-text-tertiary [animation-delay:300ms]" />
             </span>
           ) : isAi ? (
-            <div className="prose prose-sm max-w-none text-text-primary [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs [&_pre]:rounded-lg [&_pre]:bg-slate-100 [&_pre]:p-3 [&_blockquote]:border-l-2 [&_blockquote]:border-accent-ai [&_blockquote]:pl-3 [&_blockquote]:text-text-secondary">
+            <div className="prose prose-sm max-w-none text-text-primary [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_code]:rounded [&_code]:bg-surface-input [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs [&_pre]:rounded-lg [&_pre]:bg-surface-input [&_pre]:p-3 [&_blockquote]:border-l-2 [&_blockquote]:border-accent-ai [&_blockquote]:pl-3 [&_blockquote]:text-text-secondary">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {message.content}
               </ReactMarkdown>

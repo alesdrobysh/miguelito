@@ -72,7 +72,7 @@ export function ProfileStep({ onSave }: ProfileStepProps) {
                 className={`flex flex-col gap-0.5 rounded-xl border-2 px-3 py-3 text-left transition-colors ${
                   !showCustom && goal === g.value
                     ? 'border-primary bg-primary-light'
-                    : 'border-border bg-white hover:bg-slate-50'
+                    : 'border-border bg-surface-user hover:bg-surface-ai'
                 }`}
               >
                 <span className="text-base">{g.label}</span>
@@ -84,7 +84,7 @@ export function ProfileStep({ onSave }: ProfileStepProps) {
               className={`col-span-2 flex items-center gap-2 rounded-xl border-2 px-3 py-3 text-left transition-colors ${
                 showCustom
                   ? 'border-primary bg-primary-light'
-                  : 'border-border bg-white hover:bg-slate-50'
+                  : 'border-border bg-surface-user hover:bg-surface-ai'
               }`}
             >
               <span className="text-base">✏️</span>
