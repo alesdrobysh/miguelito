@@ -9,7 +9,7 @@ interface ChatHeaderProps {
 
 export function ChatHeader({ modelName, isInitializing, onSettingsClick }: ChatHeaderProps) {
   return (
-    <header className="flex items-center justify-between border-b border-border bg-white px-4 py-3">
+    <header className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-white px-4 py-3">
       <div className="flex items-center gap-2">
         <img src="/miguelito-avatar.png" className="h-8 w-8 rounded-full" alt="Miguelito" />
         {isInitializing ? (
