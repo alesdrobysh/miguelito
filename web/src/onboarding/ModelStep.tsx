@@ -1,51 +1,100 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '../atoms/Button'
 import { cn } from '../lib/cn'
-import { AVAILABLE_MODELS, DEFAULT_MODEL_ID, DEFAULT_OPENROUTER_MODEL_ID, DEFAULT_EVALUATOR_MODEL_ID } from '../lib/types'
+import { DEFAULT_OPENROUTER_MODEL_ID, DEFAULT_EVALUATOR_MODEL_ID } from '../lib/types'
 
 interface ModelStepProps {
   onSelectWebLLM: (modelId: string) => Promise<void>
   onSelectOpenRouter: (key: string, model: string, evaluatorModel?: string) => Promise<void>
 }
 
+// Display metadata for known WebLLM models
+const WEBLLM_META: Record<string, { name: string; size: string }> = {
+  'Llama-3.2-1B-Instruct-q4f32_1-MLC': { name: 'Llama 3.2 1B', size: '1.3 GB' },
+  'Llama-3.2-3B-Instruct-q4f32_1-MLC': { name: 'Llama 3.2 3B', size: '2.1 GB' },
+  'Phi-3.5-mini-instruct-q4f16_1-MLC': { name: 'Phi 3.5 Mini', size: '2.2 GB' },
+}
+
+type WebGPUStatus = 'detecting' | 'supported' | 'unsupported'
+
+async function detectBestModel(): Promise<{ status: WebGPUStatus; modelId: string; reason: string }> {
+  if (!('gpu' in navigator)) {
+    return { status: 'unsupported', modelId: 'Llama-3.2-3B-Instruct-q4f32_1-MLC', reason: '' }
+  }
+  try {
+    const adapter = await (navigator as { gpu: { requestAdapter: () => Promise<GPUAdapter | null> } }).gpu.requestAdapter()
+    if (!adapter) {
+      return { status: 'unsupported', modelId: 'Llama-3.2-3B-Instruct-q4f32_1-MLC', reason: '' }
+    }
+
+    const mem = (navigator as { deviceMemory?: number }).deviceMemory ?? null
+
+    let gpuDesc = ''
+    try {
+      const info = await (adapter as unknown as { requestAdapterInfo: () => Promise<{ description?: string; vendor?: string }> }).requestAdapterInfo()
+      gpuDesc = (info.description ?? info.vendor ?? '').toLowerCase()
+    } catch { /* not all browsers support this */ }
+
+    const isLowEnd = /intel|mobile|integrated/i.test(gpuDesc) || (mem !== null && mem < 4)
+    const isHighEnd = !isLowEnd && (mem === null || mem >= 8) && !/intel/i.test(gpuDesc)
+
+    if (isLowEnd) {
+      return { status: 'supported', modelId: 'Llama-3.2-1B-Instruct-q4f32_1-MLC', reason: 'Modelo ligero para tu dispositivo' }
+    }
+    if (isHighEnd) {
+      return { status: 'supported', modelId: 'Phi-3.5-mini-instruct-q4f16_1-MLC', reason: 'Mejor calidad para tu dispositivo' }
+    }
+    return {
+      status: 'supported',
+      modelId: 'Llama-3.2-3B-Instruct-q4f32_1-MLC',
+      reason: mem ? `Recomendado para ${mem} GB de RAM` : 'Modelo equilibrado por defecto',
+    }
+  } catch {
+    return { status: 'supported', modelId: 'Llama-3.2-3B-Instruct-q4f32_1-MLC', reason: 'Modelo equilibrado por defecto' }
+  }
+}
+
 export function ModelStep({ onSelectWebLLM, onSelectOpenRouter }: ModelStepProps) {
   const [tab, setTab] = useState<'webllm' | 'openrouter'>('webllm')
-  const [selectedWebLLM, setSelectedWebLLM] = useState(DEFAULT_MODEL_ID)
-  const [customWebLLM, setCustomWebLLM] = useState('')
+
+  // WebLLM state
+  const [webGpuStatus, setWebGpuStatus] = useState<WebGPUStatus>('detecting')
+  const [detectedReason, setDetectedReason] = useState('')
+  const [webllmModel, setWebllmModel] = useState('')
+
+  // OpenRouter state
   const [customOR, setCustomOR] = useState(DEFAULT_OPENROUTER_MODEL_ID)
   const [customEvaluator, setCustomEvaluator] = useState(DEFAULT_EVALUATOR_MODEL_ID)
   const [apiKey, setApiKey] = useState('')
   const [showKey, setShowKey] = useState(false)
+
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    detectBestModel().then(({ status, modelId, reason }) => {
+      setWebGpuStatus(status)
+      setWebllmModel(modelId)
+      setDetectedReason(reason)
+    })
+  }, [])
 
   const handleContinue = async () => {
     setError('')
     if (tab === 'webllm') {
-      const modelId = selectedWebLLM === 'custom' ? customWebLLM.trim() : selectedWebLLM
-      if (!modelId) {
-        setError('Introduce un ID de modelo WebLLM')
-        return
-      }
+      const modelId = webllmModel.trim()
+      if (!modelId) { setError('Introduce un ID de modelo WebLLM'); return }
       setLoading(true)
       await onSelectWebLLM(modelId)
       return
     }
-    if (!apiKey.trim()) {
-      setError('Introduce tu API key de OpenRouter')
-      return
-    }
-    const orModel = customOR.trim()
-    if (!orModel) {
-      setError('Introduce un ID de modelo de OpenRouter')
-      return
-    }
-
-    const orEvaluator = customEvaluator.trim() || orModel
-    
+    if (!apiKey.trim()) { setError('Introduce tu API key de OpenRouter'); return }
+    if (!customOR.trim()) { setError('Introduce un ID de modelo de OpenRouter'); return }
     setLoading(true)
-    await onSelectOpenRouter(apiKey.trim(), orModel, orEvaluator)
+    await onSelectOpenRouter(apiKey.trim(), customOR.trim(), customEvaluator.trim() || customOR.trim())
   }
+
+  const detectedMeta = WEBLLM_META[webllmModel]
 
   return (
     <div className="flex flex-col gap-6 px-6 py-10">
@@ -54,6 +103,7 @@ export function ModelStep({ onSelectWebLLM, onSelectOpenRouter }: ModelStepProps
         <p className="mt-1 text-sm text-text-secondary">¿Cómo quieres ejecutar el tutor?</p>
       </div>
 
+      {/* Tab switcher */}
       <div className="flex rounded-xl border border-border bg-surface-input p-1">
         <button
           onClick={() => setTab('webllm')}
@@ -77,57 +127,62 @@ export function ModelStep({ onSelectWebLLM, onSelectOpenRouter }: ModelStepProps
 
       {tab === 'webllm' ? (
         <>
-          <div className="flex flex-col gap-2">
-            {AVAILABLE_MODELS.map((model) => (
-              <button
-                key={model.id}
-                onClick={() => setSelectedWebLLM(model.id)}
-                className={cn(
-                  'flex items-center justify-between rounded-xl border-2 px-4 py-3 text-left transition-colors',
-                  selectedWebLLM === model.id ? 'border-primary bg-primary-light' : 'border-border bg-white hover:bg-slate-50',
-                )}
-              >
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-sm font-semibold text-text-primary">{model.name}</span>
-                  <span className="text-xs text-text-secondary">{model.description}</span>
-                </div>
-                <div className="flex flex-col items-end gap-0.5">
-                  <span className="text-xs font-medium text-text-secondary">{model.size}</span>
-                  {model.id === DEFAULT_MODEL_ID && (
-                    <span className="rounded bg-accent-ai-light px-1.5 py-0.5 text-[10px] font-semibold text-accent-ai">
-                      Recomendado
-                    </span>
-                  )}
-                </div>
-              </button>
-            ))}
-            <button
-              onClick={() => setSelectedWebLLM('custom')}
-              className={cn(
-                'flex items-center justify-between rounded-xl border-2 px-4 py-3 text-left transition-colors',
-                selectedWebLLM === 'custom' ? 'border-primary bg-primary-light' : 'border-border bg-white hover:bg-slate-50',
+          {/* Not supported warning */}
+          {webGpuStatus === 'unsupported' && (
+            <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+              ⚠️ WebGPU no está disponible en este navegador. Puede que no funcione. Prueba Chrome 113+ o Edge 113+.
+            </div>
+          )}
+
+          {/* Detected model card */}
+          <div className={cn(
+            'flex items-center justify-between rounded-xl border-2 px-4 py-3',
+            webGpuStatus === 'detecting' ? 'border-border bg-white opacity-60' : 'border-primary bg-primary-light',
+          )}>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm font-semibold text-text-primary">
+                {webGpuStatus === 'detecting'
+                  ? 'Detectando tu dispositivo…'
+                  : (detectedMeta?.name ?? webllmModel)}
+              </span>
+              {webGpuStatus !== 'detecting' && detectedReason && (
+                <span className="text-xs text-text-secondary">{detectedReason}</span>
               )}
-            >
-              <div className="flex flex-col gap-0.5">
-                <span className="text-sm font-semibold text-text-primary">Otro...</span>
-                <span className="text-xs text-text-secondary">Introduce un ID de modelo WebLLM</span>
+            </div>
+            {detectedMeta && webGpuStatus !== 'detecting' && (
+              <div className="flex flex-col items-end gap-0.5">
+                <span className="text-xs font-medium text-text-secondary">{detectedMeta.size}</span>
+                <span className="rounded bg-accent-ai-light px-1.5 py-0.5 text-[10px] font-semibold text-accent-ai">
+                  Recomendado
+                </span>
               </div>
-            </button>
-            {selectedWebLLM === 'custom' && (
-              <input
-                value={customWebLLM}
-                onChange={(e) => setCustomWebLLM(e.target.value)}
-                placeholder="Ej: Llama-3-8B-Instruct-v0.1-q4f16_1-MLC"
-                className="w-full rounded-lg border border-border-input bg-surface-input px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              />
             )}
           </div>
-          <p className="text-center text-xs text-text-tertiary">
-            Requiere WebGPU (Chrome 113+ o Edge 113+). Se descarga una vez y queda guardado.
+
+          {/* Free model ID input */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-text-secondary">ID del modelo (editable)</label>
+            <input
+              value={webllmModel}
+              onChange={(e) => setWebllmModel(e.target.value)}
+              placeholder="Ej: Llama-3.2-3B-Instruct-q4f32_1-MLC"
+              disabled={webGpuStatus === 'detecting'}
+              className="w-full rounded-lg border border-border-input bg-surface-input px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+            />
+          </div>
+
+          {/* WebLLM notice */}
+          <p className="rounded-lg bg-slate-50 px-3 py-2 text-center text-xs text-text-secondary">
+            🔒 Todo funciona en tu navegador, sin enviar datos. Puede ser <strong>más lento</strong> y con <strong>menor calidad</strong> que una API externa.
           </p>
         </>
       ) : (
         <>
+          {/* OpenRouter notice */}
+          <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+            ⚡ Más rápido y más capaz. Tus mensajes se envían al proveedor — <strong>no es local</strong>.
+          </div>
+
           <div className="flex flex-col gap-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-text-secondary">API Key de OpenRouter</label>
@@ -173,11 +228,10 @@ export function ModelStep({ onSelectWebLLM, onSelectOpenRouter }: ModelStepProps
                 placeholder="Ej: deepseek/deepseek-chat"
                 className="w-full rounded-lg border border-border-input bg-surface-input px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               />
-              <p className="mt-1 text-[10px] text-text-tertiary">
-                Vacio = usar el mismo que el de chat
-              </p>
+              <p className="mt-1 text-[10px] text-text-tertiary">Vacío = usar el mismo que el de chat</p>
             </div>
           </div>
+
           <p className="text-center text-xs text-text-tertiary">
             Sin descarga. La clave se guarda solo en tu navegador.
           </p>
@@ -186,7 +240,7 @@ export function ModelStep({ onSelectWebLLM, onSelectOpenRouter }: ModelStepProps
 
       {error && <p className="text-center text-sm text-red-600">{error}</p>}
 
-      <Button onClick={handleContinue} disabled={loading} className="w-full py-3">
+      <Button onClick={handleContinue} disabled={loading || webGpuStatus === 'detecting' && tab === 'webllm'} className="w-full py-3">
         {loading
           ? (tab === 'webllm' ? 'Iniciando descarga…' : 'Conectando…')
           : (tab === 'webllm' ? 'Descargar y empezar →' : 'Empezar con OpenRouter →')}
