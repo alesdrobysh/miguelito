@@ -14,3 +14,4 @@ logs/
 dogfood-output/
 dist-electron/
 release/
+.vercel
