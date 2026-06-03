@@ -32,7 +32,7 @@ import {
   DREAM_PATH,
 } from '../runtime/BrowserRuntime'
 import type { RuntimeManager } from '../../../src/runtime.js'
-import type { ErrorItem, CompetencyVectorRow } from '../../../src/domain/types.js'
+import type { ErrorItem, CompetencyVectorRow, ProficiencyChallengeBand } from '../../../src/domain/types.js'
 import { emitDownloadProgress } from './DownloadProgress'
 
 // ─── Phase machine ───────────────────────────────────────────────────────────
@@ -50,6 +50,7 @@ export interface PerfilData {
   interests: string[]
   competency: CompetencyVectorRow
   soul: string
+  vocabBand: ProficiencyChallengeBand | null
 }
 
 // ─── Context value ────────────────────────────────────────────────────────────
@@ -110,13 +111,14 @@ async function loadProfileFromRuntime(runtime: RuntimeManager): Promise<Profile 
 
 async function loadPerfilData(runtime: RuntimeManager): Promise<PerfilData> {
   const rt = runtime.runtime('spanish')
-  const [errors, interests, competency, soul] = await Promise.all([
+  const [errors, interests, competency, soul, vocabBand] = await Promise.all([
     rt.db.listErrors('all', 10),
     rt.db.listInterests(20),
     rt.db.getCompetencyVector(),
     import('../browser-shims/fs').then(fs => (fs.readFileSync(DREAM_PATH, 'utf8') as string) || 'No hay memoria aún.'),
+    rt.db.getTypicalVocabBand(50),
   ])
-  return { errors, interests, competency, soul }
+  return { errors, interests, competency, soul, vocabBand }
 }
 
 // ─── Provider ─────────────────────────────────────────────────────────────────

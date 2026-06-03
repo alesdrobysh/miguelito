@@ -8,6 +8,15 @@ import { AVAILABLE_MODELS, DEFAULT_MODEL_ID, DEFAULT_OPENROUTER_MODEL_ID, DEFAUL
 import type { Profile } from '../lib/types'
 import type { ProviderType } from '../storage/db'
 
+const VOCAB_BAND_LABELS: Record<string, string> = {
+  top_1k: 'Top 1k',
+  top_3k: 'Top 3k',
+  top_6k: 'Top 6k',
+  top_10k: 'Top 10k',
+  top_50k: 'Top 50k',
+  rare_or_unknown: 'Raro',
+}
+
 interface SettingsDrawerProps {
   open: boolean
   onClose: () => void
@@ -539,27 +548,15 @@ export function SettingsDrawer({
                   </div>
                 </div>
 
-                {/* Competencia */}
-                {perfilData?.competency && (
+                {/* Vocabulario */}
+                {'vocabBand' in (perfilData ?? {}) && (
                   <div>
                     <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-tertiary">Progreso</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-lg border border-border p-3">
-                        <p className="text-[10px] font-bold uppercase tracking-tight text-text-tertiary">Morfología</p>
-                        <p className="text-lg font-semibold text-text-primary">
-                          {perfilData.competency.morph_trials > 0
-                            ? `${Math.round((perfilData.competency.morph_successes / perfilData.competency.morph_trials) * 100)}%`
-                            : '-%'}
-                        </p>
-                      </div>
-                      <div className="rounded-lg border border-border p-3">
-                        <p className="text-[10px] font-bold uppercase tracking-tight text-text-tertiary">Fluidez</p>
-                        <p className="text-lg font-semibold text-text-primary">
-                          {perfilData.competency.idiom_trials > 0
-                            ? `${Math.round((perfilData.competency.idiom_successes / perfilData.competency.idiom_trials) * 100)}%`
-                            : '-%'}
-                        </p>
-                      </div>
+                    <div className="rounded-lg border border-border p-3">
+                      <p className="text-[10px] font-bold uppercase tracking-tight text-text-tertiary">Vocabulario</p>
+                      <p className="text-lg font-semibold text-text-primary">
+                        {VOCAB_BAND_LABELS[perfilData!.vocabBand ?? ''] ?? '—'}
+                      </p>
                     </div>
                   </div>
                 )}
