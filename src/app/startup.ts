@@ -15,7 +15,11 @@ export async function runDreamIfOverdue(
 ): Promise<void> {
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: config.timezone }).format(new Date());
   const lastDate = await meta.getMetaValue(`last_dream_date:${rt.lang.id}`);
-  if (!lastDate || lastDate >= today) return;
+  if (lastDate && lastDate >= today) return;
+  if (!lastDate) {
+    const msgs = await rt.db.getTodaysMessages(today);
+    if (msgs.length === 0) return;
+  }
   rt.dreamService.run().then(
     (result) => log.info({ result, lang: rt.lang.id }, "startup dream complete"),
     (err) => log.error({ err, lang: rt.lang.id }, "startup dream error"),

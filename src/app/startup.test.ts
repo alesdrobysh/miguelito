@@ -29,26 +29,41 @@ function makeConfig(timezone = "UTC"): Config {
   };
 }
 
-function makeRuntime(langId: string, dreamRun: () => Promise<string>): LanguageRuntime {
+function makeRuntime(langId: string, dreamRun: () => Promise<string>, todaysMessages: unknown[] = []): LanguageRuntime {
   return {
     lang: { id: langId } as any,
     dreamService: { run: dreamRun } as any,
+    db: { getTodaysMessages: vi.fn().mockResolvedValue(todaysMessages) } as any,
   } as any;
 }
 
 describe("runDreamIfOverdue", () => {
-  it("skips when last_dream_date is null (fresh install)", async () => {
+  it("skips when last_dream_date is null and no messages (fresh install)", async () => {
     const meta: MetaRepository = {
       getMetaValue: vi.fn().mockResolvedValue(null),
       setMetaValue: vi.fn(),
     };
     const run = vi.fn();
-    const rt = makeRuntime("spanish", run);
+    const rt = makeRuntime("spanish", run, []);
 
     await runDreamIfOverdue(makeConfig(), rt, meta);
 
     await new Promise((r) => setTimeout(r, 10));
     expect(run).not.toHaveBeenCalled();
+  });
+
+  it("fires dream when last_dream_date is null but messages exist", async () => {
+    const meta: MetaRepository = {
+      getMetaValue: vi.fn().mockResolvedValue(null),
+      setMetaValue: vi.fn(),
+    };
+    const run = vi.fn().mockResolvedValue("Dream complete.");
+    const rt = makeRuntime("spanish", run, [{ role: "user", content: "Hola" }]);
+
+    await runDreamIfOverdue(makeConfig(), rt, meta);
+
+    await new Promise((r) => setTimeout(r, 10));
+    expect(run).toHaveBeenCalledTimes(1);
   });
 
   it("skips when last_dream_date is today", async () => {
