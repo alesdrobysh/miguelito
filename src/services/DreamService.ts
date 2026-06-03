@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import type { SessionRepository, ErrorRepository, CompetencyRepository } from "../repositories/interfaces.js";
+import type { SessionRepository, ErrorRepository, CompetencyRepository, MetaRepository } from "../repositories/interfaces.js";
 import type { LLMProvider } from "../providers/interfaces.js";
 import { logger } from "../infrastructure/logger.js";
 
@@ -11,6 +11,7 @@ interface DreamConfig {
   dreamMemoryPath: string;
   dreamSystemPrompt: string;
   morphologyCategories: ReadonlySet<string>;
+  langId: string;
 }
 
 export class DreamService {
@@ -20,6 +21,7 @@ export class DreamService {
     private competency: CompetencyRepository,
     private provider: LLMProvider,
     private config: DreamConfig,
+    private meta: MetaRepository,
   ) {}
 
   async run(): Promise<string> {
@@ -63,6 +65,8 @@ export class DreamService {
       log.info({ wordCount: updated.split(/\s+/).length }, 'memory updated');
 
       const refinementNotes = await this._runNightlyRefinement();
+
+      await this.meta.setMetaValue(`last_dream_date:${this.config.langId}`, today);
 
       if (refinementNotes.length > 0) {
         log.info({ refinementNotes }, 'refinement notes');
