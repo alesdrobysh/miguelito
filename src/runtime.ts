@@ -108,7 +108,8 @@ export class RuntimeManager {
       dreamMemoryPath,
       dreamSystemPrompt: lang.prompts.dream,
       morphologyCategories: new Set(lang.morphologyCategories),
-    });
+      langId: lang.id,
+    }, db);
     this.runtimes.set(lang.id, { lang, db, sharedDb: this.sharedDb, agentRunner, promptBuilder, dreamService, dreamMemoryPath });
   }
 
@@ -139,7 +140,8 @@ export class RuntimeManager {
       dreamMemoryPath,
       dreamSystemPrompt: lang.prompts.dream,
       morphologyCategories: new Set(lang.morphologyCategories),
-    });
+      langId: lang.id,
+    }, db);
 
     this.runtimes.set(lang.id, { lang, db, sharedDb: this.sharedDb, agentRunner, promptBuilder, dreamService, dreamMemoryPath });
   }
