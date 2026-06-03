@@ -102,7 +102,6 @@ export class PostTurnProcessor {
   }
 
   private async evaluate(input: PostTurnProcessInput): Promise<PostTurnEvaluation> {
-    const activeAttempts = await this.deps.vocab.listActiveVocabReviewAttempts(5);
     const systemPrompt = [
       `You are a deterministic evaluator for a ${this.deps.lang.name} tutoring chatbot.`,
       "Return only JSON. Do not write learner-facing text.",
@@ -133,20 +132,16 @@ export class PostTurnProcessor {
           elicitation_cues: ["optional production cue"]
         }],
         learning_items: [{ type: "grammar_point|correction|phrase|word|collocation|idiom|register_note|pronunciation", title: "por vs para", prompt_l2: "optional L2 prompt", explanation_l1: "short explanation", source_type: "user_question|conversation|correction", priority: "0.9=correction/explicitly asked, 0.7=useful, 0.5=niche", practice_modes: ["short_drill"] }],
-        reviews: [{ attempt_id: 123, word: "exact chunk_l2 from vocabulary", mode: "productive|receptive", user_response: "learner answer", target_used: true, accepted_variant: "actual form", hint_level: 0, grade: 3, note: "why" }],
         interests: ["hobby or topic the learner mentioned (lowercase, e.g. 'fútbol', 'cocina')"],
       }),
-      "Use empty arrays when there is nothing to extract. Grade reviews 1..3 only. For interests: extract hobbies, topics, or preferences the learner mentioned; use lowercase; omit generic words like 'español' or 'idiomas'.",
-      "Add a review entry whenever the assistant created a vocabulary practice opportunity (e.g. asked the learner to produce or recognize a chunk) and the learner responded. Use word=exact chunk_l2, mode=productive if learner was asked to produce it, receptive if assistant used it for comprehension.",
-      "If Active review attempts are provided and the latest learner message answers one of them, include that exact attempt_id in the review entry so the pending attempt is completed instead of creating a new attempt.",
+      "Use empty arrays when there is nothing to extract. For interests: extract hobbies, topics, or preferences the learner mentioned; use lowercase; omit generic words like 'español' or 'idiomas'.",
+      "Do not score legacy vocabulary/SRS reviews. Vocabulary-like material should be captured as learning_items only; vocabulary_items and vocab_review_attempts are not part of the modern product runtime.",
     ].join("\n");
 
     const recent = input.chatHistory.slice(-8).map((m) => `${m.role}: ${m.content}`).join("\n");
     const userPrompt = [
       "Recent history:",
       recent || "(none)",
-      "Active review attempts:",
-      this.formatActiveAttempts(activeAttempts),
       "Latest learner message:",
       input.userMessage,
       "Assistant reply:",
@@ -203,21 +198,6 @@ export class PostTurnProcessor {
     for (const item of evaluation.vocabulary ?? []) {
       const word = this.clean(item.word).toLowerCase();
       if (!word) continue;
-      const id = await this.deps.vocab.addVocabCandidate({
-        chunk_l2: word,
-        capture_context_l2: this.clean(item.context),
-        anchor: this.clean(item.anchor).toLowerCase() || undefined,
-        meaning_l1: this.clean(item.meaning) || undefined,
-        source_type: evaluation.errors?.length ? "correction" : "conversation",
-        evidence_snippet: this.clean(item.context) || _input.userMessage,
-        proposed_by: "post_turn_evaluator",
-        priority: Math.max(0, Math.min(1, Number(item.priority ?? 0.6) || 0.6)),
-        topic_tags: Array.isArray(item.topic_tags) ? item.topic_tags.map((x) => String(x)).filter(Boolean) : [],
-        acceptable_variants: Array.isArray(item.acceptable_variants) ? item.acceptable_variants.map((x) => String(x)).filter(Boolean) : [],
-        elicitation_cues: Array.isArray(item.elicitation_cues) ? item.elicitation_cues.map((x) => String(x)).filter(Boolean) : [],
-        promotion_reason: this.clean(item.reason) || undefined,
-      });
-      if (id !== null) vocabCandidatesAdded++;
       const learningId = await this.learningRepo().addLearningItem({
         type: "phrase",
         title: word,
@@ -259,48 +239,9 @@ export class PostTurnProcessor {
       if (learningId !== null) learningItemsAdded++;
     }
 
-    const promoted = await this.deps.vocab.promoteVocabCandidates({ maxPromotions: 2, minPriority: 0.65, maxActiveLearningItems: 40 });
-    vocabAdded += promoted.length;
-
-    const activeAttempts = await this.deps.vocab.listActiveVocabReviewAttempts(10);
-    for (const item of evaluation.reviews ?? []) {
-      const grade = this.grade(item.grade);
-      const attemptId = this.resolveAttemptId(item, activeAttempts);
-      try {
-        if (attemptId > 0) {
-          await this.deps.vocab.finishVocabReviewAttempt({
-            attempt_id: attemptId,
-            user_response: this.clean(item.user_response),
-            target_used: this.bool(item.target_used),
-            accepted_variant: this.clean(item.accepted_variant),
-            hint_level: this.nonNegativeInt(item.hint_level),
-            grade,
-            note: this.clean(item.note),
-          });
-          reviewsCompleted++;
-        } else if (this.clean(item.word)) {
-          const attempt = await this.deps.vocab.startVocabReviewAttempt({
-            word: this.clean(item.word),
-            mode: item.mode === "receptive" ? "receptive" : "productive",
-            strategy: "post_turn_evaluator",
-            prompt_text: _input.assistantText,
-            hint_level: this.nonNegativeInt(item.hint_level),
-          });
-          await this.deps.vocab.finishVocabReviewAttempt({
-            attempt_id: attempt.id,
-            user_response: this.clean(item.user_response) || _input.userMessage,
-            target_used: this.bool(item.target_used),
-            accepted_variant: this.clean(item.accepted_variant),
-            hint_level: this.nonNegativeInt(item.hint_level),
-            grade,
-            note: this.clean(item.note),
-          });
-          reviewsCompleted++;
-        }
-      } catch (err) {
-        log.warn({ err, review: item }, "review application failed");
-      }
-    }
+    // Legacy vocabulary_items/vocab_review_attempts are intentionally ignored in
+    // the modern product runtime. Post-turn extraction writes learning_items and
+    // proficiency evidence, but it must not promote candidates or score FSRS rows.
 
     if (this.deps.interests) {
       for (const raw of evaluation.interests ?? []) {

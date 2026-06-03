@@ -16,29 +16,6 @@ afterEach(() => {
   handle.cleanup();
 });
 
-describe("integration: vocab add + score + due cycle", () => {
-  it("adds a word, scores it, and verifies it is no longer due", async () => {
-    const tools = createTools({ vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, provider: null }, SpanishLanguage);
-    const addTool = tools.get("miguelito_vocab_add")!;
-    const scoreTool = tools.get("miguelito_vocab_score")!;
-    const progressTool = tools.get("miguelito_progress_summary")!;
-
-    const addResult = await addTool.execute({ word: "gato", context: "El gato duerme" });
-    expect(addResult).toEqual({ added: true, id: expect.any(Number), word: "gato", anchor: null });
-
-    const dueBefore = await progressTool.execute({});
-    expect((dueBefore as any).vocab.due_now).toBe(1);
-
-    const scoreResult = await scoreTool.execute({ word: "gato", quality: "4" });
-    expect((scoreResult as any).ok).toBe(true);
-    expect((scoreResult as any).status).toBe("learning");
-    expect((scoreResult as any).reps).toBe(1);
-
-    const dueAfter = await progressTool.execute({});
-    expect((dueAfter as any).vocab.due_now).toBe(0);
-  });
-});
-
 
 describe("integration: error log + summary cycle", () => {
   it("logs errors and verifies categories in progress summary", async () => {
@@ -111,17 +88,10 @@ describe("integration: interest add + list", () => {
 });
 
 describe("integration: progress summary aggregates", () => {
-  it("returns correct counts after adding vocab and errors", async () => {
+  it("returns correct counts after logging errors without relying on legacy vocab tools", async () => {
     const tools = createTools({ vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, provider: null }, SpanishLanguage);
-    const addTool = tools.get("miguelito_vocab_add")!;
-    const scoreTool = tools.get("miguelito_vocab_score")!;
     const errorTool = tools.get("miguelito_error_log")!;
     const progressTool = tools.get("miguelito_progress_summary")!;
-
-    await addTool.execute({ word: "gato", translation: "cat" });
-    await addTool.execute({ word: "perro", translation: "dog" });
-    await addTool.execute({ word: "casa", translation: "house" });
-    await scoreTool.execute({ word: "gato", quality: "4" });
 
     await errorTool.execute({ user_text: "la gata", correct: "el gato", category: "gender" });
     await errorTool.execute({ user_text: "yo es", correct: "yo soy", category: "verb_conjugation" });
@@ -129,10 +99,10 @@ describe("integration: progress summary aggregates", () => {
 
     const summary = await progressTool.execute({});
     expect((summary as any).ok).toBe(true);
-    expect((summary as any).vocab.total).toBe(3);
-    expect((summary as any).vocab.new).toBe(2);
-    expect((summary as any).vocab.learning).toBe(1);
-    expect((summary as any).vocab.due_now).toBe(2);
+    expect((summary as any).vocab.total).toBe(0);
+    expect((summary as any).vocab.new).toBe(0);
+    expect((summary as any).vocab.learning).toBe(0);
+    expect((summary as any).vocab.due_now).toBe(0);
     expect((summary as any).error_categories["gender"]).toBe(2);
     expect((summary as any).error_categories["verb_conjugation"]).toBe(1);
   });
@@ -144,10 +114,6 @@ describe("integration: tool registry creates all expected tools", () => {
     const tools = createTools({ vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, provider: null }, SpanishLanguage);
 
     const expectedNames = [
-      "miguelito_vocab_add",
-      "miguelito_vocab_score",
-      "miguelito_vocab_attempt_start",
-      "miguelito_vocab_attempt_finish",
       "miguelito_error_log",
       "miguelito_profile_set",
       "miguelito_read_link",
@@ -156,7 +122,7 @@ describe("integration: tool registry creates all expected tools", () => {
       "miguelito_turn_annotate",
     ];
 
-    expect(tools.size).toBe(10);
+    expect(tools.size).toBe(6);
     for (const name of expectedNames) {
       expect(tools.has(name)).toBe(true);
     }
@@ -169,7 +135,7 @@ describe("integration: toolsToOpenAI produces valid format", () => {
     const openai = toolsToOpenAI(tools);
 
     expect(Array.isArray(openai)).toBe(true);
-    expect(openai).toHaveLength(10);
+    expect(openai).toHaveLength(6);
 
     for (const item of openai as any[]) {
       expect(item.type).toBe("function");

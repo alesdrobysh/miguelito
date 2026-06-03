@@ -1,6 +1,5 @@
 import type { VocabRepository, ErrorRepository, ProfileRepository, InterestRepository, CompetencyRepository, SessionRepository, LearningRepository } from "../repositories/interfaces.js";
 import type { LLMProvider } from "../providers/interfaces.js";
-import { createVocabTools } from "./vocab.js";
 import { createErrorTools } from "./errors.js";
 import { createProfileTools } from "./profile.js";
 import { createReadingTools } from "./reading.js";
@@ -32,7 +31,6 @@ export function createTools(ctx: ToolContext, lang: LanguageConfig): Map<string,
   const tools = new Map<string, ToolDefinition>();
 
   for (const t of [
-    ...createVocabTools(ctx),
     ...createErrorTools(ctx, lang),
     ...createProfileTools(ctx),
     ...createReadingTools(ctx, lang),

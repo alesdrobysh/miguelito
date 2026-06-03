@@ -47,12 +47,12 @@ describe("real dialogue regressions", () => {
         expect(actualErrors.some((e) => e.user_text === expected.user_text && e.correct_form === expected.correct)).toBe(true);
       }
       const expectedVocab = dialog.evaluation.vocabulary ?? [];
-      const actualCandidates = await db.listVocabCandidates("all", 20);
-      const actualActive = await db.listVocab("all", 20);
-      const seenChunks = [...actualCandidates.map((v) => v.chunk_l2), ...actualActive.map((v) => v.chunk_l2)];
+      const actualLearningItems = await db.listLearningItems("active", 20);
+      const seenLearningTitles = actualLearningItems.map((v) => v.title);
       for (const expected of expectedVocab) {
-        expect(seenChunks).toContain(expected.word);
+        expect(seenLearningTitles).toContain(expected.word);
       }
+      expect(await db.listVocabCandidates("all", 20)).toHaveLength(0);
     });
   }
 });

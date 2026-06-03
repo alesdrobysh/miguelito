@@ -93,7 +93,7 @@ describe("PostTurnProcessor", () => {
     ]);
   });
 
-  it("stages evaluator vocabulary as candidates instead of directly growing active SRS", async () => {
+  it("captures evaluator vocabulary as learning items without growing candidates or active SRS", async () => {
     const provider = new JsonProvider({
       annotation: { obligatory: [], used: [], naturalness: 1, comprehension: "smooth" },
       mode: "REACT",
@@ -102,20 +102,20 @@ describe("PostTurnProcessor", () => {
       reviews: [],
     });
 
-    const processor = new PostTurnProcessor({ provider, vocab: db, errors: db, competency: db, session: db, lang: SpanishLanguage });
+    const processor = new PostTurnProcessor({ provider, vocab: db, errors: db, competency: db, session: db, learning: db, lang: SpanishLanguage });
     const result = await processor.process({ userMessage: "yo es cansado", assistantText: "Dirías: yo estoy cansado.", chatHistory: [] });
 
     const errors = await db.listErrors("verb_conjugation", 10);
     expect(errors).toHaveLength(1);
     expect(errors[0].correct_form).toBe("yo soy");
     expect(result.vocabAdded).toBe(0);
-    expect(result.vocabCandidatesAdded).toBe(1);
+    expect(result.vocabCandidatesAdded).toBe(0);
     expect(await db.listVocab("all", 10)).toHaveLength(0);
-    const candidates = await db.listVocabCandidates("candidate", 10);
-    expect(candidates.map((v) => v.chunk_l2)).toContain("me cuesta + [inf]");
+    expect(await db.listVocabCandidates("candidate", 10)).toHaveLength(0);
+    expect((await db.listLearningItems("active", 10)).map((i) => i.title)).toContain("me cuesta + [inf]");
   });
 
-  it("finishes scheduled review attempts from evaluator output and advances the right FSRS lane", async () => {
+  it("ignores legacy scheduled review attempts and does not advance FSRS lanes", async () => {
     await db.addVocab("echar de menos", "Te echo de menos", "echar");
     const attempt = await db.startVocabReviewAttempt({
       word: "echar de menos",
@@ -132,13 +132,14 @@ describe("PostTurnProcessor", () => {
     });
 
     const processor = new PostTurnProcessor({ provider, vocab: db, errors: db, competency: db, session: db, lang: SpanishLanguage });
-    await processor.process({ userMessage: "Echo de menos a mi hermana", assistantText: "Qué bonito.", chatHistory: [] });
+    const result = await processor.process({ userMessage: "Echo de menos a mi hermana", assistantText: "Qué bonito.", chatHistory: [] });
 
     const row = db.db.exec("SELECT pro_reps, rec_reps FROM vocabulary_items WHERE chunk_l2 = 'echar de menos'")[0].values[0];
-    expect(row).toEqual([1, 0]);
+    expect(row).toEqual([0, 0]);
+    expect(result.reviewsCompleted).toBe(0);
   });
 
-  it("records an audit row when evaluator scores a review by word without an attempt id", async () => {
+  it("does not create legacy review audit rows when evaluator scores a review by word", async () => {
     await db.addVocab("pasar el fin de semana", "ctx", "pasar");
     const provider = new JsonProvider({
       annotation: { obligatory: [], used: ["pasar el fin de semana"], naturalness: 1, comprehension: "smooth" },
@@ -149,15 +150,16 @@ describe("PostTurnProcessor", () => {
     });
 
     const processor = new PostTurnProcessor({ provider, vocab: db, errors: db, competency: db, session: db, lang: SpanishLanguage });
-    await processor.process({ userMessage: "Voy a pasar el fin de semana tranquilo", assistantText: "Perfecto.", chatHistory: [] });
+    const result = await processor.process({ userMessage: "Voy a pasar el fin de semana tranquilo", assistantText: "Perfecto.", chatHistory: [] });
 
-    const attempts = db.db.exec("SELECT word, mode, status, user_response, target_used, accepted_variant, grade, note FROM vocab_review_attempts")[0].values;
-    expect(attempts).toEqual([["pasar el fin de semana", "productive", "completed", "Voy a pasar el fin de semana tranquilo", 1, "pasar el fin de semana", 3, "spontaneous"]]);
+    const attempts = db.db.exec("SELECT word, mode, status, user_response, target_used, accepted_variant, grade, note FROM vocab_review_attempts")[0]?.values ?? [];
+    expect(attempts).toEqual([]);
     const row = db.db.exec("SELECT pro_reps, rec_reps FROM vocabulary_items WHERE chunk_l2 = 'pasar el fin de semana'")[0].values[0];
-    expect(row).toEqual([1, 0]);
+    expect(row).toEqual([0, 0]);
+    expect(result.reviewsCompleted).toBe(0);
   });
 
-  it("shows active attempts to the evaluator so the next learner reply can close them", async () => {
+  it("does not show legacy active attempts to the evaluator", async () => {
     await db.addVocab("coger el tren", "ctx", "coger");
     const attempt = await db.startVocabReviewAttempt({
       word: "coger el tren",
@@ -177,14 +179,13 @@ describe("PostTurnProcessor", () => {
     const processor = new PostTurnProcessor({ provider, vocab: db, errors: db, competency: db, session: db, lang: SpanishLanguage });
     await processor.process({ userMessage: "Tengo que coger el tren", assistantText: "Exacto.", chatHistory: [] });
 
-    expect(provider.calls[0].userPrompt).toContain("Active review attempts:");
-    expect(provider.calls[0].userPrompt).toContain(`\"attempt_id\":${attempt.id}`);
-    expect(provider.calls[0].userPrompt).toContain("coger el tren");
+    expect(provider.calls[0].userPrompt).not.toContain("Active review attempts:");
+    expect(provider.calls[0].userPrompt).not.toContain(`\"attempt_id\":${attempt.id}`);
     const active = await db.listActiveVocabReviewAttempts();
-    expect(active).toHaveLength(0);
+    expect(active).toHaveLength(1);
   });
 
-  it("matches an active attempt by word and mode when the evaluator omits attempt_id", async () => {
+  it("ignores active legacy attempts even when the evaluator omits attempt_id", async () => {
     await db.addVocab("coger el tren", "ctx", "coger");
     await db.startVocabReviewAttempt({
       word: "coger el tren",
@@ -203,12 +204,12 @@ describe("PostTurnProcessor", () => {
     const processor = new PostTurnProcessor({ provider, vocab: db, errors: db, competency: db, session: db, lang: SpanishLanguage });
     const result = await processor.process({ userMessage: "Cojo el tren mañana", assistantText: "Muy bien.", chatHistory: [] });
 
-    expect(result.reviewsCompleted).toBe(1);
-    expect(await db.listActiveVocabReviewAttempts()).toHaveLength(0);
+    expect(result.reviewsCompleted).toBe(0);
+    expect(await db.listActiveVocabReviewAttempts()).toHaveLength(1);
     const attempts = db.db.exec("SELECT word, status, grade FROM vocab_review_attempts")[0].values;
-    expect(attempts).toEqual([["coger el tren", "completed", 3]]);
+    expect(attempts).toEqual([["coger el tren", "active", null]]);
     const row = db.db.exec("SELECT pro_reps, rec_reps FROM vocabulary_items WHERE chunk_l2 = 'coger el tren'")[0].values[0];
-    expect(row).toEqual([1, 0]);
+    expect(row).toEqual([0, 0]);
   });
   it("does not duplicate evaluator-proposed correction learning items already captured from errors", async () => {
     const provider = new JsonProvider({

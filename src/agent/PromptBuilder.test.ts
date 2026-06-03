@@ -97,8 +97,8 @@ describe("PromptBuilder product coaching policy", () => {
   });
 });
 
-describe("PromptBuilder vocabulary target injection", () => {
-  it("separates receptive words for bot integration from productive words for learner elicitation", async () => {
+describe("PromptBuilder legacy vocabulary isolation", () => {
+  it("does not inject legacy vocabulary_items into the chat prompt", async () => {
     await db.addVocab("posponer la reunión", "ctx", "posponer");
     await db.addVocab("echar de menos", "ctx", "echar");
     await db.addVocab("me cuesta + [inf]", "ctx", "costar");
@@ -111,15 +111,14 @@ describe("PromptBuilder vocabulary target injection", () => {
     );
     const prompt = await builder.build();
 
-    expect(prompt).toContain("Vocabulario receptivo");
-    expect(prompt).toContain("Vocabulario productivo");
-    expect(prompt).toContain("Contexto opcional, no agenda de conversación");
-    expect(prompt).toContain("no fuerces siempre la misma palabra");
-    expect(prompt).toContain("posponer la reunión");
-    expect(prompt).toContain("echar de menos");
+    expect(prompt).not.toContain("## Perfil actual del aprendiz\n**Vocabulario receptivo**");
+    expect(prompt).not.toContain("## Perfil actual del aprendiz\n**Vocabulario productivo**");
+    expect(prompt).not.toContain("posponer la reunión");
+    expect(prompt).not.toContain("echar de menos");
+    expect(prompt).not.toContain("me cuesta + [inf]");
   });
 
-  it("does not inject the same tiny vocabulary list on every consecutive turn", async () => {
+  it("does not inject even a tiny legacy vocabulary list on any turn", async () => {
     await db.addVocab("echar de menos", "ctx", "echar");
     await db.updateConversationState("chat", "general");
 

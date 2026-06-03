@@ -12,6 +12,7 @@ const postTurnOwnedToolNames = [
   "miguelito_error_log",
   "miguelito_vocab_add",
   "miguelito_vocab_score",
+  "miguelito_vocab_attempt_start",
   "miguelito_vocab_attempt_finish",
 ];
 

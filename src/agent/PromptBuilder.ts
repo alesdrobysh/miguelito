@@ -3,7 +3,6 @@ import type { LanguageConfig } from "../languages/LanguageConfig.js";
 import type { VocabRepository, ErrorRepository, ProfileRepository, InterestRepository, CompetencyRepository, SessionRepository } from "../repositories/interfaces.js";
 import type { ConversationStateResult } from "../domain/types.js";
 import { getCompetencyVector, selectFocusAxis, renderCalibration } from "../domain/competency.js";
-import { VocabularyReviewPlanner } from "./VocabularyReviewPlanner.js";
 
 export interface PromptRepos {
   vocab: VocabRepository;
@@ -95,11 +94,12 @@ export class PromptBuilder {
       calibration = `\n\n${renderCalibration(cv, focus, this.lang)}`;
     } catch {}
 
-    const reviewPlan = await new VocabularyReviewPlanner(this.repos.vocab).select({
-      turnCount: convState?.session.turn_count ?? 0,
-    });
-    const productiveWords = reviewPlan.productiveWords;
-    const receptiveWords = reviewPlan.receptiveWords;
+    // Modern Miguelito uses learning_items/proficiency evidence rather than the
+    // legacy vocabulary_items FSRS table. Do not inject due vocabulary from
+    // vocabulary_items into the chat prompt; it can force stale topics into the
+    // conversation and resurrect removed SRS behavior.
+    const productiveWords: string[] = [];
+    const receptiveWords: string[] = [];
     const weakAreas = await this._getWeakAreas(3);
     const errorInfo = weakAreas.length > 0 ? await this._getRecentErrorForCategory(weakAreas[0]) : null;
 

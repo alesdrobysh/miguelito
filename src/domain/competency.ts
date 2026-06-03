@@ -1,5 +1,5 @@
 import type { LanguageConfig } from "../languages/LanguageConfig.js";
-import type { CompetencyRepository, VocabRepository } from "../repositories/interfaces.js";
+import type { CompetencyRepository } from "../repositories/interfaces.js";
 
 export type Confidence = "low" | "medium" | "high";
 export type Axis = "lexicon" | "syntax" | "morphology" | "idiomaticity";
@@ -61,16 +61,13 @@ async function buildReceptionByFrequencyBand(repo: CompetencyRepository): Promis
 
 export async function getCompetencyVector(repos: {
   competency: CompetencyRepository;
-  vocab: VocabRepository;
 }): Promise<CompetencyVector> {
-  const [vec, learning, review, mastered] = await Promise.all([
-    repos.competency.getCompetencyVector(),
-    repos.vocab.listVocab("learning", 9999),
-    repos.vocab.listVocab("review", 9999),
-    repos.vocab.listVocab("mastered", 9999),
-  ]);
+  const vec = await repos.competency.getCompetencyVector();
 
-  const activeChunks = learning.length + review.length + mastered.length;
+  // Legacy vocabulary_items no longer define product competency. Lexical
+  // calibration comes from turn/proficiency evidence; keep activeChunks at zero
+  // so old SRS rows cannot steer the tutor or inflate confidence.
+  const activeChunks = 0;
   const lexiconConf = activeChunks < 5 ? "low" : activeChunks < 30 ? "medium" : "high";
 
   type SyntaxEntry = { tunit_length: number; had_sub: boolean };

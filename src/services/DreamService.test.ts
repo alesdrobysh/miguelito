@@ -3,6 +3,8 @@ import { DreamService } from "./DreamService.js";
 import type { SessionRepository, ErrorRepository, CompetencyRepository, MetaRepository } from "../repositories/interfaces.js";
 import type { LLMProvider } from "../providers/interfaces.js";
 
+const dreamMemoryPath = "./data-test/dream-test-memory.md";
+
 function makeRepos() {
   const session: SessionRepository = {
     addChatMessage: vi.fn(),
@@ -48,7 +50,7 @@ describe("DreamService", () => {
     const { session, errors, competency, meta, provider } = makeRepos();
     const svc = new DreamService(session, errors, competency, provider, {
       timezone: "UTC",
-      dreamMemoryPath: "/tmp/dream-test-memory.md",
+      dreamMemoryPath: dreamMemoryPath,
       dreamSystemPrompt: "You are a memory updater.",
       morphologyCategories: new Set(),
       langId: "spanish",
@@ -68,7 +70,7 @@ describe("DreamService", () => {
 
     const svc = new DreamService(session, errors, competency, provider, {
       timezone: "UTC",
-      dreamMemoryPath: "/tmp/dream-test-memory.md",
+      dreamMemoryPath: dreamMemoryPath,
       dreamSystemPrompt: "You are a memory updater.",
       morphologyCategories: new Set(),
       langId: "spanish",

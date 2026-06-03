@@ -671,7 +671,7 @@ describe("BuddyDb turn annotations and competency vector", () => {
 
   it("getCompetencyVector confidence gating via getCompetencyVector() wrapper", async () => {
     // With 0 observations, all confidence levels are low/medium
-    const vec = await getCompetencyVector({ competency: db, vocab: db });
+    const vec = await getCompetencyVector({ competency: db });
     expect(vec.morphology.confidence).toBe("low");
     expect(vec.idiomaticity.confidence).toBe("low");
     expect(vec.syntax.confidence).toBe("low");
@@ -692,7 +692,7 @@ describe("BuddyDb turn annotations and competency vector", () => {
     const rows = await db.listProficiencyEvidence(10);
     expect(rows[0].challenge_band).toBe("top_10k");
 
-    const cv = await getCompetencyVector({ competency: db, vocab: db });
+    const cv = await getCompetencyVector({ competency: db });
     expect(cv.reception.byFrequencyBand.top_10k.score).toBeCloseTo(1);
     expect(cv.reception.byFrequencyBand.top_10k.obs).toBe(1);
     expect(cv.reception.byFrequencyBand.top_50k.score).toBeNull();
