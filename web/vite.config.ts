@@ -24,6 +24,8 @@ export default defineConfig({
       { find: 'fs',        replacement: path.resolve(__dirname, 'src/browser-shims/fs.ts') },
       { find: 'pino',      replacement: path.resolve(__dirname, 'src/browser-shims/pino.ts') },
       { find: 'pino-pretty', replacement: path.resolve(__dirname, 'src/browser-shims/pino.ts') },
+      // Force sql.js to resolve from web/node_modules even when imported from ../src/
+      { find: 'sql.js', replacement: path.resolve(__dirname, 'node_modules/sql.js') },
     ],
   },
   optimizeDeps: {
