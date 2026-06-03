@@ -109,6 +109,19 @@ async function loadProfileFromRuntime(runtime: RuntimeManager): Promise<Profile 
   return { name: up.name ?? '', goal: up.goal ?? '' }
 }
 
+async function bootDream(runtime: RuntimeManager, onComplete: () => void): Promise<void> {
+  const rt = runtime.runtime('spanish')
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date())
+  const lastDate = await rt.db.getMetaValue('last_dream_date:spanish')
+  if (lastDate && lastDate >= today) return
+  if (!lastDate) {
+    const msgs = await rt.db.getTodaysMessages(today)
+    if (msgs.length === 0) return
+  }
+  rt.dreamService.run().then(onComplete).catch(() => {})
+}
+
 async function loadPerfilData(runtime: RuntimeManager): Promise<PerfilData> {
   const rt = runtime.runtime('spanish')
   const [errors, interests, competency, soul, vocabBand] = await Promise.all([
@@ -184,6 +197,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setIsInitialLoading(false)
         setPhase({ type: 'chat' })
         loadPerfilData(runtime).then(setPerfilData)
+        bootDream(runtime, () => loadPerfilData(runtime).then(setPerfilData))
         return
       }
 
@@ -203,6 +217,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setIsInitialLoading(false)
       setPhase({ type: 'chat' })
       loadPerfilData(runtime).then(setPerfilData)
+      bootDream(runtime, () => loadPerfilData(runtime).then(setPerfilData))
     })()
   }, [])
 
