@@ -17,9 +17,6 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: web
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,13 +28,18 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
+      - name: Install root dependencies
+        run: npm ci
+
       - name: Install dependencies
+        working-directory: web
         run: npm ci
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
       - name: Build
+        working-directory: web
         run: npm run build
         env:
           GITHUB_PAGES: 'true'
