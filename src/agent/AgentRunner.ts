@@ -27,6 +27,11 @@ export interface AgentResult {
   toolCallsMade: number;
 }
 
+export interface AgentRunOptions {
+  postTurn?: boolean;
+  sourceType?: "user_chat" | "cron" | "proactive" | "system";
+}
+
 const MAX_TOOL_ITERATIONS = 10;
 
 export class AgentRunner {
@@ -46,7 +51,7 @@ export class AgentRunner {
     return new Map(Array.from(tools.entries()).filter(([name]) => !internalOnly.has(name)));
   }
 
-  async run(userMessage: string, chatHistory: ChatMessage[]): Promise<AgentResult> {
+  async run(userMessage: string, chatHistory: ChatMessage[], options: AgentRunOptions = {}): Promise<AgentResult> {
     const { provider, promptBuilder, toolCtx, lang, dreamMemoryPath } = this.deps;
 
     const fullSystem = await promptBuilder.build(userMessage, dreamMemoryPath);
@@ -94,7 +99,7 @@ export class AgentRunner {
       toolCallsMade += toolResults.filter((tr) => tr.toolCalled).length;
     }
 
-    if (totalText.trim()) {
+    if (totalText.trim() && options.postTurn !== false && options.sourceType !== "cron" && options.sourceType !== "proactive" && options.sourceType !== "system") {
       const evaluatorProvider = this.deps.evaluatorProvider ?? provider;
       const postTurn = new PostTurnProcessor({
         provider: evaluatorProvider,

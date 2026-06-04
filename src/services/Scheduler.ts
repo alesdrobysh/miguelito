@@ -17,14 +17,14 @@ interface SchedulerConfig {
 
 export function startScheduler(
   config: SchedulerConfig,
-  agentRunner: (prompt: string) => Promise<{ text: string }>,
+  agentRunner: (prompt: string, options?: { postTurn?: boolean; sourceType?: "cron" | "proactive" | "system" | "user_chat" }) => Promise<{ text: string }>,
   dream: DreamService,
   transport: Transport,
 ): void {
   async function runCronJob(jobName: string, prompt: string): Promise<void> {
     log.info({ job: jobName }, 'cron job fired');
     try {
-      const result = await agentRunner(prompt);
+      const result = await agentRunner(prompt, { postTurn: false, sourceType: "cron" });
       log.info({ job: jobName }, 'cron job complete');
       if (result.text && config.telegramChatId) {
         await transport.sendMessage(config.telegramChatId, result.text);

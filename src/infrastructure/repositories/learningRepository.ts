@@ -1,5 +1,5 @@
 import type { Database } from "sql.js";
-import type { LearningItem, LearningItemInput, LearningItemStatus, LearningItemType, LearningPracticeAttempt, StartLearningPracticeAttemptInput, FinishLearningPracticeAttemptInput } from "../../domain/types.js";
+import type { LearningItem, LearningItemEvidenceInput, LearningItemEvidenceRow, LearningItemInput, LearningItemStatus, LearningItemType, LearningPracticeAttempt, StartLearningPracticeAttemptInput, FinishLearningPracticeAttemptInput } from "../../domain/types.js";
 import { SqlRepository, type SaveFn, nowIso, computeNextReview } from "./sqlRepository.js";
 
 const VALID_TYPES = new Set([
@@ -12,7 +12,35 @@ const VALID_TYPES = new Set([
   "register_note",
   "pronunciation",
 ]);
-const VALID_STATUSES = new Set(["candidate", "active", "ignored", "mastered"]);
+const VALID_STATUSES = new Set(["candidate", "active", "cooling_down", "stable", "ignored", "mastered", "archived"]);
+const VALID_EVIDENCE_SKILLS = new Set(["passive", "active", "reactivation"]);
+
+function clamp01(value: unknown, fallback = 0): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(1, n));
+}
+
+function nextReactivationDate(activeScore: number, passiveScore: number): string {
+  const score = Math.max(activeScore, passiveScore);
+  const days = score >= 0.85 ? 30 : score >= 0.65 ? 14 : score >= 0.35 ? 7 : 2;
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString();
+}
+
+function stabilityFor(activeScore: number, passiveScore: number, evidenceCount: number): string {
+  const score = Math.max(activeScore, passiveScore);
+  if (evidenceCount <= 0) return "new";
+  if (activeScore >= 0.8 && passiveScore >= 0.7) return "stable";
+  if (score >= 0.2) return "developing";
+  return "noticed";
+}
+
+function pressureFor(activeScore: number, passiveScore: number): string {
+  const score = Math.max(activeScore, passiveScore);
+  return score >= 0.7 ? "low" : score >= 0.35 ? "medium" : "high";
+}
 
 export class SqlLearningRepository extends SqlRepository {
   constructor(db: Database, languageId: string, save: SaveFn) {
@@ -69,6 +97,71 @@ export class SqlLearningRepository extends SqlRepository {
       `SELECT * FROM learning_items WHERE language = ? AND status = ? ORDER BY priority DESC, created_at ASC, id ASC LIMIT ?`,
       [this.languageId, status, capped],
     ) as LearningItem[];
+  }
+
+  async listDueLearningItems(limit: number): Promise<LearningItem[]> {
+    const capped = Math.max(1, Math.min(20, Math.round(limit || 5)));
+    return this.queryAll<LearningItem>(
+      `SELECT * FROM learning_items
+       WHERE language = ?
+         AND status IN ('active', 'cooling_down')
+         AND (next_reactivation_at IS NULL OR next_reactivation_at <= datetime('now'))
+       ORDER BY priority DESC, evidence_count ASC, created_at ASC, id ASC
+       LIMIT ?`,
+      [this.languageId, capped],
+    );
+  }
+
+  async recordLearningItemEvidence(input: LearningItemEvidenceInput): Promise<number> {
+    const itemId = Number(input.learning_item_id);
+    const item = this.queryRow<LearningItem>(`SELECT * FROM learning_items WHERE id = ? AND language = ?`, [itemId, this.languageId]);
+    if (!item) throw new Error(`Learning item #${itemId} not found`);
+    const rawSkill = String(input.skill ?? "passive").trim().toLowerCase();
+    const skill = VALID_EVIDENCE_SKILLS.has(rawSkill) ? rawSkill : "passive";
+    const event = String(input.event ?? "").trim();
+    if (!event) throw new Error("Learning item evidence event is required");
+    const independence = String(input.independence ?? "unknown").trim().toLowerCase() || "unknown";
+    const deltaRaw = Number(input.score_delta ?? 0);
+    const scoreDelta = Number.isFinite(deltaRaw) ? Math.max(-1, Math.min(1, deltaRaw)) : 0;
+    const confidence = clamp01(input.confidence, 0.5);
+    const now = nowIso();
+    const sourceType = String(input.source_type ?? "conversation").trim() || "conversation";
+    this.db.run(
+      `INSERT INTO learning_item_evidence
+       (learning_item_id, language, skill, event, independence, score_delta, confidence, evidence_snippet, source_type, source_message_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [itemId, this.languageId, skill, event, independence, scoreDelta, confidence, input.evidence_snippet?.trim() || null, sourceType, input.source_message_id ?? null, now],
+    );
+    const evidenceId = this.db.exec("SELECT last_insert_rowid()")[0].values[0][0] as number;
+
+    const passiveScore = clamp01(Number(item.passive_score ?? 0) + (skill === "passive" ? scoreDelta : 0), 0);
+    const activeScore = clamp01(Number(item.active_score ?? 0) + (skill === "active" ? scoreDelta : 0), 0);
+    const evidenceCount = Number(item.evidence_count ?? 0) + 1;
+    const failureCount = Number(item.failure_count ?? 0) + (scoreDelta < 0 ? 1 : 0);
+    const avoidanceCount = Number(item.avoidance_count ?? 0) + (event === "avoidance" ? 1 : 0);
+    const lastUnderstoodAt = skill === "passive" && scoreDelta > 0 ? now : item.last_understood_at;
+    const lastProducedAt = skill === "active" && scoreDelta > 0 ? now : item.last_produced_at;
+    const lastReactivatedAt = skill === "reactivation" ? now : item.last_reactivated_at;
+    const stability = stabilityFor(activeScore, passiveScore, evidenceCount);
+    const status = stability === "stable" ? "stable" : item.status === "stable" ? "cooling_down" : item.status;
+    this.db.run(
+      `UPDATE learning_items
+       SET passive_score = ?, active_score = ?, stability = ?, last_seen_at = ?, last_understood_at = ?, last_produced_at = ?,
+           last_reactivated_at = ?, next_reactivation_at = ?, reactivation_pressure = ?, evidence_count = ?, failure_count = ?, avoidance_count = ?,
+           status = ?, updated_at = ?
+       WHERE id = ? AND language = ?`,
+      [passiveScore, activeScore, stability, now, lastUnderstoodAt, lastProducedAt, lastReactivatedAt, nextReactivationDate(activeScore, passiveScore), pressureFor(activeScore, passiveScore), evidenceCount, failureCount, avoidanceCount, status, now, itemId, this.languageId],
+    );
+    this.save();
+    return evidenceId;
+  }
+
+  async listLearningItemEvidence(learningItemId: number, limit = 20): Promise<LearningItemEvidenceRow[]> {
+    const capped = Math.max(1, Math.min(100, Math.round(limit || 20)));
+    return this.queryAll<LearningItemEvidenceRow>(
+      `SELECT * FROM learning_item_evidence WHERE language = ? AND learning_item_id = ? ORDER BY created_at DESC, id DESC LIMIT ?`,
+      [this.languageId, learningItemId, capped],
+    );
   }
 
   async startLearningPracticeAttempt(input: StartLearningPracticeAttemptInput): Promise<LearningPracticeAttempt> {

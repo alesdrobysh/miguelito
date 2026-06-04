@@ -232,4 +232,34 @@ describe("PostTurnProcessor", () => {
     expect(items.map((i) => i.title)).toEqual(["opcioces → opciones"]);
   });
 
+  it("records evaluator item evidence to move learning items through conversation", async () => {
+    const itemId = await db.addLearningItem({ type: "correction", title: "Pienso de ir → Pienso ir", prompt_l2: "Pienso ir", priority: 0.9 });
+    const provider = new JsonProvider({
+      annotation: { obligatory: [], used: ["pienso ir"], naturalness: 1, comprehension: "smooth" },
+      mode: "REACT",
+      errors: [],
+      vocabulary: [],
+      learning_items: [],
+      item_evidence: [{
+        learning_item_id: itemId,
+        skill: "active",
+        event: "spontaneous_production",
+        independence: "spontaneous",
+        score_delta: 0.25,
+        confidence: 0.9,
+        evidence_snippet: "Sí, pienso ir a La Palma.",
+      }],
+    });
+
+    const processor = new PostTurnProcessor({ provider, vocab: db, errors: db, competency: db, session: db, learning: db, lang: SpanishLanguage });
+    const result = await processor.process({ userMessage: "Sí, pienso ir a La Palma.", assistantText: "Suena natural así.", chatHistory: [] });
+
+    expect(result.learningEvidenceAdded).toBe(1);
+    const evidence = await db.listLearningItemEvidence(itemId!, 10);
+    expect(evidence).toHaveLength(1);
+    const [item] = await db.listLearningItems("active", 10);
+    expect(item.active_score).toBeCloseTo(0.25);
+    expect(item.last_produced_at).toBeTruthy();
+  });
+
 });

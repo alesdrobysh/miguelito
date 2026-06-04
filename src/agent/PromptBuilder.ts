@@ -1,6 +1,6 @@
 import fs from "fs";
 import type { LanguageConfig } from "../languages/LanguageConfig.js";
-import type { VocabRepository, ErrorRepository, ProfileRepository, InterestRepository, CompetencyRepository, SessionRepository } from "../repositories/interfaces.js";
+import type { VocabRepository, ErrorRepository, ProfileRepository, InterestRepository, CompetencyRepository, SessionRepository, LearningRepository } from "../repositories/interfaces.js";
 import type { ConversationStateResult } from "../domain/types.js";
 import { getCompetencyVector, selectFocusAxis, renderCalibration } from "../domain/competency.js";
 
@@ -12,6 +12,7 @@ export interface PromptRepos {
   interests: InterestRepository;
   competency: CompetencyRepository;
   session: SessionRepository;
+  learning?: LearningRepository;
 }
 
 interface ProfileInjection {
@@ -103,10 +104,14 @@ export class PromptBuilder {
     const weakAreas = await this._getWeakAreas(3);
     const errorInfo = weakAreas.length > 0 ? await this._getRecentErrorForCategory(weakAreas[0]) : null;
 
-    const hasLearnerData = receptiveWords.length > 0 || productiveWords.length > 0 || errorInfo != null || weakAreas.length > 0;
-    const learnerProfile = hasLearnerData
+    const dueLearningItems = await this._getDueLearningItems(3);
+    const hasLearnerData = receptiveWords.length > 0 || productiveWords.length > 0 || errorInfo != null || weakAreas.length > 0 || dueLearningItems.length > 0;
+    const learnerProfileBase = hasLearnerData
       ? this.lang.promptText.currentLearnerProfile({ receptiveWords, productiveWords, errorInfo, weakAreas })
       : null;
+    const learnerProfile = dueLearningItems.length > 0
+      ? `${learnerProfileBase ?? ""}\n\n## Conversation-native learning items due\n${dueLearningItems.map((i) => `- #${i.id} ${i.title} (${i.type}; passive=${i.passive_score.toFixed(2)}, active=${i.active_score.toFixed(2)}, pressure=${i.reactivation_pressure})`).join("\n")}\nIf one naturally fits this turn, reintroduce at most one lightly in context. Do not force stale topics, do not quiz, and do not create a /practice mode.`
+      : learnerProfileBase;
 
     // Dynamic Interest Injection
     // Interests are background context, not an agenda. Only surface interests that
@@ -137,6 +142,14 @@ export class PromptBuilder {
 
   private async _buildCompetencyVector() {
     return getCompetencyVector(this.repos);
+  }
+
+  private async _getDueLearningItems(limit: number) {
+    try {
+      return this.repos.learning ? await this.repos.learning.listDueLearningItems(limit) : [];
+    } catch {
+      return [];
+    }
   }
 
   private async _getWeakAreas(limit: number): Promise<string[]> {

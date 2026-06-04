@@ -13,7 +13,7 @@ import type {
   VocabReviewMode, VocabReviewAttempt, StartVocabReviewAttemptInput, FinishVocabReviewAttemptInput,
   VocabCandidateItem,
   ProficiencyEvidenceInput, ProficiencyEvidenceRow, ProficiencyChallengeBand,
-  LearningItemInput, LearningItem, LearningPracticeAttempt, StartLearningPracticeAttemptInput, FinishLearningPracticeAttemptInput,
+  LearningItemInput, LearningItem, LearningItemEvidenceInput, LearningItemEvidenceRow, LearningPracticeAttempt, StartLearningPracticeAttemptInput, FinishLearningPracticeAttemptInput,
 } from "../domain/types.js";
 import type {
   VocabRepository, ErrorRepository, SessionRepository, ProfileRepository,
@@ -141,6 +141,18 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
 
   async listLearningItems(status: string, limit: number): Promise<LearningItem[]> {
     return this.learning.listLearningItems(status, limit);
+  }
+
+  async listDueLearningItems(limit: number): Promise<LearningItem[]> {
+    return this.learning.listDueLearningItems(limit);
+  }
+
+  async recordLearningItemEvidence(input: LearningItemEvidenceInput): Promise<number> {
+    return this.learning.recordLearningItemEvidence(input);
+  }
+
+  async listLearningItemEvidence(learningItemId: number, limit?: number): Promise<LearningItemEvidenceRow[]> {
+    return this.learning.listLearningItemEvidence(learningItemId, limit);
   }
 
   async startLearningPracticeAttempt(input: StartLearningPracticeAttemptInput): Promise<LearningPracticeAttempt> {

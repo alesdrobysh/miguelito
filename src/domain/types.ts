@@ -59,7 +59,35 @@ export type LearningItemType =
   | "register_note"
   | "pronunciation";
 
-export type LearningItemStatus = "candidate" | "active" | "ignored" | "mastered";
+export type LearningItemStatus = "candidate" | "active" | "cooling_down" | "stable" | "ignored" | "mastered" | "archived";
+
+export type LearningItemEvidenceSkill = "passive" | "active" | "reactivation";
+export type LearningItemEvidenceIndependence = "spontaneous" | "elicited" | "hinted" | "observed" | "unknown";
+
+export interface LearningItemEvidenceInput {
+  learning_item_id: number;
+  skill: LearningItemEvidenceSkill | string;
+  event: string;
+  independence?: LearningItemEvidenceIndependence | string;
+  score_delta?: number;
+  confidence?: number;
+  evidence_snippet?: string;
+  source_type?: string;
+  source_message_id?: number;
+}
+
+export interface LearningItemEvidenceRow extends Required<Pick<LearningItemEvidenceInput, "skill" | "event">> {
+  id: number;
+  learning_item_id: number;
+  language: string;
+  independence: string;
+  score_delta: number;
+  confidence: number;
+  evidence_snippet: string | null;
+  source_type: string;
+  source_message_id: number | null;
+  created_at: string;
+}
 
 export interface LearningItemInput {
   type: LearningItemType | string;
@@ -93,6 +121,18 @@ export interface LearningItem extends Required<Pick<LearningItemInput, "type" | 
   reps: number;
   created_at: string;
   updated_at: string;
+  passive_score: number;
+  active_score: number;
+  stability: string;
+  last_seen_at: string | null;
+  last_reactivated_at: string | null;
+  last_understood_at: string | null;
+  last_produced_at: string | null;
+  next_reactivation_at: string | null;
+  reactivation_pressure: string;
+  evidence_count: number;
+  failure_count: number;
+  avoidance_count: number;
 }
 
 export interface LearningPracticeAttempt {

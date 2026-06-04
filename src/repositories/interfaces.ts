@@ -20,6 +20,8 @@ import type {
   ProficiencyChallengeBand,
   LearningItemInput,
   LearningItem,
+  LearningItemEvidenceInput,
+  LearningItemEvidenceRow,
   LearningPracticeAttempt,
   StartLearningPracticeAttemptInput,
   FinishLearningPracticeAttemptInput,
@@ -28,6 +30,9 @@ import type {
 export interface LearningRepository {
   addLearningItem(input: LearningItemInput): Promise<number | null>;
   listLearningItems(status: string, limit: number): Promise<LearningItem[]>;
+  listDueLearningItems(limit: number): Promise<LearningItem[]>;
+  recordLearningItemEvidence(input: LearningItemEvidenceInput): Promise<number>;
+  listLearningItemEvidence(learningItemId: number, limit?: number): Promise<LearningItemEvidenceRow[]>;
   startLearningPracticeAttempt(input: StartLearningPracticeAttemptInput): Promise<LearningPracticeAttempt>;
   listActiveLearningPracticeAttempts(limit?: number): Promise<LearningPracticeAttempt[]>;
   finishLearningPracticeAttempt(input: FinishLearningPracticeAttemptInput): Promise<LearningPracticeAttempt>;

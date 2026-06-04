@@ -245,6 +245,40 @@ describe("BuddyDb vocabulary (chunk-based)", () => {
 });
 
 describe("BuddyDb learning items", () => {
+  it("records conversational evidence and moves item passive/active state without practice attempts", async () => {
+    const itemId = await db.addLearningItem({
+      type: "correction",
+      title: "Pienso de ir → Pienso ir",
+      prompt_l2: "Pienso ir",
+      priority: 0.9,
+    });
+    expect(itemId).toBeTypeOf("number");
+
+    const evidenceId = await db.recordLearningItemEvidence({
+      learning_item_id: itemId!,
+      skill: "active",
+      event: "spontaneous_production",
+      independence: "spontaneous",
+      score_delta: 0.25,
+      confidence: 0.9,
+      evidence_snippet: "Sí, pienso ir a La Palma.",
+    });
+
+    expect(evidenceId).toBeGreaterThan(0);
+    const evidence = await db.listLearningItemEvidence(itemId!, 10);
+    expect(evidence.map((e) => [e.skill, e.event, e.independence])).toEqual([
+      ["active", "spontaneous_production", "spontaneous"],
+    ]);
+    const [item] = await db.listLearningItems("active", 10);
+    expect(item.active_score).toBeCloseTo(0.25);
+    expect(item.passive_score).toBe(0);
+    expect(item.evidence_count).toBe(1);
+    expect(item.last_seen_at).toBeTruthy();
+    expect(item.last_produced_at).toBeTruthy();
+    expect(item.stability).toBe("developing");
+    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(0);
+  });
+
   it("stores words, corrections, and grammar points as one learning inbox scoped by language", async () => {
     const phraseId = await db.addLearningItem({
       type: "phrase",
@@ -574,7 +608,7 @@ describe("BuddyDb turn annotations and competency vector", () => {
     expect(names).toContain("competency_vector");
 
     const ver = db.db.exec("SELECT value FROM _buddy_meta WHERE key = 'schema_version'");
-    expect(ver[0].values[0][0]).toBe("13");
+    expect(ver[0].values[0][0]).toBe("14");
   });
 
   it("competency_vector row is seeded with defaults", async () => {

@@ -117,4 +117,22 @@ describe("AgentRunner post-turn evaluation", () => {
     expect(names).not.toContain("miguelito_vocab_attempt_finish");
     expect(names).not.toContain("miguelito_progress_summary");
   });
+
+  it("can skip post-turn evaluation for cron/proactive messages", async () => {
+    const main = new ChatProvider("Buenos días.");
+    const evaluator = new EvaluatorProvider();
+    const promptBuilder = {
+      build: async () => "system",
+      buildPostHistoryReminder: () => "reminder",
+    } as unknown as PromptBuilder;
+    const toolCtx = { vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, provider: main };
+
+    const runner = new AgentRunner({ provider: main, evaluatorProvider: evaluator, session: db, promptBuilder, toolCtx, lang: SpanishLanguage });
+    await runner.run("morning cron", [], { postTurn: false, sourceType: "cron" });
+
+    expect(main.chatCalls).toBe(1);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(evaluator.completeJsonCalls).toBe(0);
+    expect(await db.getRecentAnnotations(10)).toHaveLength(0);
+  });
 });

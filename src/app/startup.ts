@@ -39,7 +39,7 @@ export function startLanguageScheduler(config: Config, rt: LanguageRuntime, tran
       morningCronPrompt,
       eveningCronPrompt,
     },
-    (prompt) => rt.agentRunner.run(prompt, []),
+    (prompt, options) => rt.agentRunner.run(prompt, [], options),
     rt.dreamService,
     transport,
   );

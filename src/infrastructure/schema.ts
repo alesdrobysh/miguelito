@@ -67,11 +67,38 @@ CREATE TABLE IF NOT EXISTS learning_items (
     due_at TEXT,
     last_practiced_at TEXT,
     reps INTEGER NOT NULL DEFAULT 0,
+    passive_score REAL NOT NULL DEFAULT 0.0,
+    active_score REAL NOT NULL DEFAULT 0.0,
+    stability TEXT NOT NULL DEFAULT 'new',
+    last_seen_at TEXT,
+    last_reactivated_at TEXT,
+    last_understood_at TEXT,
+    last_produced_at TEXT,
+    next_reactivation_at TEXT,
+    reactivation_pressure TEXT NOT NULL DEFAULT 'medium',
+    evidence_count INTEGER NOT NULL DEFAULT 0,
+    failure_count INTEGER NOT NULL DEFAULT 0,
+    avoidance_count INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_learning_items_language_type_title_unique ON learning_items(language, type, title COLLATE NOCASE);
 CREATE INDEX IF NOT EXISTS idx_learning_items_status_priority ON learning_items(language, status, priority DESC, created_at);
+CREATE TABLE IF NOT EXISTS learning_item_evidence (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    learning_item_id INTEGER NOT NULL,
+    language TEXT NOT NULL DEFAULT '',
+    skill TEXT NOT NULL,
+    event TEXT NOT NULL,
+    independence TEXT NOT NULL DEFAULT 'unknown',
+    score_delta REAL NOT NULL DEFAULT 0.0,
+    confidence REAL NOT NULL DEFAULT 0.5,
+    evidence_snippet TEXT,
+    source_type TEXT NOT NULL DEFAULT 'conversation',
+    source_message_id INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_learning_item_evidence_item ON learning_item_evidence(language, learning_item_id, created_at DESC);
 CREATE TABLE IF NOT EXISTS learning_practice_attempts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     learning_item_id INTEGER NOT NULL,

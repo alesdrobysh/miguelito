@@ -11,17 +11,24 @@ export function runMigrations(db: Database): void {
 
   const verRow = db.exec("SELECT value FROM _buddy_meta WHERE key = 'schema_version'");
   const ver = verRow[0]?.values[0]?.[0] as string | undefined;
-  if (ver === "13") return;
+  if (ver === "14") return;
+  if (ver === "13") {
+    migrateLearningItemLifecycle(db);
+    db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '14')");
+    return;
+  }
   if (ver === "12") {
     migrateProficiencyEvidenceChallengeBand(db);
     dropLegacyProficiencyEvidenceLevelColumn(db);
-    db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '13')");
+    migrateLearningItemLifecycle(db);
+    db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '14')");
     return;
   }
   if (ver === "11") {
     migrateProficiencyEvidenceChallengeBand(db);
     dropLegacyProficiencyEvidenceLevelColumn(db);
-    db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '13')");
+    migrateLearningItemLifecycle(db);
+    db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '14')");
     return;
   }
 
@@ -314,6 +321,44 @@ export function runMigrations(db: Database): void {
     )`);
     db.run("CREATE INDEX IF NOT EXISTS idx_vocab_attempts_active ON vocab_review_attempts(language, status, created_at)");
   } catch {}
+
+  migrateLearningItemLifecycle(db);
+  db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '14')");
+}
+
+function migrateLearningItemLifecycle(db: Database): void {
+  const info = db.exec("PRAGMA table_info(learning_items)");
+  const cols = (info[0]?.values ?? []).map((r) => r[1] as string);
+  if (cols.length === 0) return;
+  const addCol = (name: string, ddl: string) => { if (!cols.includes(name)) db.run(`ALTER TABLE learning_items ADD COLUMN ${ddl}`); };
+  addCol("passive_score", "passive_score REAL NOT NULL DEFAULT 0.0");
+  addCol("active_score", "active_score REAL NOT NULL DEFAULT 0.0");
+  addCol("stability", "stability TEXT NOT NULL DEFAULT 'new'");
+  addCol("last_seen_at", "last_seen_at TEXT");
+  addCol("last_reactivated_at", "last_reactivated_at TEXT");
+  addCol("last_understood_at", "last_understood_at TEXT");
+  addCol("last_produced_at", "last_produced_at TEXT");
+  addCol("next_reactivation_at", "next_reactivation_at TEXT");
+  addCol("reactivation_pressure", "reactivation_pressure TEXT NOT NULL DEFAULT 'medium'");
+  addCol("evidence_count", "evidence_count INTEGER NOT NULL DEFAULT 0");
+  addCol("failure_count", "failure_count INTEGER NOT NULL DEFAULT 0");
+  addCol("avoidance_count", "avoidance_count INTEGER NOT NULL DEFAULT 0");
+  db.run("CREATE INDEX IF NOT EXISTS idx_learning_items_reactivation ON learning_items(language, status, next_reactivation_at, priority DESC)");
+  db.run(`CREATE TABLE IF NOT EXISTS learning_item_evidence (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    learning_item_id INTEGER NOT NULL,
+    language TEXT NOT NULL DEFAULT '',
+    skill TEXT NOT NULL,
+    event TEXT NOT NULL,
+    independence TEXT NOT NULL DEFAULT 'unknown',
+    score_delta REAL NOT NULL DEFAULT 0.0,
+    confidence REAL NOT NULL DEFAULT 0.5,
+    evidence_snippet TEXT,
+    source_type TEXT NOT NULL DEFAULT 'conversation',
+    source_message_id INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  db.run("CREATE INDEX IF NOT EXISTS idx_learning_item_evidence_item ON learning_item_evidence(language, learning_item_id, created_at DESC)");
 }
 
 function migrateProficiencyEvidenceChallengeBand(db: Database): void {

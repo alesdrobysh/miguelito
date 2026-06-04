@@ -2,7 +2,7 @@ import type { ChatMessage } from "../llm.js";
 import type { LanguageConfig } from "../languages/LanguageConfig.js";
 import type { LLMProvider } from "../providers/interfaces.js";
 import type { CompetencyRepository, ErrorRepository, InterestRepository, LearningRepository, SessionRepository, VocabRepository } from "../repositories/interfaces.js";
-import type { LearningItemInput, TurnAnnotationInput, VocabReviewAttempt, VocabReviewMode } from "../domain/types.js";
+import type { LearningItem, LearningItemEvidenceInput, LearningItemInput, TurnAnnotationInput, VocabReviewAttempt, VocabReviewMode } from "../domain/types.js";
 import { analyzeTextDifficulty, outcomeScore } from "../domain/frequency.js";
 import { logger } from "../infrastructure/logger.js";
 
@@ -69,12 +69,25 @@ interface EvaluatedReview {
   note?: string;
 }
 
+interface EvaluatedLearningItemEvidence {
+  learning_item_id?: number | string;
+  skill?: string;
+  event?: string;
+  independence?: string;
+  score_delta?: number | string;
+  confidence?: number | string;
+  evidence_snippet?: string;
+  source_type?: string;
+  source_message_id?: number | string;
+}
+
 interface PostTurnEvaluation {
   annotation?: Partial<TurnAnnotationInput>;
   mode?: string;
   errors?: EvaluatedError[];
   vocabulary?: EvaluatedVocab[];
   learning_items?: EvaluatedLearningItem[];
+  item_evidence?: EvaluatedLearningItemEvidence[];
   reviews?: EvaluatedReview[];
   interests?: string[];
 }
@@ -85,6 +98,7 @@ export interface PostTurnProcessResult {
   vocabAdded: number;
   vocabCandidatesAdded: number;
   learningItemsAdded: number;
+  learningEvidenceAdded: number;
   reviewsCompleted: number;
   annotationInserted: boolean;
   interestsAdded: number;
@@ -98,10 +112,15 @@ export class PostTurnProcessor {
 
   async process(input: PostTurnProcessInput): Promise<PostTurnProcessResult> {
     const evaluation = await this.evaluate(input);
+    if (!evaluation) return this.emptyResult(false);
     return this.apply(evaluation, input);
   }
 
-  private async evaluate(input: PostTurnProcessInput): Promise<PostTurnEvaluation> {
+  private emptyResult(ok: boolean): PostTurnProcessResult {
+    return { ok, errorsLogged: 0, vocabAdded: 0, vocabCandidatesAdded: 0, learningItemsAdded: 0, learningEvidenceAdded: 0, reviewsCompleted: 0, annotationInserted: false, interestsAdded: 0 };
+  }
+
+  private async evaluate(input: PostTurnProcessInput): Promise<PostTurnEvaluation | null> {
     const systemPrompt = [
       `You are a deterministic evaluator for a ${this.deps.lang.name} tutoring chatbot.`,
       "Return only JSON. Do not write learner-facing text.",
@@ -132,6 +151,7 @@ export class PostTurnProcessor {
           elicitation_cues: ["optional production cue"]
         }],
         learning_items: [{ type: "grammar_point|correction|phrase|word|collocation|idiom|register_note|pronunciation", title: "por vs para", prompt_l2: "optional L2 prompt", explanation_l1: "short explanation", source_type: "user_question|conversation|correction", priority: "0.9=correction/explicitly asked, 0.7=useful, 0.5=niche", practice_modes: ["short_drill"] }],
+        item_evidence: [{ learning_item_id: 123, skill: "passive|active|reactivation", event: "recognized|responded_appropriately|asked_clarification|misunderstood|spontaneous_production|elicited_production|hinted_production|self_correction|incorrect_production|avoidance|assistant_reintroduced", independence: "spontaneous|elicited|hinted|observed", score_delta: "-0.2..0.3", confidence: "0..1", evidence_snippet: "short quote" }],
         interests: ["hobby or topic the learner mentioned (lowercase, e.g. 'fútbol', 'cocina')"],
       }),
       "Use empty arrays when there is nothing to extract. For interests: extract hobbies, topics, or preferences the learner mentioned; use lowercase; omit generic words like 'español' or 'idiomas'.",
@@ -139,9 +159,12 @@ export class PostTurnProcessor {
     ].join("\n");
 
     const recent = input.chatHistory.slice(-8).map((m) => `${m.role}: ${m.content}`).join("\n");
+    const activeItems = await this.recentLearningItemsForEvaluation();
     const userPrompt = [
       "Recent history:",
       recent || "(none)",
+      "Active learning items that may receive item_evidence (use these ids only):",
+      activeItems,
       "Latest learner message:",
       input.userMessage,
       "Assistant reply:",
@@ -157,7 +180,7 @@ export class PostTurnProcessor {
       });
     } catch (err) {
       log.warn({ err }, "post-turn evaluation failed");
-      return {};
+      return null;
     }
   }
 
@@ -166,6 +189,7 @@ export class PostTurnProcessor {
     let vocabAdded = 0;
     let vocabCandidatesAdded = 0;
     let learningItemsAdded = 0;
+    let learningEvidenceAdded = 0;
     let reviewsCompleted = 0;
     let annotationInserted = false;
     let interestsAdded = 0;
@@ -239,6 +263,17 @@ export class PostTurnProcessor {
       if (learningId !== null) learningItemsAdded++;
     }
 
+    for (const item of evaluation.item_evidence ?? []) {
+      const evidence = this.learningItemEvidenceInput(item);
+      if (!evidence) continue;
+      try {
+        await this.learningRepo().recordLearningItemEvidence(evidence);
+        learningEvidenceAdded++;
+      } catch (err) {
+        log.warn({ err, item }, "learning item evidence ignored");
+      }
+    }
+
     // Legacy vocabulary_items/vocab_review_attempts are intentionally ignored in
     // the modern product runtime. Post-turn extraction writes learning_items and
     // proficiency evidence, but it must not promote candidates or score FSRS rows.
@@ -253,11 +288,21 @@ export class PostTurnProcessor {
       }
     }
 
-    return { ok: true, errorsLogged, vocabAdded, vocabCandidatesAdded, learningItemsAdded, reviewsCompleted, annotationInserted, interestsAdded };
+    return { ok: true, errorsLogged, vocabAdded, vocabCandidatesAdded, learningItemsAdded, learningEvidenceAdded, reviewsCompleted, annotationInserted, interestsAdded };
   }
 
   private learningRepo(): LearningRepository {
     return this.deps.learning ?? (this.deps.vocab as unknown as LearningRepository);
+  }
+
+  private async recentLearningItemsForEvaluation(): Promise<string> {
+    try {
+      const items = await this.learningRepo().listLearningItems("active", 30);
+      if (items.length === 0) return "[]";
+      return JSON.stringify(items.map((i: LearningItem) => ({ id: i.id, type: i.type, title: i.title, prompt_l2: i.prompt_l2, passive_score: i.passive_score, active_score: i.active_score, stability: i.stability })));
+    } catch {
+      return "[]";
+    }
   }
 
   private learningItemInput(item: EvaluatedLearningItem, input: PostTurnProcessInput): LearningItemInput | null {
@@ -273,6 +318,24 @@ export class PostTurnProcessor {
       priority: Math.max(0, Math.min(1, Number(item.priority ?? 0.7) || 0.7)),
       practice_modes: Array.isArray(item.practice_modes) ? item.practice_modes.map((x) => String(x)).filter(Boolean) : [],
       tags: Array.isArray(item.tags) ? item.tags.map((x) => String(x)).filter(Boolean) : [],
+    };
+  }
+
+  private learningItemEvidenceInput(item: EvaluatedLearningItemEvidence): LearningItemEvidenceInput | null {
+    const learningItemId = Number(item.learning_item_id ?? 0);
+    const event = this.clean(item.event);
+    if (!learningItemId || !event) return null;
+    const sourceMessageId = item.source_message_id == null ? undefined : Number(item.source_message_id);
+    return {
+      learning_item_id: learningItemId,
+      skill: this.clean(item.skill) || "passive",
+      event,
+      independence: this.clean(item.independence) || "unknown",
+      score_delta: Number(item.score_delta ?? 0) || 0,
+      confidence: Math.max(0, Math.min(1, Number(item.confidence ?? 0.5) || 0.5)),
+      evidence_snippet: this.clean(item.evidence_snippet) || undefined,
+      source_type: this.clean(item.source_type) || "conversation",
+      source_message_id: Number.isFinite(sourceMessageId) && sourceMessageId! > 0 ? sourceMessageId : undefined,
     };
   }
 
