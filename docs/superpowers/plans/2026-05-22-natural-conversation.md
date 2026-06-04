@@ -587,20 +587,4 @@ git commit -m "feat: rewrite SOUL.md for natural conversation rhythm"
 
 ### Task 6: Deploy to the phone
 
-**Files:** none
-
-- [ ] **Step 1: Run deploy script**
-
-```bash
-./deploy.sh
-```
-
-The script builds TypeScript, rsyncs to the phone, installs dependencies, and restarts the daemon. Expected final output: `Daemon started OK`.
-
-- [ ] **Step 2: Verify bot is running and no CONV_STATE leaks**
-
-```bash
-ssh 192.168.1.29 "tail -10 ~/miguelito-ts/miguelito.log"
-```
-
-Expected: `miguelito-ts starting...` followed by `Bot @... started` with no crash loop and no `[unhandledRejection]`.
+Use the current Termux boot-script deployment workflow.
