@@ -31,6 +31,8 @@ export interface LearningRepository {
   addLearningItem(input: LearningItemInput): Promise<number | null>;
   listLearningItems(status: string, limit: number): Promise<LearningItem[]>;
   listDueLearningItems(limit: number): Promise<LearningItem[]>;
+  selectLearningItemsForEvaluation(userMessage: string, assistantText: string, limit: number): Promise<LearningItem[]>;
+  markLearningItemsReintroduced(ids: number[]): Promise<number>;
   recordLearningItemEvidence(input: LearningItemEvidenceInput): Promise<number>;
   listLearningItemEvidence(learningItemId: number, limit?: number): Promise<LearningItemEvidenceRow[]>;
   startLearningPracticeAttempt(input: StartLearningPracticeAttemptInput): Promise<LearningPracticeAttempt>;

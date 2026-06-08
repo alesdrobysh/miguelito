@@ -29,6 +29,31 @@ function nextReactivationDate(activeScore: number, passiveScore: number): string
   return d.toISOString();
 }
 
+function initialReactivationDate(priority: number): string {
+  const d = new Date();
+  const hours = priority >= 0.9 ? 6 : priority >= 0.7 ? 18 : 36;
+  d.setHours(d.getHours() + hours);
+  return d.toISOString();
+}
+
+function afterReintroductionDate(activeScore: number, passiveScore: number): string {
+  const score = Math.max(activeScore, passiveScore);
+  const d = new Date();
+  d.setDate(d.getDate() + (score >= 0.35 ? 3 : 1));
+  return d.toISOString();
+}
+
+function tokenizeForMatching(text: string): string[] {
+  const stop = new Set(["que", "con", "para", "por", "del", "las", "los", "una", "uno", "este", "esta", "como", "pero", "mas", "más", "the", "and"]);
+  return Array.from(new Set(text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .match(/[\p{L}\p{N}]{4,}/gu) ?? []))
+    .filter((t) => !stop.has(t))
+    .slice(0, 12);
+}
+
 function stabilityFor(activeScore: number, passiveScore: number, evidenceCount: number): string {
   const score = Math.max(activeScore, passiveScore);
   if (evidenceCount <= 0) return "new";
@@ -55,11 +80,12 @@ export class SqlLearningRepository extends SqlRepository {
     const rawStatus = String(input.status ?? "active").trim().toLowerCase();
     const status = (VALID_STATUSES.has(rawStatus) ? rawStatus : "active") as LearningItemStatus;
     const now = nowIso();
+    const priority = Math.max(0, Math.min(1, Number(input.priority ?? 0.5) || 0.5));
     this.db.run(
       `INSERT OR IGNORE INTO learning_items
        (language, type, title, prompt_l2, explanation_l1, source_type, source_message_id, evidence_snippet,
-        priority, status, practice_modes_json, tags_json, due_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        priority, status, practice_modes_json, tags_json, due_at, next_reactivation_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         this.languageId,
         type,
@@ -69,11 +95,12 @@ export class SqlLearningRepository extends SqlRepository {
         input.source_type?.trim() || "conversation",
         input.source_message_id ?? null,
         input.evidence_snippet?.trim() || null,
-        Math.max(0, Math.min(1, Number(input.priority ?? 0.5) || 0.5)),
+        priority,
         status,
         JSON.stringify(input.practice_modes ?? []),
         JSON.stringify(input.tags ?? []),
         input.due_at?.trim() || null,
+        initialReactivationDate(priority),
         now,
         now,
       ],
@@ -105,11 +132,88 @@ export class SqlLearningRepository extends SqlRepository {
       `SELECT * FROM learning_items
        WHERE language = ?
          AND status IN ('active', 'cooling_down')
-         AND (next_reactivation_at IS NULL OR next_reactivation_at <= datetime('now'))
-       ORDER BY priority DESC, evidence_count ASC, created_at ASC, id ASC
+         AND (next_reactivation_at IS NULL OR datetime(next_reactivation_at) <= datetime('now'))
+       ORDER BY
+         CASE reactivation_pressure WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END ASC,
+         datetime(COALESCE(next_reactivation_at, created_at)) ASC,
+         evidence_count ASC,
+         datetime(updated_at) ASC,
+         id ASC
        LIMIT ?`,
       [this.languageId, capped],
     );
+  }
+
+  async selectLearningItemsForEvaluation(userMessage: string, assistantText: string, limit: number): Promise<LearningItem[]> {
+    const capped = Math.max(1, Math.min(100, Math.round(limit || 60)));
+    const selected = new Map<number, LearningItem>();
+    const add = (items: LearningItem[]) => {
+      for (const item of items) {
+        if (selected.size >= capped) break;
+        selected.set(item.id, item);
+      }
+    };
+
+    const text = `${userMessage} ${assistantText}`;
+    const tokens = tokenizeForMatching(text);
+    for (const token of tokens) {
+      if (selected.size >= capped) break;
+      add(this.queryAll<LearningItem>(
+        `SELECT * FROM learning_items
+         WHERE language = ? AND status IN ('active', 'cooling_down')
+           AND (lower(title) LIKE ? OR lower(COALESCE(prompt_l2, '')) LIKE ? OR lower(COALESCE(evidence_snippet, '')) LIKE ?)
+         ORDER BY evidence_count ASC, priority DESC, datetime(updated_at) DESC, id DESC
+         LIMIT 8`,
+        [this.languageId, `%${token}%`, `%${token}%`, `%${token}%`],
+      ));
+    }
+
+    add(this.queryAll<LearningItem>(
+      `SELECT * FROM learning_items
+       WHERE language = ? AND status IN ('active', 'cooling_down')
+         AND last_reactivated_at IS NOT NULL
+         AND datetime(last_reactivated_at) >= datetime('now', '-1 day')
+       ORDER BY datetime(last_reactivated_at) DESC, evidence_count ASC, priority DESC
+       LIMIT ?`,
+      [this.languageId, Math.min(20, capped)],
+    ));
+    add(await this.listDueLearningItems(Math.min(20, capped)));
+    add(this.queryAll<LearningItem>(
+      `SELECT * FROM learning_items
+       WHERE language = ? AND status IN ('active', 'cooling_down')
+       ORDER BY datetime(updated_at) DESC, datetime(created_at) DESC, id DESC
+       LIMIT ?`,
+      [this.languageId, Math.min(20, capped)],
+    ));
+    add(this.queryAll<LearningItem>(
+      `SELECT * FROM learning_items
+       WHERE language = ? AND status = 'active'
+       ORDER BY priority DESC, evidence_count ASC, datetime(created_at) ASC, id ASC
+       LIMIT ?`,
+      [this.languageId, capped],
+    ));
+
+    return Array.from(selected.values()).slice(0, capped);
+  }
+
+  async markLearningItemsReintroduced(ids: number[]): Promise<number> {
+    const cleanIds = Array.from(new Set(ids.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)));
+    if (cleanIds.length === 0) return 0;
+    const now = nowIso();
+    let changed = 0;
+    for (const id of cleanIds) {
+      const item = this.queryRow<LearningItem>(`SELECT * FROM learning_items WHERE id = ? AND language = ?`, [id, this.languageId]);
+      if (!item) continue;
+      this.db.run(
+        `UPDATE learning_items
+         SET last_reactivated_at = ?, next_reactivation_at = ?, updated_at = ?
+         WHERE id = ? AND language = ?`,
+        [now, afterReintroductionDate(Number(item.active_score ?? 0), Number(item.passive_score ?? 0)), now, id, this.languageId],
+      );
+      changed += this.db.getRowsModified();
+    }
+    if (changed > 0) this.save();
+    return changed;
   }
 
   async recordLearningItemEvidence(input: LearningItemEvidenceInput): Promise<number> {

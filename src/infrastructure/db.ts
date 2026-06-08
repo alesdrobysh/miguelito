@@ -147,6 +147,14 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
     return this.learning.listDueLearningItems(limit);
   }
 
+  async selectLearningItemsForEvaluation(userMessage: string, assistantText: string, limit: number): Promise<LearningItem[]> {
+    return this.learning.selectLearningItemsForEvaluation(userMessage, assistantText, limit);
+  }
+
+  async markLearningItemsReintroduced(ids: number[]): Promise<number> {
+    return this.learning.markLearningItemsReintroduced(ids);
+  }
+
   async recordLearningItemEvidence(input: LearningItemEvidenceInput): Promise<number> {
     return this.learning.recordLearningItemEvidence(input);
   }

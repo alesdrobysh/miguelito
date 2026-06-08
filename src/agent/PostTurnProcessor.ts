@@ -159,7 +159,7 @@ export class PostTurnProcessor {
     ].join("\n");
 
     const recent = input.chatHistory.slice(-8).map((m) => `${m.role}: ${m.content}`).join("\n");
-    const activeItems = await this.recentLearningItemsForEvaluation();
+    const activeItems = await this.recentLearningItemsForEvaluation(input);
     const userPrompt = [
       "Recent history:",
       recent || "(none)",
@@ -172,12 +172,21 @@ export class PostTurnProcessor {
     ].join("\n\n");
 
     try {
-      return await this.deps.provider.completeJson<PostTurnEvaluation>(systemPrompt, userPrompt, {
-        temperature: 0,
-        maxTokens: 1200,
-        structured: true,
-        timeoutMs: 60_000,
-      });
+      let lastErr: unknown;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          return await this.deps.provider.completeJson<PostTurnEvaluation>(systemPrompt, userPrompt, {
+            temperature: 0,
+            maxTokens: 1200,
+            structured: true,
+            timeoutMs: 60_000,
+          });
+        } catch (err) {
+          lastErr = err;
+          if (!this.isTransientEvaluatorError(err) || attempt === 2) throw err;
+        }
+      }
+      throw lastErr;
     } catch (err) {
       log.warn({ err }, "post-turn evaluation failed");
       return null;
@@ -295,13 +304,18 @@ export class PostTurnProcessor {
     return this.deps.learning ?? (this.deps.vocab as unknown as LearningRepository);
   }
 
-  private async recentLearningItemsForEvaluation(): Promise<string> {
+  private async recentLearningItemsForEvaluation(input: PostTurnProcessInput): Promise<string> {
     try {
-      const items = await this.learningRepo().listLearningItems("active", 30);
+      const items = await this.learningRepo().selectLearningItemsForEvaluation(input.userMessage, input.assistantText, 80);
       if (items.length === 0) return "[]";
-      return JSON.stringify(items.map((i: LearningItem) => ({ id: i.id, type: i.type, title: i.title, prompt_l2: i.prompt_l2, passive_score: i.passive_score, active_score: i.active_score, stability: i.stability })));
+      return JSON.stringify(items.map((i: LearningItem) => ({ id: i.id, type: i.type, title: i.title, prompt_l2: i.prompt_l2, passive_score: i.passive_score, active_score: i.active_score, stability: i.stability, last_reactivated_at: i.last_reactivated_at })));
     } catch {
-      return "[]";
+      try {
+        const items = await this.learningRepo().listLearningItems("active", 30);
+        return JSON.stringify(items.map((i: LearningItem) => ({ id: i.id, type: i.type, title: i.title, prompt_l2: i.prompt_l2, passive_score: i.passive_score, active_score: i.active_score, stability: i.stability })));
+      } catch {
+        return "[]";
+      }
     }
   }
 
@@ -450,6 +464,18 @@ export class PostTurnProcessor {
 
   private clean(value: unknown): string {
     return typeof value === "string" ? value.trim() : value == null ? "" : String(value).trim();
+  }
+
+  private isTransientEvaluatorError(err: unknown): boolean {
+    const anyErr = err as { message?: unknown; name?: unknown; code?: unknown };
+    const message = this.clean(anyErr?.message).toLowerCase();
+    const name = this.clean(anyErr?.name).toLowerCase();
+    const code = this.clean(anyErr?.code).toLowerCase();
+    return message.includes("empty_json_response")
+      || message.includes("unexpected end of json")
+      || message.includes("aborted due to timeout")
+      || name.includes("timeouterror")
+      || code === "23";
   }
 
   private validCategory(value: unknown): string {

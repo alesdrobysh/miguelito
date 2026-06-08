@@ -11,24 +11,29 @@ export function runMigrations(db: Database): void {
 
   const verRow = db.exec("SELECT value FROM _buddy_meta WHERE key = 'schema_version'");
   const ver = verRow[0]?.values[0]?.[0] as string | undefined;
-  if (ver === "14") return;
+  if (ver === "15") return;
+  if (ver === "14") {
+    migrateLearningItemLifecycle(db);
+    db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '15')");
+    return;
+  }
   if (ver === "13") {
     migrateLearningItemLifecycle(db);
-    db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '14')");
+    db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '15')");
     return;
   }
   if (ver === "12") {
     migrateProficiencyEvidenceChallengeBand(db);
     dropLegacyProficiencyEvidenceLevelColumn(db);
     migrateLearningItemLifecycle(db);
-    db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '14')");
+    db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '15')");
     return;
   }
   if (ver === "11") {
     migrateProficiencyEvidenceChallengeBand(db);
     dropLegacyProficiencyEvidenceLevelColumn(db);
     migrateLearningItemLifecycle(db);
-    db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '14')");
+    db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '15')");
     return;
   }
 
@@ -323,7 +328,7 @@ export function runMigrations(db: Database): void {
   } catch {}
 
   migrateLearningItemLifecycle(db);
-  db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '14')");
+  db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '15')");
 }
 
 function migrateLearningItemLifecycle(db: Database): void {
@@ -343,6 +348,9 @@ function migrateLearningItemLifecycle(db: Database): void {
   addCol("evidence_count", "evidence_count INTEGER NOT NULL DEFAULT 0");
   addCol("failure_count", "failure_count INTEGER NOT NULL DEFAULT 0");
   addCol("avoidance_count", "avoidance_count INTEGER NOT NULL DEFAULT 0");
+  db.run(`UPDATE learning_items
+    SET next_reactivation_at = datetime(created_at, '+' || CASE WHEN priority >= 0.9 THEN 6 WHEN priority >= 0.7 THEN 18 ELSE 36 END || ' hours')
+    WHERE next_reactivation_at IS NULL AND status IN ('active', 'cooling_down')`);
   db.run("CREATE INDEX IF NOT EXISTS idx_learning_items_reactivation ON learning_items(language, status, next_reactivation_at, priority DESC)");
   db.run(`CREATE TABLE IF NOT EXISTS learning_item_evidence (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

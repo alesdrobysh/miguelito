@@ -23,6 +23,18 @@ class JsonProvider implements LLMProvider {
   }
 }
 
+class FailOnceJsonProvider extends JsonProvider {
+  private failed = false;
+  async completeJson<T>(systemPrompt: string | null, userPrompt: string, opts?: ChatOptions): Promise<T> {
+    if (!this.failed) {
+      this.failed = true;
+      this.calls.push({ systemPrompt, userPrompt, opts });
+      throw new SyntaxError("empty_json_response");
+    }
+    return super.completeJson<T>(systemPrompt, userPrompt, opts);
+  }
+}
+
 let db: BuddyDb;
 let dbPath: string;
 let tmpDir: string;
@@ -41,6 +53,24 @@ afterEach(() => {
 });
 
 describe("PostTurnProcessor", () => {
+  it("retries transient empty JSON evaluator failures before giving up", async () => {
+    const provider = new FailOnceJsonProvider({
+      annotation: { obligatory: [], used: [], naturalness: 1, comprehension: "smooth" },
+      mode: "REACT",
+      errors: [],
+      vocabulary: [],
+      learning_items: [],
+      item_evidence: [],
+    });
+
+    const processor = new PostTurnProcessor({ provider, vocab: db, errors: db, competency: db, session: db, learning: db, lang: SpanishLanguage });
+    const result = await processor.process({ userMessage: "Hola", assistantText: "Hola, Ales.", chatHistory: [] });
+
+    expect(result.ok).toBe(true);
+    expect(provider.calls).toHaveLength(2);
+    expect(await db.getRecentAnnotations(5)).toHaveLength(1);
+  });
+
   it("always runs deterministic evaluator annotation after a normal assistant response", async () => {
     const provider = new JsonProvider({
       annotation: {

@@ -253,6 +253,8 @@ describe("BuddyDb learning items", () => {
       priority: 0.9,
     });
     expect(itemId).toBeTypeOf("number");
+    const [created] = await db.listLearningItems("active", 10);
+    expect(created.next_reactivation_at).toBeTruthy();
 
     const evidenceId = await db.recordLearningItemEvidence({
       learning_item_id: itemId!,
@@ -332,6 +334,32 @@ describe("BuddyDb learning items", () => {
     expect(second).toBeNull();
     expect(phrase).toBeTypeOf("number");
     expect(await db.listLearningItems("all", 10)).toHaveLength(2);
+  });
+
+  it("rotates reintroduced due learning items instead of pinning the oldest backlog", async () => {
+    const first = await db.addLearningItem({ type: "correction", title: "old one → fixed one", priority: 0.9 });
+    const second = await db.addLearningItem({ type: "correction", title: "old two → fixed two", priority: 0.9 });
+    expect(first).toBeTypeOf("number");
+    expect(second).toBeTypeOf("number");
+    db.db.run("UPDATE learning_items SET next_reactivation_at = datetime('now', '-1 hour'), created_at = datetime('now', '-3 days') WHERE id IN (?, ?)", [first, second]);
+
+    expect((await db.listDueLearningItems(1))[0].id).toBe(first);
+    await db.markLearningItemsReintroduced([first!]);
+
+    const dueAfterMark = await db.listDueLearningItems(2);
+    expect(dueAfterMark.map((i) => i.id)).toContain(second);
+    expect(dueAfterMark.map((i) => i.id)).not.toContain(first);
+  });
+
+  it("selects recent and lexically relevant learning items for evaluator beyond the old top-priority window", async () => {
+    for (let i = 0; i < 35; i++) {
+      await db.addLearningItem({ type: "correction", title: `stale ${i} → fixed ${i}`, priority: 0.9 });
+    }
+    const recent = await db.addLearningItem({ type: "word", title: "brisa marina", prompt_l2: "la brisa marina", priority: 0.7 });
+    expect(recent).toBeTypeOf("number");
+
+    const selected = await db.selectLearningItemsForEvaluation("La brisa marina es fuerte", "Sí, hay mucha brisa marina.", 20);
+    expect(selected.map((i) => i.id)).toContain(recent);
   });
 
   it("records and completes learning practice attempts with scheduling metadata", async () => {
@@ -608,7 +636,7 @@ describe("BuddyDb turn annotations and competency vector", () => {
     expect(names).toContain("competency_vector");
 
     const ver = db.db.exec("SELECT value FROM _buddy_meta WHERE key = 'schema_version'");
-    expect(ver[0].values[0][0]).toBe("14");
+    expect(ver[0].values[0][0]).toBe("15");
   });
 
   it("competency_vector row is seeded with defaults", async () => {
