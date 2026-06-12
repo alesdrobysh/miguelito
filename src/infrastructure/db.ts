@@ -100,6 +100,10 @@ export class BuddyDb implements ErrorRepository, SessionRepository, ProfileRepos
     return this.learning.listDueLearningItems(limit);
   }
 
+  async deduplicateLearningItems(limit?: number): Promise<number> {
+    return this.learning.deduplicateLearningItems(limit);
+  }
+
   async selectLearningItemsForEvaluation(userMessage: string, assistantText: string, limit: number): Promise<LearningItem[]> {
     return this.learning.selectLearningItemsForEvaluation(userMessage, assistantText, limit);
   }

@@ -23,7 +23,7 @@ function clamp01(value: unknown, fallback = 0): number {
 
 function nextReactivationDate(activeScore: number, passiveScore: number): string {
   const score = Math.max(activeScore, passiveScore);
-  const days = score >= 0.85 ? 30 : score >= 0.65 ? 14 : score >= 0.35 ? 7 : 2;
+  const days = score >= 0.85 ? 14 : score >= 0.65 ? 7 : score >= 0.35 ? 3 : 1;
   const d = new Date();
   d.setDate(d.getDate() + days);
   return d.toISOString();
@@ -31,7 +31,7 @@ function nextReactivationDate(activeScore: number, passiveScore: number): string
 
 function initialReactivationDate(priority: number): string {
   const d = new Date();
-  const hours = priority >= 0.9 ? 6 : priority >= 0.7 ? 18 : 36;
+  const hours = priority >= 0.9 ? 2 : priority >= 0.7 ? 8 : 18;
   d.setHours(d.getHours() + hours);
   return d.toISOString();
 }
@@ -39,7 +39,7 @@ function initialReactivationDate(priority: number): string {
 function afterReintroductionDate(activeScore: number, passiveScore: number): string {
   const score = Math.max(activeScore, passiveScore);
   const d = new Date();
-  d.setDate(d.getDate() + (score >= 0.35 ? 3 : 1));
+  d.setHours(d.getHours() + (score >= 0.35 ? 24 : 12));
   return d.toISOString();
 }
 
@@ -52,6 +52,21 @@ function tokenizeForMatching(text: string): string[] {
     .match(/[\p{L}\p{N}]{4,}/gu) ?? []))
     .filter((t) => !stop.has(t))
     .slice(0, 12);
+}
+
+
+function canonicalLearningItemKey(type: string, title: string): string {
+  const normalizedTitle = title
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[¿?¡!.,;:"'`´()[\]{}]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  // Corrections encode a specific before→after contrast; keep them separate
+  // from phrase/word/collocation captures. Vocabulary-like items with the same
+  // title are one learning target even if the evaluator alternates word/phrase.
+  return type === "correction" ? `correction:${normalizedTitle}` : `lexical:${normalizedTitle}`;
 }
 
 function stabilityFor(activeScore: number, passiveScore: number, evidenceCount: number): string {
@@ -81,6 +96,28 @@ export class SqlLearningRepository extends SqlRepository {
     const status = (VALID_STATUSES.has(rawStatus) ? rawStatus : "active") as LearningItemStatus;
     const now = nowIso();
     const priority = Math.max(0, Math.min(1, Number(input.priority ?? 0.5) || 0.5));
+    const existing = this.findDuplicateLearningItem(type, title);
+    if (existing) {
+      const next = initialReactivationDate(priority);
+      this.db.run(
+        `UPDATE learning_items
+         SET priority = MAX(priority, ?),
+             status = CASE WHEN status IN ('ignored', 'archived', 'mastered') THEN status ELSE 'active' END,
+             prompt_l2 = COALESCE(NULLIF(prompt_l2, ''), ?),
+             explanation_l1 = COALESCE(NULLIF(explanation_l1, ''), ?),
+             evidence_snippet = COALESCE(NULLIF(evidence_snippet, ''), ?),
+             next_reactivation_at = CASE
+               WHEN next_reactivation_at IS NULL OR datetime(next_reactivation_at) > datetime(?) THEN ?
+               ELSE next_reactivation_at
+             END,
+             reactivation_pressure = CASE WHEN reactivation_pressure = 'low' THEN 'medium' ELSE reactivation_pressure END,
+             updated_at = ?
+         WHERE id = ? AND language = ?`,
+        [priority, input.prompt_l2?.trim() || null, input.explanation_l1?.trim() || null, input.evidence_snippet?.trim() || null, next, next, now, existing.id, this.languageId],
+      );
+      if (this.db.getRowsModified() > 0) this.save();
+      return existing.id;
+    }
     this.db.run(
       `INSERT OR IGNORE INTO learning_items
        (language, type, title, prompt_l2, explanation_l1, source_type, source_message_id, evidence_snippet,
@@ -110,6 +147,86 @@ export class SqlLearningRepository extends SqlRepository {
     const id = rowidResult[0].values[0][0] as number;
     this.save();
     return id;
+  }
+
+  private findDuplicateLearningItem(type: string, title: string): LearningItem | null {
+    const key = canonicalLearningItemKey(type, title);
+    const candidates = this.queryAll<LearningItem>(
+      `SELECT * FROM learning_items
+       WHERE language = ? AND status NOT IN ('ignored', 'archived', 'mastered')
+       ORDER BY evidence_count DESC, priority DESC, datetime(updated_at) DESC, id ASC
+       LIMIT 500`,
+      [this.languageId],
+    );
+    return candidates.find((item) => canonicalLearningItemKey(String(item.type), item.title) === key) ?? null;
+  }
+
+  async deduplicateLearningItems(limit = 500): Promise<number> {
+    const capped = Math.max(1, Math.min(5000, Math.round(limit || 500)));
+    const items = this.queryAll<LearningItem>(
+      `SELECT * FROM learning_items
+       WHERE language = ? AND status NOT IN ('ignored', 'archived', 'mastered')
+       ORDER BY datetime(created_at) ASC, id ASC
+       LIMIT ?`,
+      [this.languageId, capped],
+    );
+    const groups = new Map<string, LearningItem[]>();
+    for (const item of items) {
+      const key = canonicalLearningItemKey(String(item.type), item.title);
+      const group = groups.get(key) ?? [];
+      group.push(item);
+      groups.set(key, group);
+    }
+
+    let changed = 0;
+    const now = nowIso();
+    for (const group of groups.values()) {
+      if (group.length < 2) continue;
+      const [keeper, ...duplicates] = group.sort((a, b) => {
+        const aRank = Number(a.evidence_count ?? 0) * 10 + Number(a.active_score ?? 0) * 4 + Number(a.passive_score ?? 0) * 2 + Number(a.priority ?? 0);
+        const bRank = Number(b.evidence_count ?? 0) * 10 + Number(b.active_score ?? 0) * 4 + Number(b.passive_score ?? 0) * 2 + Number(b.priority ?? 0);
+        return bRank - aRank || a.id - b.id;
+      });
+      for (const dup of duplicates) {
+        this.db.run(`UPDATE learning_item_evidence SET learning_item_id = ? WHERE language = ? AND learning_item_id = ?`, [keeper.id, this.languageId, dup.id]);
+        this.db.run(`UPDATE learning_practice_attempts SET learning_item_id = ? WHERE language = ? AND learning_item_id = ?`, [keeper.id, this.languageId, dup.id]);
+        const passiveScore = clamp01(Math.max(Number(keeper.passive_score ?? 0), Number(dup.passive_score ?? 0)));
+        const activeScore = clamp01(Math.max(Number(keeper.active_score ?? 0), Number(dup.active_score ?? 0)));
+        const evidenceCount = this.queryRow<{ count: number }>(`SELECT COUNT(*) AS count FROM learning_item_evidence WHERE language = ? AND learning_item_id = ?`, [this.languageId, keeper.id])?.count ?? (Number(keeper.evidence_count ?? 0) + Number(dup.evidence_count ?? 0));
+        const failureCount = Number(keeper.failure_count ?? 0) + Number(dup.failure_count ?? 0);
+        const avoidanceCount = Number(keeper.avoidance_count ?? 0) + Number(dup.avoidance_count ?? 0);
+        const stability = stabilityFor(activeScore, passiveScore, evidenceCount);
+        const status = stability === "stable" ? "stable" : keeper.status;
+        this.db.run(
+          `UPDATE learning_items
+           SET priority = MAX(priority, ?), passive_score = ?, active_score = ?, stability = ?,
+               evidence_count = ?, failure_count = ?, avoidance_count = ?, status = ?,
+               prompt_l2 = COALESCE(NULLIF(prompt_l2, ''), ?),
+               explanation_l1 = COALESCE(NULLIF(explanation_l1, ''), ?),
+               evidence_snippet = COALESCE(NULLIF(evidence_snippet, ''), ?),
+               last_seen_at = COALESCE(last_seen_at, ?),
+               last_reactivated_at = COALESCE(last_reactivated_at, ?),
+               last_understood_at = COALESCE(last_understood_at, ?),
+               last_produced_at = COALESCE(last_produced_at, ?),
+               next_reactivation_at = CASE
+                 WHEN next_reactivation_at IS NULL THEN ?
+                 WHEN ? IS NULL THEN next_reactivation_at
+                 WHEN datetime(?) < datetime(next_reactivation_at) THEN ?
+                 ELSE next_reactivation_at
+               END,
+               reactivation_pressure = ?, updated_at = ?
+           WHERE id = ? AND language = ?`,
+          [Number(dup.priority ?? 0), passiveScore, activeScore, stability, evidenceCount, failureCount, avoidanceCount, status, dup.prompt_l2, dup.explanation_l1, dup.evidence_snippet, dup.last_seen_at, dup.last_reactivated_at, dup.last_understood_at, dup.last_produced_at, dup.next_reactivation_at, dup.next_reactivation_at, dup.next_reactivation_at, dup.next_reactivation_at, pressureFor(activeScore, passiveScore), now, keeper.id, this.languageId],
+        );
+        this.db.run(
+          `UPDATE learning_items SET status = 'archived', updated_at = ? WHERE id = ? AND language = ?`,
+          [now, dup.id, this.languageId],
+        );
+        changed++;
+      }
+    }
+    if (changed > 0) this.save();
+    return changed;
   }
 
   async listLearningItems(status: string, limit: number): Promise<LearningItem[]> {

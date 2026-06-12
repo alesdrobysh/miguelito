@@ -97,13 +97,13 @@ export class PromptBuilder {
     const weakAreas = await this._getWeakAreas(3);
     const errorInfo = weakAreas.length > 0 ? await this._getRecentErrorForCategory(weakAreas[0]) : null;
 
-    const dueLearningItems = await this._getDueLearningItems(3);
+    const dueLearningItems = await this._getDueLearningItems(5);
     const hasLearnerData = errorInfo != null || weakAreas.length > 0 || dueLearningItems.length > 0;
     const learnerProfileBase = hasLearnerData
       ? this.lang.promptText.currentLearnerProfile({ receptiveWords: [], productiveWords: [], errorInfo, weakAreas })
       : null;
     const learnerProfile = dueLearningItems.length > 0
-      ? `${learnerProfileBase ?? ""}\n\n## Conversation-native learning items due\n${dueLearningItems.map((i) => `- #${i.id} ${i.title} (${i.type}; passive=${i.passive_score.toFixed(2)}, active=${i.active_score.toFixed(2)}, pressure=${i.reactivation_pressure})`).join("\n")}\nIf one naturally fits this turn, reintroduce at most one lightly in context. Do not force stale topics, do not quiz, and do not create a /practice mode.`
+      ? `${learnerProfileBase ?? ""}\n\n## Conversation-native learning items due\n${dueLearningItems.map((i) => `- #${i.id} ${i.title} (${i.type}; passive=${i.passive_score.toFixed(2)}, active=${i.active_score.toFixed(2)}, pressure=${i.reactivation_pressure})`).join("\n")}\nThese are priority learning targets. Weave exactly one into this turn when at all plausible; for high-pressure items, prefer an active-production opportunity (a natural cue, micro-cloze, or short follow-up) over mere exposure. Keep it conversational, do not dump a quiz list, and do not create a /practice mode.`
       : learnerProfileBase;
 
     // Dynamic Interest Injection

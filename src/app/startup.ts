@@ -26,7 +26,21 @@ export async function runDreamIfOverdue(
   );
 }
 
+export function startLearningItemMaintenance(rt: LanguageRuntime, intervalMs = 6 * 60 * 60 * 1000): ReturnType<typeof setInterval> {
+  const run = () => {
+    rt.db.deduplicateLearningItems().then(
+      (merged) => {
+        if (merged > 0) log.info({ lang: rt.lang.id, merged }, "learning item maintenance deduplicated items");
+      },
+      (err) => log.warn({ err, lang: rt.lang.id }, "learning item maintenance failed"),
+    );
+  };
+  run();
+  return setInterval(run, intervalMs);
+}
+
 export function startLanguageScheduler(config: Config, rt: LanguageRuntime, transport: Transport): void {
+  startLearningItemMaintenance(rt);
   const morningCronPrompt = process.env.MORNING_CRON_PROMPT ?? rt.lang.prompts.morning;
   const eveningCronPrompt = process.env.EVENING_CRON_PROMPT ?? rt.lang.prompts.evening;
   startScheduler(
