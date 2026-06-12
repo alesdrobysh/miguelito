@@ -8,9 +8,14 @@ import { OpenRouterProvider } from "./providers/OpenRouterProvider.js";
 import { OllamaProvider } from "./providers/OllamaProvider.js";
 import type { LLMProvider } from "./providers/interfaces.js";
 import { PromptBuilder } from "./agent/PromptBuilder.js";
-import { AgentRunner } from "./agent/AgentRunner.js";
+import { LangGraphRunner } from "./agent/LangGraphRunner.js";
+import type { AgentDeps, AgentRuntime } from "./agent/types.js";
 import { DreamService } from "./services/DreamService.js";
 import type { ChatMessage } from "./llm.js";
+
+function createAgentRuntime(deps: AgentDeps): AgentRuntime {
+  return new LangGraphRunner(deps);
+}
 
 export interface RuntimeDeps {
   provider?: LLMProvider;
@@ -21,7 +26,7 @@ export interface LanguageRuntime {
   lang: LanguageConfig;
   db: BuddyDb;
   sharedDb: BuddyDb;
-  agentRunner: AgentRunner;
+  agentRunner: AgentRuntime;
   promptBuilder: PromptBuilder;
   dreamService: DreamService;
   dreamMemoryPath: string;
@@ -102,7 +107,7 @@ export class RuntimeManager {
       { errors: db, profile: this.sharedDb, langProfile: db, interests: this.sharedDb, competency: db, session: db, learning: db },
       lang,
     );
-    const agentRunner = new AgentRunner({ provider: this.provider, evaluatorProvider: this.evaluatorProvider, session: db, promptBuilder, toolCtx, lang, dreamMemoryPath });
+    const agentRunner = createAgentRuntime({ provider: this.provider, evaluatorProvider: this.evaluatorProvider, session: db, promptBuilder, toolCtx, lang, dreamMemoryPath });
     const dreamService = new DreamService(db, db, db, this.evaluatorProvider, {
       timezone: this.config.timezone,
       dreamMemoryPath,
@@ -133,7 +138,7 @@ export class RuntimeManager {
       { errors: db, profile: this.sharedDb, langProfile: db, interests: this.sharedDb, competency: db, session: db, learning: db },
       lang,
     );
-    const agentRunner = new AgentRunner({ provider: this.provider, evaluatorProvider: this.evaluatorProvider, session: db, promptBuilder, toolCtx, lang, dreamMemoryPath });
+    const agentRunner = createAgentRuntime({ provider: this.provider, evaluatorProvider: this.evaluatorProvider, session: db, promptBuilder, toolCtx, lang, dreamMemoryPath });
     const dreamService = new DreamService(db, db, db, this.evaluatorProvider, {
       timezone: this.config.timezone,
       dreamMemoryPath,

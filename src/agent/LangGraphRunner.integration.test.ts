@@ -5,7 +5,7 @@ import path from "path";
 import { BuddyDb } from "../infrastructure/db.js";
 import { SpanishLanguage } from "../languages/spanish/index.js";
 import type { LLMProvider, ChatMessage, ChatResult, ChatOptions } from "../providers/interfaces.js";
-import { AgentRunner } from "./AgentRunner.js";
+import { LangGraphRunner } from "./LangGraphRunner.js";
 import type { PromptBuilder } from "./PromptBuilder.js";
 
 class ChatProvider implements LLMProvider {
@@ -53,7 +53,7 @@ afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
-describe("AgentRunner post-turn evaluation", () => {
+describe("LangGraphRunner post-turn evaluation", () => {
   it("uses a separate deterministic evaluator provider after the chat provider replies", async () => {
     const main = new ChatProvider("Vale, seguimos.");
     const evaluator = new EvaluatorProvider();
@@ -63,7 +63,7 @@ describe("AgentRunner post-turn evaluation", () => {
     } as unknown as PromptBuilder;
     const toolCtx = { errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, learning: db, provider: main };
 
-    const runner = new AgentRunner({ provider: main, evaluatorProvider: evaluator, session: db, promptBuilder, toolCtx, lang: SpanishLanguage });
+    const runner = new LangGraphRunner({ provider: main, evaluatorProvider: evaluator, session: db, promptBuilder, toolCtx, lang: SpanishLanguage });
     const result = await runner.run("hola", []);
 
     expect(result.text).toBe("Vale, seguimos.");
@@ -82,7 +82,7 @@ describe("AgentRunner post-turn evaluation", () => {
     } as unknown as PromptBuilder;
     const toolCtx = { errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, learning: db, provider: main };
 
-    const runner = new AgentRunner({ provider: main, evaluatorProvider: evaluator, session: db, promptBuilder, toolCtx, lang: SpanishLanguage });
+    const runner = new LangGraphRunner({ provider: main, evaluatorProvider: evaluator, session: db, promptBuilder, toolCtx, lang: SpanishLanguage });
     await runner.run("¿Qué ejercicios me recomiendas?", [
       { role: "user", content: "Quiero viajar a Canarias y subir al Teide." },
       { role: "assistant", content: "Podemos hablar de rutas y preparación." },
@@ -105,7 +105,7 @@ describe("AgentRunner post-turn evaluation", () => {
     } as unknown as PromptBuilder;
     const toolCtx = { errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, learning: db, provider: main };
 
-    const runner = new AgentRunner({ provider: main, evaluatorProvider: evaluator, session: db, promptBuilder, toolCtx, lang: SpanishLanguage });
+    const runner = new LangGraphRunner({ provider: main, evaluatorProvider: evaluator, session: db, promptBuilder, toolCtx, lang: SpanishLanguage });
     await runner.run("hola", []);
 
     const names = ((main.lastTools ?? []) as any[]).map((t) => t.function.name);
@@ -127,7 +127,7 @@ describe("AgentRunner post-turn evaluation", () => {
     } as unknown as PromptBuilder;
     const toolCtx = { errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, learning: db, provider: main };
 
-    const runner = new AgentRunner({ provider: main, evaluatorProvider: evaluator, session: db, promptBuilder, toolCtx, lang: SpanishLanguage });
+    const runner = new LangGraphRunner({ provider: main, evaluatorProvider: evaluator, session: db, promptBuilder, toolCtx, lang: SpanishLanguage });
     await runner.run("morning cron", [], { postTurn: false, sourceType: "cron" });
 
     expect(main.chatCalls).toBe(1);
