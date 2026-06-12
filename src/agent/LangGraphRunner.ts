@@ -5,7 +5,7 @@ import { callTool } from "./ToolExecutor.js";
 import { logger } from "../infrastructure/logger.js";
 import { PostTurnProcessor } from "./PostTurnProcessor.js";
 import { buildConversationPlan } from "./ConversationPlanner.js";
-import type { AgentDeps, AgentResult, AgentRunOptions } from "./AgentRunner.js";
+import type { AgentDeps, AgentResult, AgentRunOptions } from "./types.js";
 import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
 
 const log = logger.child({ ctx: "agent", runtime: "langgraph" });

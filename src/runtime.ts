@@ -8,20 +8,13 @@ import { OpenRouterProvider } from "./providers/OpenRouterProvider.js";
 import { OllamaProvider } from "./providers/OllamaProvider.js";
 import type { LLMProvider } from "./providers/interfaces.js";
 import { PromptBuilder } from "./agent/PromptBuilder.js";
-import { AgentRunner, type AgentDeps, type AgentResult, type AgentRunOptions } from "./agent/AgentRunner.js";
 import { LangGraphRunner } from "./agent/LangGraphRunner.js";
+import type { AgentDeps, AgentRuntime } from "./agent/types.js";
 import { DreamService } from "./services/DreamService.js";
 import type { ChatMessage } from "./llm.js";
 
-interface AgentRuntime {
-  run(userMessage: string, chatHistory: ChatMessage[], options?: AgentRunOptions): Promise<AgentResult>;
-}
-
 function createAgentRuntime(deps: AgentDeps): AgentRuntime {
-  if (process.env.AGENT_RUNTIME === "langgraph") {
-    return new LangGraphRunner(deps);
-  }
-  return new AgentRunner(deps);
+  return new LangGraphRunner(deps);
 }
 
 export interface RuntimeDeps {
