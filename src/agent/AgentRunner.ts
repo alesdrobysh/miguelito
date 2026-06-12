@@ -11,7 +11,11 @@ import { PostTurnProcessor } from "./PostTurnProcessor.js";
 import { buildConversationPlan } from "./ConversationPlanner.js";
 import { TurnGraph } from "./TurnGraph.js";
 
-const log = logger.child({ ctx: 'agent' });
+const log = logger.child({ ctx: "agent", runtime: "internal-graph" });
+const MAX_TOOL_ITERATIONS = 10;
+
+type NextStep = "llm" | "tools" | "post_turn" | "done";
+type NodeName = "prepare" | "llm" | "tools" | "post_turn";
 
 export interface AgentDeps {
   provider: LLMProvider;
@@ -33,155 +37,278 @@ export interface AgentRunOptions {
   sourceType?: "user_chat" | "cron" | "proactive" | "system";
 }
 
-const MAX_TOOL_ITERATIONS = 10;
+export interface AgentTransition {
+  runtime: "internal-graph";
+  traceId: string;
+  at: string;
+  from: NodeName | "start";
+  to: NodeName | "done";
+  reason: string;
+  iteration: number;
+  messageCount: number;
+  toolCallsMade: number;
+  responseLength: number;
+  toolCallCount?: number;
+}
 
-interface AgentTurnState {
+export interface AgentRunnerOptions {
+  onTransition?: (transition: AgentTransition) => void;
+}
+
+export interface AgentTurnState {
+  traceId: string;
   userMessage: string;
   chatHistory: ChatMessage[];
   options: AgentRunOptions;
   messages: ChatMessage[];
-  tools: Map<string, ToolDefinition>;
   totalText: string;
+  iteration: number;
   toolCallsMade: number;
-  iterations: number;
+  toolRegistry: Map<string, ToolDefinition>;
+  next: NextStep;
+  transitionReason: string;
 }
 
-export class AgentRunner {
-  constructor(private deps: AgentDeps) {}
+function conversationTools(tools: Map<string, ToolDefinition>): Map<string, ToolDefinition> {
+  const internalOnly = new Set([
+    "miguelito_turn_annotate",
+    "miguelito_error_log",
+    "miguelito_progress_summary",
+    "miguelito_interest_add",
+  ]);
+  return new Map(Array.from(tools.entries()).filter(([name]) => !internalOnly.has(name)));
+}
 
-  private conversationTools(tools: Map<string, ToolDefinition>): Map<string, ToolDefinition> {
-    const internalOnly = new Set([
-      "miguelito_turn_annotate",
-      "miguelito_error_log",
-      "miguelito_progress_summary",
-      "miguelito_interest_add",
-    ]);
-    return new Map(Array.from(tools.entries()).filter(([name]) => !internalOnly.has(name)));
-  }
+function shouldRunPostTurn(state: Pick<AgentTurnState, "totalText" | "options">): boolean {
+  const { options } = state;
+  return Boolean(
+    state.totalText.trim() &&
+      options.postTurn !== false &&
+      options.sourceType !== "cron" &&
+      options.sourceType !== "proactive" &&
+      options.sourceType !== "system",
+  );
+}
 
-  async run(userMessage: string, chatHistory: ChatMessage[], options: AgentRunOptions = {}): Promise<AgentResult> {
-    const traceId = `agent-turn-${Date.now()}`;
-    const graph = new TurnGraph<AgentTurnState>([
-      {
-        name: "prepare_prompt_and_tools",
-        run: async (state) => this.preparePromptAndTools(state),
-        summarize: (state) => ({ messages: state.messages.length, tools: state.tools.size }),
-      },
-      {
-        name: "run_llm_tool_loop",
-        run: async (state) => this.runLlmToolLoop(state),
-        summarize: (state) => ({
-          messages: state.messages.length,
-          toolCallsMade: state.toolCallsMade,
-          responseLength: state.totalText.length,
-          next: state.totalText ? "post_turn_evaluation" : "return_empty",
-        }),
-      },
-      {
-        name: "schedule_post_turn_evaluation",
-        run: async (state) => this.schedulePostTurnEvaluation(state),
-        summarize: (state) => ({ responseLength: state.totalText.length, toolCallsMade: state.toolCallsMade }),
-      },
-    ]);
+function nextNode(next: NextStep): NodeName | "done" {
+  return next === "tools" ? "tools" : next;
+}
 
-    const { state, trace } = await graph.run({
-      userMessage,
-      chatHistory,
-      options,
-      messages: [],
-      tools: new Map(),
-      totalText: "",
-      toolCallsMade: 0,
-      iterations: 0,
-    }, traceId);
+function emitTransition(
+  options: AgentRunnerOptions,
+  state: AgentTurnState,
+  from: NodeName | "start",
+  to: NodeName | "done",
+  reason: string,
+  extra: Pick<Partial<AgentTransition>, "toolCallCount"> = {},
+): void {
+  const transition: AgentTransition = {
+    runtime: "internal-graph",
+    traceId: state.traceId,
+    at: new Date().toISOString(),
+    from,
+    to,
+    reason,
+    iteration: state.iteration,
+    messageCount: state.messages.length,
+    toolCallsMade: state.toolCallsMade,
+    responseLength: state.totalText.length,
+    ...extra,
+  };
+  log.info(transition, "agent graph transition");
+  options.onTransition?.(transition);
+}
 
-    log.info({
-      traceId: trace.id,
-      nodes: trace.events.map((event) => `${event.node}:${event.durationMs}ms`),
-      totalIters: state.iterations,
-      toolCallsMade: state.toolCallsMade,
-      responseLength: state.totalText.length,
-    }, 'run complete');
+export function createInitialAgentState(userMessage: string, chatHistory: ChatMessage[], options: AgentRunOptions): AgentTurnState {
+  return {
+    traceId: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    userMessage,
+    chatHistory,
+    options,
+    messages: [],
+    totalText: "",
+    iteration: 0,
+    toolCallsMade: 0,
+    toolRegistry: new Map(),
+    next: "llm",
+    transitionReason: "start",
+  };
+}
 
-    return { text: state.totalText, toolCallsMade: state.toolCallsMade };
-  }
+export async function prepareAgentTurn(deps: AgentDeps, state: AgentTurnState): Promise<Partial<AgentTurnState>> {
+  const { promptBuilder, toolCtx, lang, dreamMemoryPath } = deps;
+  const fullSystem = await promptBuilder.build(state.userMessage, dreamMemoryPath);
+  const postHistoryReminder = promptBuilder.buildPostHistoryReminder();
+  const conversationPlan = buildConversationPlan({ userMessage: state.userMessage, history: state.chatHistory });
+  const toolRegistry = createTools(toolCtx, lang);
+  const messages: ChatMessage[] = [
+    { role: "system", content: fullSystem },
+    ...state.chatHistory,
+    { role: "user", content: state.userMessage },
+    { role: "system", content: conversationPlan },
+    { role: "system", content: postHistoryReminder },
+  ];
 
-  private async preparePromptAndTools(state: AgentTurnState): Promise<AgentTurnState> {
-    const { promptBuilder, toolCtx, lang, dreamMemoryPath } = this.deps;
-    const fullSystem = await promptBuilder.build(state.userMessage, dreamMemoryPath);
-    const postHistoryReminder = promptBuilder.buildPostHistoryReminder();
-    const conversationPlan = buildConversationPlan({ userMessage: state.userMessage, history: state.chatHistory });
+  return { messages, toolRegistry, next: "llm", transitionReason: "prepared_turn" };
+}
 
+export async function callAgentLlm(deps: AgentDeps, state: AgentTurnState): Promise<Partial<AgentTurnState>> {
+  const openaiTools = toolsToOpenAI(conversationTools(state.toolRegistry));
+  log.debug(
+    { traceId: state.traceId, node: "llm", iteration: state.iteration, maxIters: MAX_TOOL_ITERATIONS, toolCount: openaiTools.length },
+    "agent graph llm call start",
+  );
+
+  const result = await deps.provider.chat(state.messages, openaiTools, {
+    temperature: 0.7,
+    maxTokens: 4096,
+    stop: ["\nUser:", "\nLearner:", "\n<|im_start|>", "\n<|im_end|>"],
+  });
+
+  if (result.toolCalls.length === 0) {
+    const totalText = result.content ?? "";
     return {
-      ...state,
-      messages: [
-        { role: "system", content: fullSystem },
-        ...state.chatHistory,
-        { role: "user", content: state.userMessage },
-        { role: "system", content: conversationPlan },
-        { role: "system", content: postHistoryReminder },
-      ],
-      tools: createTools(toolCtx, lang),
+      totalText,
+      next: shouldRunPostTurn({ ...state, totalText }) ? "post_turn" : "done",
+      transitionReason: totalText.trim() ? "assistant_reply" : "empty_reply",
     };
   }
 
-  private async runLlmToolLoop(state: AgentTurnState): Promise<AgentTurnState> {
-    const { provider } = this.deps;
-    const messages = [...state.messages];
-    let totalText = "";
-    let toolCallsMade = 0;
-    let iterations = 0;
-
-    for (; iterations < MAX_TOOL_ITERATIONS; iterations++) {
-      const conversationTools = this.conversationTools(state.tools);
-      log.debug({ iter: iterations, maxIters: MAX_TOOL_ITERATIONS, messageCount: messages.length, toolCount: conversationTools.size }, 'llm node iteration start');
-
-      const result = await provider.chat(messages, toolsToOpenAI(conversationTools), {
-        temperature: 0.7,
-        maxTokens: 4096,
-        stop: ["\nUser:", "\nLearner:", "\n<|im_start|>", "\n<|im_end|>"],
-      });
-
-      log.debug({ iter: iterations, toolCalls: result.toolCalls.length, contentLength: result.content?.length ?? 0 }, 'llm node iteration result');
-
-      if (result.toolCalls.length === 0) {
-        totalText = result.content ?? "";
-        break;
-      }
-
-      messages.push({
-        role: "assistant",
-        content: result.content ?? "",
-        tool_calls: result.toolCalls,
-      });
-
-      const toolResults = await Promise.all(result.toolCalls.map((tc) => callTool(tc, state.tools)));
-      messages.push(...toolResults);
-      toolCallsMade += toolResults.filter((tr) => tr.toolCalled).length;
-    }
-
-    return { ...state, messages, totalText, toolCallsMade, iterations: iterations + 1 };
+  if (state.iteration + 1 >= MAX_TOOL_ITERATIONS) {
+    return {
+      totalText: result.content ?? "",
+      next: "done",
+      transitionReason: "max_tool_iterations",
+    };
   }
 
-  private async schedulePostTurnEvaluation(state: AgentTurnState): Promise<AgentTurnState> {
-    const { provider, toolCtx, lang } = this.deps;
-    if (!state.totalText.trim() || state.options.postTurn === false || state.options.sourceType === "cron" || state.options.sourceType === "proactive" || state.options.sourceType === "system") {
-      return state;
-    }
+  return {
+    messages: [
+      ...state.messages,
+      { role: "assistant", content: result.content ?? "", tool_calls: result.toolCalls },
+    ],
+    next: "tools",
+    transitionReason: "tool_calls_requested",
+  };
+}
 
-    const evaluatorProvider = this.deps.evaluatorProvider ?? provider;
-    const postTurn = new PostTurnProcessor({
-      provider: evaluatorProvider,
-      errors: toolCtx.errors,
-      competency: toolCtx.competency,
-      session: toolCtx.session,
-      interests: toolCtx.interests,
-      learning: toolCtx.learning,
-      lang,
-    });
-    postTurn.process({ userMessage: state.userMessage, assistantText: state.totalText, chatHistory: state.chatHistory }).catch((err) =>
-      log.warn({ err }, "post-turn evaluation failed")
+export async function runAgentTools(state: AgentTurnState): Promise<Partial<AgentTurnState>> {
+  const last = state.messages[state.messages.length - 1];
+  const toolCalls = last?.tool_calls ?? [];
+  const toolResults = await Promise.all(toolCalls.map((tc) => callTool(tc, state.toolRegistry)));
+  return {
+    messages: [...state.messages, ...toolResults],
+    iteration: state.iteration + 1,
+    toolCallsMade: state.toolCallsMade + toolResults.filter((tr) => tr.toolCalled).length,
+    next: "llm",
+    transitionReason: "tools_completed",
+  };
+}
+
+export function scheduleAgentPostTurn(deps: AgentDeps, state: AgentTurnState): Partial<AgentTurnState> {
+  const { provider, toolCtx, lang } = deps;
+  const evaluatorProvider = deps.evaluatorProvider ?? provider;
+  const processor = new PostTurnProcessor({
+    provider: evaluatorProvider,
+    errors: toolCtx.errors,
+    competency: toolCtx.competency,
+    session: toolCtx.session,
+    interests: toolCtx.interests,
+    learning: toolCtx.learning,
+    lang,
+  });
+
+  processor.process({ userMessage: state.userMessage, assistantText: state.totalText, chatHistory: state.chatHistory }).catch((err) =>
+    log.warn({ err, traceId: state.traceId }, "post-turn evaluation failed"),
+  );
+
+  return { next: "done", transitionReason: "post_turn_scheduled" };
+}
+
+function applyUpdate(state: AgentTurnState, update: Partial<AgentTurnState>): AgentTurnState {
+  return { ...state, ...update };
+}
+
+export class AgentRunner {
+  private readonly graph: TurnGraph<AgentTurnState, NodeName>;
+
+  constructor(private deps: AgentDeps, private options: AgentRunnerOptions = {}) {
+    this.graph = new TurnGraph<AgentTurnState, NodeName>("prepare", [
+      {
+        name: "prepare",
+        run: async (state) => {
+          const update = await prepareAgentTurn(this.deps, state);
+          const updated = applyUpdate(state, update);
+          emitTransition(this.options, updated, "prepare", nextNode(updated.next), updated.transitionReason);
+          return updated;
+        },
+        route: (state) => nextNode(state.next),
+        reason: (state) => state.transitionReason,
+        summarize: (state) => ({ messages: state.messages.length, tools: state.toolRegistry.size, next: state.next }),
+      },
+      {
+        name: "llm",
+        run: async (state) => {
+          const update = await callAgentLlm(this.deps, state);
+          const updated = applyUpdate(state, update);
+          const lastToolCalls = updated.messages[updated.messages.length - 1]?.tool_calls?.length;
+          emitTransition(this.options, updated, "llm", nextNode(updated.next), updated.transitionReason, { toolCallCount: lastToolCalls });
+          return updated;
+        },
+        route: (state) => nextNode(state.next),
+        reason: (state) => state.transitionReason,
+        summarize: (state) => ({
+          iteration: state.iteration,
+          messages: state.messages.length,
+          toolCallsMade: state.toolCallsMade,
+          responseLength: state.totalText.length,
+          next: state.next,
+        }),
+      },
+      {
+        name: "tools",
+        run: async (state) => {
+          const update = await runAgentTools(state);
+          const updated = applyUpdate(state, update);
+          emitTransition(this.options, updated, "tools", "llm", updated.transitionReason);
+          return updated;
+        },
+        route: (state) => nextNode(state.next),
+        reason: (state) => state.transitionReason,
+        summarize: (state) => ({ iteration: state.iteration, messages: state.messages.length, toolCallsMade: state.toolCallsMade, next: state.next }),
+      },
+      {
+        name: "post_turn",
+        run: (state) => {
+          const update = scheduleAgentPostTurn(this.deps, state);
+          const updated = applyUpdate(state, update);
+          emitTransition(this.options, updated, "post_turn", "done", updated.transitionReason);
+          return updated;
+        },
+        route: (state) => nextNode(state.next),
+        reason: (state) => state.transitionReason,
+        summarize: (state) => ({ responseLength: state.totalText.length, toolCallsMade: state.toolCallsMade, next: state.next }),
+      },
+    ]);
+  }
+
+  async run(userMessage: string, chatHistory: ChatMessage[], options: AgentRunOptions = {}): Promise<AgentResult> {
+    const initialState = createInitialAgentState(userMessage, chatHistory, options);
+
+    log.info({ traceId: initialState.traceId }, "agent graph run start");
+    emitTransition(this.options, initialState, "start", "prepare", "run_started");
+    const { state: finalState, trace } = await this.graph.run(initialState, initialState.traceId, { maxSteps: MAX_TOOL_ITERATIONS * 3 + 8 });
+    log.info(
+      {
+        traceId: finalState.traceId,
+        nodes: trace.events.map((event) => `${event.from}->${event.to}:${event.durationMs}ms`),
+        totalIters: finalState.iteration + 1,
+        toolCallsMade: finalState.toolCallsMade,
+        responseLength: finalState.totalText.length,
+      },
+      "agent graph run complete",
     );
-    return state;
+
+    return { text: finalState.totalText, toolCallsMade: finalState.toolCallsMade };
   }
 }
