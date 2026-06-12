@@ -9,6 +9,7 @@ import { OllamaProvider } from "./providers/OllamaProvider.js";
 import type { LLMProvider } from "./providers/interfaces.js";
 import { PromptBuilder } from "./agent/PromptBuilder.js";
 import { AgentRunner } from "./agent/AgentRunner.js";
+import { OpenAIAgentsRunner } from "./agent/OpenAIAgentsRunner.js";
 import { DreamService } from "./services/DreamService.js";
 import type { ChatMessage } from "./llm.js";
 
@@ -17,11 +18,13 @@ export interface RuntimeDeps {
   evaluatorProvider?: LLMProvider;
 }
 
+export type MiguelitoAgentRuntime = AgentRunner | OpenAIAgentsRunner;
+
 export interface LanguageRuntime {
   lang: LanguageConfig;
   db: BuddyDb;
   sharedDb: BuddyDb;
-  agentRunner: AgentRunner;
+  agentRunner: MiguelitoAgentRuntime;
   promptBuilder: PromptBuilder;
   dreamService: DreamService;
   dreamMemoryPath: string;
@@ -102,7 +105,19 @@ export class RuntimeManager {
       { errors: db, profile: this.sharedDb, langProfile: db, interests: this.sharedDb, competency: db, session: db, learning: db },
       lang,
     );
-    const agentRunner = new AgentRunner({ provider: this.provider, evaluatorProvider: this.evaluatorProvider, session: db, promptBuilder, toolCtx, lang, dreamMemoryPath });
+    const agentRunner = this.config.provider === "openrouter" && process.env.AGENT_RUNTIME === "openai-agents"
+      ? new OpenAIAgentsRunner({
+        provider: this.provider,
+        evaluatorProvider: this.evaluatorProvider,
+        promptBuilder,
+        toolCtx,
+        lang,
+        apiKey: this.config.openrouterApiKey,
+        baseUrl: this.config.openrouterBaseUrl,
+        model: this.config.chatModel,
+        dreamMemoryPath,
+      })
+      : new AgentRunner({ provider: this.provider, evaluatorProvider: this.evaluatorProvider, session: db, promptBuilder, toolCtx, lang, dreamMemoryPath });
     const dreamService = new DreamService(db, db, db, this.evaluatorProvider, {
       timezone: this.config.timezone,
       dreamMemoryPath,
@@ -133,7 +148,19 @@ export class RuntimeManager {
       { errors: db, profile: this.sharedDb, langProfile: db, interests: this.sharedDb, competency: db, session: db, learning: db },
       lang,
     );
-    const agentRunner = new AgentRunner({ provider: this.provider, evaluatorProvider: this.evaluatorProvider, session: db, promptBuilder, toolCtx, lang, dreamMemoryPath });
+    const agentRunner = this.config.provider === "openrouter" && process.env.AGENT_RUNTIME === "openai-agents"
+      ? new OpenAIAgentsRunner({
+        provider: this.provider,
+        evaluatorProvider: this.evaluatorProvider,
+        promptBuilder,
+        toolCtx,
+        lang,
+        apiKey: this.config.openrouterApiKey,
+        baseUrl: this.config.openrouterBaseUrl,
+        model: this.config.chatModel,
+        dreamMemoryPath,
+      })
+      : new AgentRunner({ provider: this.provider, evaluatorProvider: this.evaluatorProvider, session: db, promptBuilder, toolCtx, lang, dreamMemoryPath });
     const dreamService = new DreamService(db, db, db, this.evaluatorProvider, {
       timezone: this.config.timezone,
       dreamMemoryPath,
