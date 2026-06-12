@@ -1,4 +1,4 @@
-import type { VocabRepository, ErrorRepository, ProfileRepository, InterestRepository, CompetencyRepository, SessionRepository, LearningRepository } from "../repositories/interfaces.js";
+import type { ErrorRepository, ProfileRepository, InterestRepository, CompetencyRepository, SessionRepository, LearningRepository } from "../repositories/interfaces.js";
 import type { LLMProvider } from "../providers/interfaces.js";
 import { createErrorTools } from "./errors.js";
 import { createProfileTools } from "./profile.js";
@@ -16,14 +16,13 @@ export interface ToolDefinition {
 }
 
 export interface ToolContext {
-  vocab: VocabRepository;
   errors: ErrorRepository;
   profile: ProfileRepository;
   langProfile: ProfileRepository;
   interests: InterestRepository;
   competency: CompetencyRepository;
   session: SessionRepository;
-  learning?: LearningRepository;
+  learning: LearningRepository;
   provider: LLMProvider | null;
 }
 

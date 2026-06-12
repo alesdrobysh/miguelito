@@ -1,55 +1,4 @@
 export const SCHEMA = `
-CREATE TABLE IF NOT EXISTS vocabulary_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    chunk_l2 TEXT NOT NULL,
-    anchor TEXT,
-    capture_context_l2 TEXT,
-    language TEXT NOT NULL DEFAULT '',
-    first_seen_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    pro_stability REAL DEFAULT 1.0,
-    pro_difficulty REAL DEFAULT 5.0,
-    pro_due DATETIME,
-    pro_last_review DATETIME,
-    pro_reps INTEGER DEFAULT 0,
-    rec_stability REAL DEFAULT 1.0,
-    rec_difficulty REAL DEFAULT 5.0,
-    rec_due DATETIME,
-    rec_last_review DATETIME,
-    rec_reps INTEGER DEFAULT 0,
-    status TEXT NOT NULL DEFAULT 'active',
-    source_type TEXT,
-    source_candidate_id INTEGER,
-    meaning_l1 TEXT,
-    topic_tags_json TEXT NOT NULL DEFAULT '[]',
-    acceptable_variants_json TEXT NOT NULL DEFAULT '[]',
-    elicitation_cues_json TEXT NOT NULL DEFAULT '[]',
-    promotion_reason TEXT,
-    last_seen_in_chat_at TEXT
-);
-
-CREATE TABLE IF NOT EXISTS vocabulary_candidates (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    chunk_l2 TEXT NOT NULL,
-    anchor TEXT,
-    meaning_l1 TEXT,
-    capture_context_l2 TEXT,
-    language TEXT NOT NULL DEFAULT '',
-    source_type TEXT NOT NULL DEFAULT 'conversation',
-    source_message_id INTEGER,
-    evidence_snippet TEXT,
-    proposed_by TEXT NOT NULL DEFAULT 'evaluator',
-    priority REAL NOT NULL DEFAULT 0.5,
-    status TEXT NOT NULL DEFAULT 'candidate',
-    duplicate_of INTEGER,
-    topic_tags_json TEXT NOT NULL DEFAULT '[]',
-    acceptable_variants_json TEXT NOT NULL DEFAULT '[]',
-    elicitation_cues_json TEXT NOT NULL DEFAULT '[]',
-    promotion_reason TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    reviewed_at TEXT
-);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_vocab_candidates_language_chunk_unique ON vocabulary_candidates(language, chunk_l2 COLLATE NOCASE);
-CREATE INDEX IF NOT EXISTS idx_vocab_candidates_status_priority ON vocabulary_candidates(language, status, priority DESC, created_at);
 CREATE TABLE IF NOT EXISTS learning_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     language TEXT NOT NULL DEFAULT '',
@@ -206,26 +155,6 @@ CREATE TABLE IF NOT EXISTS chat_history (
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_chat_history_chat_id ON chat_history(chat_id, id);
-
-CREATE TABLE IF NOT EXISTS vocab_review_attempts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    vocab_id INTEGER NOT NULL,
-    word TEXT NOT NULL,
-    language TEXT NOT NULL DEFAULT '',
-    mode TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'active',
-    strategy TEXT,
-    prompt_text TEXT,
-    user_response TEXT,
-    target_used INTEGER NOT NULL DEFAULT 0,
-    accepted_variant TEXT,
-    hint_level INTEGER NOT NULL DEFAULT 0,
-    grade INTEGER,
-    note TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    completed_at TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_vocab_attempts_active ON vocab_review_attempts(language, status, created_at);
 
 CREATE TABLE IF NOT EXISTS proficiency_evidence (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

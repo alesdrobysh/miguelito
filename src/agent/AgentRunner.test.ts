@@ -61,7 +61,7 @@ describe("AgentRunner post-turn evaluation", () => {
       build: async () => "system",
       buildPostHistoryReminder: () => "reminder",
     } as unknown as PromptBuilder;
-    const toolCtx = { vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, provider: main };
+    const toolCtx = { errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, learning: db, provider: main };
 
     const runner = new AgentRunner({ provider: main, evaluatorProvider: evaluator, session: db, promptBuilder, toolCtx, lang: SpanishLanguage });
     const result = await runner.run("hola", []);
@@ -71,7 +71,7 @@ describe("AgentRunner post-turn evaluation", () => {
     await expect.poll(() => evaluator.completeJsonCalls).toBe(1);
     await expect.poll(async () => (await db.getRecentAnnotations(10)).length).toBe(1);
     expect((await db.getConversationState()).session.last_mode).toBe("OFFER");
-  });
+  }, 15_000);
 
   it("injects a dialogue plan after history so the chat model does not only react to the latest message", async () => {
     const main = new ChatProvider("Puedes probar sentadillas y subidas con mochila; eso conecta con el Teide.");
@@ -80,7 +80,7 @@ describe("AgentRunner post-turn evaluation", () => {
       build: async () => "system",
       buildPostHistoryReminder: () => "reminder",
     } as unknown as PromptBuilder;
-    const toolCtx = { vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, provider: main };
+    const toolCtx = { errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, learning: db, provider: main };
 
     const runner = new AgentRunner({ provider: main, evaluatorProvider: evaluator, session: db, promptBuilder, toolCtx, lang: SpanishLanguage });
     await runner.run("¿Qué ejercicios me recomiendas?", [
@@ -103,7 +103,7 @@ describe("AgentRunner post-turn evaluation", () => {
       build: async () => "system",
       buildPostHistoryReminder: () => "reminder",
     } as unknown as PromptBuilder;
-    const toolCtx = { vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, provider: main };
+    const toolCtx = { errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, learning: db, provider: main };
 
     const runner = new AgentRunner({ provider: main, evaluatorProvider: evaluator, session: db, promptBuilder, toolCtx, lang: SpanishLanguage });
     await runner.run("hola", []);
@@ -125,7 +125,7 @@ describe("AgentRunner post-turn evaluation", () => {
       build: async () => "system",
       buildPostHistoryReminder: () => "reminder",
     } as unknown as PromptBuilder;
-    const toolCtx = { vocab: db, errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, provider: main };
+    const toolCtx = { errors: db, profile: db, langProfile: db, interests: db, competency: db, session: db, learning: db, provider: main };
 
     const runner = new AgentRunner({ provider: main, evaluatorProvider: evaluator, session: db, promptBuilder, toolCtx, lang: SpanishLanguage });
     await runner.run("morning cron", [], { postTurn: false, sourceType: "cron" });

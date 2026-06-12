@@ -1,54 +1,3 @@
-export interface ChunkItem {
-  id: number;
-  chunk_l2: string;
-  anchor: string | null;
-  capture_context_l2: string | null;
-  first_seen_at: string | null;
-  pro_stability: number;
-  pro_difficulty: number;
-  pro_due: string | null;
-  pro_last_review: string | null;
-  pro_reps: number;
-  rec_stability: number;
-  rec_difficulty: number;
-  rec_due: string | null;
-  rec_last_review: string | null;
-  rec_reps: number;
-  status?: string;
-  source_type?: string | null;
-  source_candidate_id?: number | null;
-  meaning_l1?: string | null;
-  topic_tags_json?: string;
-  acceptable_variants_json?: string;
-  elicitation_cues_json?: string;
-  promotion_reason?: string | null;
-  last_seen_in_chat_at?: string | null;
-}
-
-export type VocabCandidateStatus = "candidate" | "accepted" | "rejected" | "merged";
-
-export interface VocabCandidateItem {
-  id: number;
-  chunk_l2: string;
-  anchor: string | null;
-  meaning_l1: string | null;
-  capture_context_l2: string | null;
-  language: string;
-  source_type: string;
-  source_message_id: number | null;
-  evidence_snippet: string | null;
-  proposed_by: string;
-  priority: number;
-  status: VocabCandidateStatus;
-  duplicate_of: number | null;
-  topic_tags_json: string;
-  acceptable_variants_json: string;
-  elicitation_cues_json: string;
-  promotion_reason: string | null;
-  created_at: string;
-  reviewed_at: string | null;
-}
-
 export type LearningItemType =
   | "word"
   | "phrase"
@@ -160,17 +109,6 @@ export interface FinishLearningPracticeAttemptInput {
   note?: string;
 }
 
-export interface DueChunkItem {
-  id: number;
-  chunk_l2: string;
-  anchor: string | null;
-  pro_stability: number;
-  pro_reps: number;
-  pro_due: string | null;
-}
-
-export type VocabItem = ChunkItem;
-export type DueVocabItem = DueChunkItem;
 
 export interface ErrorItem {
   id: number;
@@ -207,24 +145,6 @@ export interface ConversationStateResult {
   isNew: boolean;
 }
 
-export interface FsrsReviewResult {
-  stability: number;
-  difficulty: number;
-  reps: number;
-  status: string;
-  due: string;
-}
-
-export interface ProgressData {
-  newCount: number;
-  learningCount: number;
-  reviewCount: number;
-  masteredCount: number;
-  totalCount: number;
-  dueCount: number;
-  recentWords: string[];
-  errorCategories: Record<string, number>;
-}
 
 export interface UpdateResult {
   turn_count: number;
@@ -232,44 +152,6 @@ export interface UpdateResult {
   topics_touched: string[];
 }
 
-export type VocabReviewMode = "productive" | "receptive";
-
-export interface VocabReviewAttempt {
-  id: number;
-  vocab_id: number;
-  word: string;
-  language: string;
-  mode: VocabReviewMode;
-  status: "active" | "completed" | "abandoned";
-  strategy: string | null;
-  prompt_text: string | null;
-  user_response: string | null;
-  target_used: number;
-  accepted_variant: string | null;
-  hint_level: number;
-  grade: number | null;
-  note: string | null;
-  created_at: string;
-  completed_at: string | null;
-}
-
-export interface StartVocabReviewAttemptInput {
-  word: string;
-  mode: VocabReviewMode;
-  strategy?: string;
-  prompt_text?: string;
-  hint_level?: number;
-}
-
-export interface FinishVocabReviewAttemptInput {
-  attempt_id: number;
-  user_response?: string;
-  target_used: boolean;
-  accepted_variant?: string;
-  hint_level?: number;
-  grade: number;
-  note?: string;
-}
 
 export interface ObligatoryContext {
   type: string;

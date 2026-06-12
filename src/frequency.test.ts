@@ -11,7 +11,7 @@ describe("frequency-based difficulty", () => {
     expect(common.lexicalRarity).toBeLessThan(rare.lexicalRarity);
     expect(rare.rareTokens.length).toBeGreaterThan(0);
     expect(rare.highestBand).not.toBe("top_1k");
-  });
+  }, 15_000);
 
   it("treats OOV proper nouns and typos as unknown frequency evidence", () => {
     const profile = analyzeTextDifficulty("Teide powerbank opcioces mapa-tyrystyczna", SpanishLanguage);

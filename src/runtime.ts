@@ -94,12 +94,12 @@ export class RuntimeManager {
     if (this.runtimes.has(lang.id)) return;
     const db = this.sharedDb.withLanguage(lang.id, lang.errorCategories, lang.morphologyCategories);
     const toolCtx = {
-      vocab: db, errors: db, profile: this.sharedDb, langProfile: db,
+      errors: db, profile: this.sharedDb, langProfile: db,
       interests: this.sharedDb, competency: db, session: db, learning: db,
       provider: this.provider,
     };
     const promptBuilder = new PromptBuilder(
-      { vocab: db, errors: db, profile: this.sharedDb, langProfile: db, interests: this.sharedDb, competency: db, session: db, learning: db },
+      { errors: db, profile: this.sharedDb, langProfile: db, interests: this.sharedDb, competency: db, session: db, learning: db },
       lang,
     );
     const agentRunner = new AgentRunner({ provider: this.provider, evaluatorProvider: this.evaluatorProvider, session: db, promptBuilder, toolCtx, lang, dreamMemoryPath });
@@ -120,7 +120,6 @@ export class RuntimeManager {
     const db = this.sharedDb.withLanguage(lang.id, lang.errorCategories, lang.morphologyCategories);
 
     const toolCtx = {
-      vocab: db,
       errors: db,
       profile: this.sharedDb,
       langProfile: db,
@@ -131,7 +130,7 @@ export class RuntimeManager {
       provider: this.provider,
     };
     const promptBuilder = new PromptBuilder(
-      { vocab: db, errors: db, profile: this.sharedDb, langProfile: db, interests: this.sharedDb, competency: db, session: db, learning: db },
+      { errors: db, profile: this.sharedDb, langProfile: db, interests: this.sharedDb, competency: db, session: db, learning: db },
       lang,
     );
     const agentRunner = new AgentRunner({ provider: this.provider, evaluatorProvider: this.evaluatorProvider, session: db, promptBuilder, toolCtx, lang, dreamMemoryPath });

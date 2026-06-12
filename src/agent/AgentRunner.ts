@@ -41,10 +41,6 @@ export class AgentRunner {
     const internalOnly = new Set([
       "miguelito_turn_annotate",
       "miguelito_error_log",
-      "miguelito_vocab_add",
-      "miguelito_vocab_score",
-      "miguelito_vocab_attempt_start",
-      "miguelito_vocab_attempt_finish",
       "miguelito_progress_summary",
       "miguelito_interest_add",
     ]);
@@ -103,12 +99,11 @@ export class AgentRunner {
       const evaluatorProvider = this.deps.evaluatorProvider ?? provider;
       const postTurn = new PostTurnProcessor({
         provider: evaluatorProvider,
-        vocab: toolCtx.vocab,
         errors: toolCtx.errors,
         competency: toolCtx.competency,
         session: toolCtx.session,
         interests: toolCtx.interests,
-        learning: toolCtx.learning ?? (toolCtx.vocab as any),
+        learning: toolCtx.learning,
         lang,
       });
       postTurn.process({ userMessage, assistantText: totalText, chatHistory }).catch((err) =>

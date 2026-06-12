@@ -7,22 +7,18 @@ export function configureSqlJs(config: SqlJsConfig): void {
 import fs from "fs";
 import path from "path";
 import type {
-  ChunkItem, DueChunkItem, ErrorItem, UserProfile,
-  ConversationStateResult, FsrsReviewResult, ProgressData, UpdateResult,
+  ErrorItem, UserProfile, ConversationStateResult, UpdateResult,
   TurnAnnotationInput, TurnAnnotation, CompetencyVectorRow,
-  VocabReviewMode, VocabReviewAttempt, StartVocabReviewAttemptInput, FinishVocabReviewAttemptInput,
-  VocabCandidateItem,
   ProficiencyEvidenceInput, ProficiencyEvidenceRow, ProficiencyChallengeBand,
   LearningItemInput, LearningItem, LearningItemEvidenceInput, LearningItemEvidenceRow, LearningPracticeAttempt, StartLearningPracticeAttemptInput, FinishLearningPracticeAttemptInput,
 } from "../domain/types.js";
 import type {
-  VocabRepository, ErrorRepository, SessionRepository, ProfileRepository,
+  ErrorRepository, SessionRepository, ProfileRepository,
   InterestRepository, CompetencyRepository, LearningRepository, MetaRepository,
 } from "../repositories/interfaces.js";
 
 import { SCHEMA } from "./schema.js";
-import { runMigrations } from "./migrations.js";
-import { SqlVocabRepository } from "./repositories/vocabRepository.js";
+import { dropLegacyLearningTables, runMigrations } from "./migrations.js";
 import { SqlErrorRepository } from "./repositories/errorRepository.js";
 import { SqlSessionRepository } from "./repositories/sessionRepository.js";
 import { SqlProfileRepository } from "./repositories/profileRepository.js";
@@ -30,12 +26,11 @@ import { SqlInterestRepository } from "./repositories/interestRepository.js";
 import { SqlCompetencyRepository } from "./repositories/competencyRepository.js";
 import { SqlLearningRepository } from "./repositories/learningRepository.js";
 
-export type { ChunkItem, DueChunkItem, ErrorItem, UserProfile, ConversationStateResult, FsrsReviewResult, ProgressData, UpdateResult, TurnAnnotationInput, TurnAnnotation, CompetencyVectorRow } from "../domain/types.js";
+export type { ErrorItem, UserProfile, ConversationStateResult, UpdateResult, TurnAnnotationInput, TurnAnnotation, CompetencyVectorRow } from "../domain/types.js";
 
-export class BuddyDb implements VocabRepository, ErrorRepository, SessionRepository, ProfileRepository, InterestRepository, CompetencyRepository, LearningRepository, MetaRepository {
+export class BuddyDb implements ErrorRepository, SessionRepository, ProfileRepository, InterestRepository, CompetencyRepository, LearningRepository, MetaRepository {
   readonly db: Database;
   private dbPath: string;
-  private readonly vocab: VocabRepository;
   private readonly errors: ErrorRepository;
   private readonly sessions: SessionRepository;
   private readonly profiles: ProfileRepository;
@@ -53,7 +48,6 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
     this.db = db;
     this.dbPath = dbPath;
     const save = () => this.save();
-    this.vocab = new SqlVocabRepository(db, languageId, save);
     this.errors = new SqlErrorRepository(db, languageId, save, validCategories);
     this.sessions = new SqlSessionRepository(db, languageId, save);
     this.profiles = new SqlProfileRepository(db, languageId, save);
@@ -82,6 +76,7 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
       buf = new Uint8Array(fs.readFileSync(dbPath));
     }
     const db = new SQL.Database(buf);
+    dropLegacyLearningTables(db);
     db.run(SCHEMA);
     runMigrations(db);
     fs.writeFileSync(dbPath, Buffer.from(db.export()));
@@ -91,48 +86,6 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
   private save(): void {
     const data = this.db.export();
     fs.writeFileSync(this.dbPath, Buffer.from(data));
-  }
-
-  async addVocab(chunk_l2: string, capture_context_l2: string, anchor?: string): Promise<number | null> {
-    return this.vocab.addVocab(chunk_l2, capture_context_l2, anchor);
-  }
-
-  async addVocabCandidate(input: {
-    chunk_l2: string;
-    anchor?: string;
-    meaning_l1?: string;
-    capture_context_l2?: string;
-    source_type?: string;
-    source_message_id?: number;
-    evidence_snippet?: string;
-    proposed_by?: string;
-    priority?: number;
-    topic_tags?: string[];
-    acceptable_variants?: string[];
-    elicitation_cues?: string[];
-    promotion_reason?: string;
-  }): Promise<number | null> {
-    return this.vocab.addVocabCandidate(input);
-  }
-
-  async listVocabCandidates(status: string, limit: number): Promise<VocabCandidateItem[]> {
-    return this.vocab.listVocabCandidates(status, limit);
-  }
-
-  async promoteVocabCandidates(options: { maxPromotions?: number; minPriority?: number; maxActiveLearningItems?: number } = {}): Promise<ChunkItem[]> {
-    return this.vocab.promoteVocabCandidates(options);
-  }
-
-  async promoteSpecificVocabCandidate(candidateId: number): Promise<ChunkItem | null> {
-    return this.vocab.promoteSpecificVocabCandidate(candidateId);
-  }
-
-  async updateVocabCandidateStatus(candidateId: number, status: string): Promise<boolean> {
-    return this.vocab.updateVocabCandidateStatus(candidateId, status);
-  }
-
-  async listVocab(bucket: string, limit: number): Promise<ChunkItem[]> {
-    return this.vocab.listVocab(bucket, limit);
   }
 
   async addLearningItem(input: LearningItemInput): Promise<number | null> {
@@ -179,26 +132,6 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
     return this.learning.abandonActiveLearningPracticeAttempts(note);
   }
 
-  async dueVocab(limit: number, mode: VocabReviewMode = "productive"): Promise<DueChunkItem[]> {
-    return this.vocab.dueVocab(limit, mode);
-  }
-
-  async scoreVocab(chunk_l2: string, grade: number, mode: VocabReviewMode = "productive"): Promise<FsrsReviewResult> {
-    return this.vocab.scoreVocab(chunk_l2, grade, mode);
-  }
-
-  async startVocabReviewAttempt(input: StartVocabReviewAttemptInput): Promise<VocabReviewAttempt> {
-    return this.vocab.startVocabReviewAttempt(input);
-  }
-
-  async finishVocabReviewAttempt(input: FinishVocabReviewAttemptInput): Promise<VocabReviewAttempt> {
-    return this.vocab.finishVocabReviewAttempt(input);
-  }
-
-  async listActiveVocabReviewAttempts(limit?: number): Promise<VocabReviewAttempt[]> {
-    return this.vocab.listActiveVocabReviewAttempts(limit);
-  }
-
   async logError(userText: string, correct: string, category: string, note: string): Promise<number> {
     return this.errors.logError(userText, correct, category, note);
   }
@@ -233,14 +166,6 @@ export class BuddyDb implements VocabRepository, ErrorRepository, SessionReposit
 
   async listInterests(limit: number): Promise<string[]> {
     return this.interests.listInterests(limit);
-  }
-
-  async exportVocab(format: string): Promise<{ count: number; data: string }> {
-    return this.vocab.exportVocab(format);
-  }
-
-  async progressSummary(): Promise<ProgressData> {
-    return this.vocab.progressSummary();
   }
 
   async addChatMessage(chatId: number, role: string, content: string, sessionId?: string): Promise<void> {

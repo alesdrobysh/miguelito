@@ -64,7 +64,7 @@ export async function getCompetencyVector(repos: {
 }): Promise<CompetencyVector> {
   const vec = await repos.competency.getCompetencyVector();
 
-  // Legacy vocabulary_items no longer define product competency. Lexical
+  // Product competency is derived from observed language behavior. Lexical
   // calibration comes from turn/proficiency evidence; keep activeChunks at zero
   // so old SRS rows cannot steer the tutor or inflate confidence.
   const activeChunks = 0;

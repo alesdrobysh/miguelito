@@ -5,13 +5,16 @@ import type { ToolContext } from "./index.js";
 function progressSummary(ctx: ToolContext, lang: LanguageConfig) {
   return {
     name: "miguelito_progress_summary",
-    description: "Aggregate counts of vocab buckets, due-now words, recent additions, recent errors, error category histogram, and live competency vector. Call this when the user sends /progreso.",
-    parameters: {
-      type: "object",
-      properties: {},
-    },
+    description: "Summarize learning items, due-now items, recent additions, recent errors, error category histogram, and live competency vector. Call this when the user sends /progreso.",
+    parameters: { type: "object", properties: {} },
     execute: async () => {
-      const data = await ctx.vocab.progressSummary();
+      const activeItems = await ctx.learning.listLearningItems("active", 1000);
+      const dueItems = await ctx.learning.listDueLearningItems(1000);
+      const errors = await ctx.errors.listErrors("all", 1000);
+      const errorCategories = errors.reduce<Record<string, number>>((acc, e) => {
+        acc[e.category] = (acc[e.category] ?? 0) + 1;
+        return acc;
+      }, {});
 
       let competency: Record<string, unknown> | null = null;
       try {
@@ -35,16 +38,15 @@ function progressSummary(ctx: ToolContext, lang: LanguageConfig) {
 
       return {
         ok: true,
-        vocab: {
-          total: data.totalCount,
-          new: data.newCount,
-          learning: data.learningCount,
-          review: data.reviewCount,
-          mastered: data.masteredCount,
-          due_now: data.dueCount,
+        learning_items: {
+          active: activeItems.length,
+          due_now: dueItems.length,
+          new: activeItems.filter((i) => i.stability === "new").length,
+          practiced: activeItems.filter((i) => i.evidence_count > 0).length,
+          stable: activeItems.filter((i) => i.stability === "stable" || i.status === "stable").length,
         },
-        recent_words: data.recentWords,
-        error_categories: data.errorCategories,
+        recent_items: activeItems.slice(0, 5).map((i) => i.title),
+        error_categories: errorCategories,
         competency,
       };
     },

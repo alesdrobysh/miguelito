@@ -5,16 +5,18 @@ import initSqlJs, { Database } from "sql.js";
 import { BuddyDb } from "./db.js";
 
 const SCOPED_TABLES = new Set([
-  "vocabulary_items",
-  "vocabulary_candidates",
+  "learning_items",
+  "learning_item_evidence",
+  "learning_practice_attempts",
   "error_log",
   "turn_annotations",
   "competency_vector",
   "conversation_state",
   "chat_history",
+  "proficiency_evidence",
 ]);
 const GLOBAL_TABLES = new Set(["user_profile", "user_interests"]);
-const TABLES_WITH_IDS = new Set([...SCOPED_TABLES, ...GLOBAL_TABLES, "vocab_review_attempts"]);
+const TABLES_WITH_IDS = new Set([...SCOPED_TABLES, ...GLOBAL_TABLES]);
 
 export interface ConsolidationSourceSummary {
   path: string;
@@ -159,31 +161,11 @@ export async function consolidateMiguelitoDatabases(options: ConsolidationOption
       for (const row of queryAll(sourceDb, `SELECT * FROM ${table}`)) {
         const next = { ...row };
         if (Object.prototype.hasOwnProperty.call(next, "language") && !next.language) next.language = inferredLanguage;
-        let newId: number | null = null;
-        try {
-          newId = insertRow(targetDb, table, next);
-        } catch (err: any) {
-          if (table === "vocabulary_items") {
-            const existing = queryAll(targetDb, "SELECT id FROM vocabulary_items WHERE language = ? AND chunk_l2 = ? COLLATE NOCASE", [next.language, next.chunk_l2]);
-            newId = existing.length ? Number(existing[0].id) : null;
-          } else {
-            throw err;
-          }
-        }
+        const newId = insertRow(targetDb, table, next);
         if (TABLES_WITH_IDS.has(table)) recordMap(targetDb, sourceDbName, table, row.id, newId);
       }
     }
 
-    if (names.includes("vocab_review_attempts")) {
-      for (const row of queryAll(sourceDb, "SELECT * FROM vocab_review_attempts")) {
-        const next = { ...row };
-        if (!next.language) next.language = inferredLanguage;
-        const mappedVocabId = findMappedId(targetDb, sourceDbName, "vocabulary_items", next.vocab_id);
-        if (mappedVocabId !== null) next.vocab_id = mappedVocabId;
-        const newId = insertRow(targetDb, "vocab_review_attempts", next);
-        recordMap(targetDb, sourceDbName, "vocab_review_attempts", row.id, newId);
-      }
-    }
 
     if (names.includes("user_interests")) {
       for (const row of queryAll(sourceDb, "SELECT * FROM user_interests")) {

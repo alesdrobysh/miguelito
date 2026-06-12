@@ -1,20 +1,11 @@
 import type {
-  ChunkItem,
-  VocabCandidateItem,
-  DueChunkItem,
   ErrorItem,
   UserProfile,
   ConversationStateResult,
   UpdateResult,
-  FsrsReviewResult,
   TurnAnnotationInput,
   TurnAnnotation,
   CompetencyVectorRow,
-  ProgressData,
-  VocabReviewMode,
-  VocabReviewAttempt,
-  StartVocabReviewAttemptInput,
-  FinishVocabReviewAttemptInput,
   ProficiencyEvidenceInput,
   ProficiencyEvidenceRow,
   ProficiencyChallengeBand,
@@ -41,36 +32,6 @@ export interface LearningRepository {
   abandonActiveLearningPracticeAttempts(note?: string): Promise<number>;
 }
 
-export interface VocabRepository {
-  addVocab(chunk_l2: string, capture_context_l2: string, anchor?: string): Promise<number | null>;
-  addVocabCandidate(input: {
-    chunk_l2: string;
-    anchor?: string;
-    meaning_l1?: string;
-    capture_context_l2?: string;
-    source_type?: string;
-    source_message_id?: number;
-    evidence_snippet?: string;
-    proposed_by?: string;
-    priority?: number;
-    topic_tags?: string[];
-    acceptable_variants?: string[];
-    elicitation_cues?: string[];
-    promotion_reason?: string;
-  }): Promise<number | null>;
-  listVocabCandidates(status: string, limit: number): Promise<VocabCandidateItem[]>;
-  promoteVocabCandidates(options?: { maxPromotions?: number; minPriority?: number; maxActiveLearningItems?: number }): Promise<ChunkItem[]>;
-  promoteSpecificVocabCandidate(candidateId: number): Promise<ChunkItem | null>;
-  updateVocabCandidateStatus(candidateId: number, status: string): Promise<boolean>;
-  listVocab(bucket: string, limit: number): Promise<ChunkItem[]>;
-  dueVocab(limit: number, mode?: VocabReviewMode): Promise<DueChunkItem[]>;
-  scoreVocab(chunk_l2: string, grade: number, mode?: VocabReviewMode): Promise<FsrsReviewResult>;
-  startVocabReviewAttempt(input: StartVocabReviewAttemptInput): Promise<VocabReviewAttempt>;
-  finishVocabReviewAttempt(input: FinishVocabReviewAttemptInput): Promise<VocabReviewAttempt>;
-  listActiveVocabReviewAttempts(limit?: number): Promise<VocabReviewAttempt[]>;
-  exportVocab(format: string): Promise<{ count: number; data: string }>;
-  progressSummary(): Promise<ProgressData>;
-}
 
 export interface ErrorRepository {
   logError(userText: string, correct: string, category: string, note: string): Promise<number>;
