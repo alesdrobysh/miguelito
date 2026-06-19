@@ -123,7 +123,6 @@ export async function streamingHandleMessage(
   const provider = makeProvider(evaluatorModel)
   const postTurn = new PostTurnProcessor({
     provider,
-    vocab: db,
     errors: db,
     competency: db,
     session: db,
