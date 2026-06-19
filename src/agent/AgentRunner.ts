@@ -137,9 +137,9 @@ export function createInitialAgentState(userMessage: string, chatHistory: ChatMe
 
 export async function prepareAgentTurn(deps: AgentDeps, state: AgentTurnState): Promise<Partial<AgentTurnState>> {
   const { promptBuilder, toolCtx, lang, dreamMemoryPath } = deps;
-  const fullSystem = await promptBuilder.build(state.userMessage, dreamMemoryPath);
+  const fullSystem = await promptBuilder.build(state.userMessage, dreamMemoryPath, { sourceType: state.options.sourceType });
   const postHistoryReminder = promptBuilder.buildPostHistoryReminder();
-  const conversationPlan = buildConversationPlan({ userMessage: state.userMessage, history: state.chatHistory });
+  const conversationPlan = buildConversationPlan({ userMessage: state.userMessage, history: state.chatHistory, sourceType: state.options.sourceType });
   const toolRegistry = createTools(toolCtx, lang);
   const messages: ChatMessage[] = [
     { role: "system", content: fullSystem },
