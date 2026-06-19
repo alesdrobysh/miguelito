@@ -70,7 +70,7 @@ describe("AgentRunner post-turn evaluation", () => {
     expect(main.chatCalls).toBe(1);
     await expect.poll(() => evaluator.completeJsonCalls).toBe(1);
     await expect.poll(async () => (await db.getRecentAnnotations(10)).length).toBe(1);
-    expect((await db.getConversationState()).session.last_mode).toBe("OFFER");
+    await expect.poll(async () => (await db.getConversationState()).session.last_mode).toBe("OFFER");
   }, 15_000);
 
   it("injects a dialogue plan after history so the chat model does not only react to the latest message", async () => {

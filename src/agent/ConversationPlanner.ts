@@ -3,6 +3,7 @@ import type { ChatMessage } from "../providers/interfaces.js";
 export interface ConversationPlanInput {
   userMessage: string;
   history: ChatMessage[];
+  sourceType?: "user_chat" | "cron" | "proactive" | "system";
 }
 
 function normalize(text: string): string {
@@ -61,7 +62,17 @@ function activeThread(topics: string[], userMessage: string): string {
   return `${primary}; conecta con ${related.join(", ")}`;
 }
 
-export function buildConversationPlan({ userMessage, history }: ConversationPlanInput): string {
+export function buildConversationPlan({ userMessage, history, sourceType }: ConversationPlanInput): string {
+  if (sourceType === "cron" || sourceType === "proactive") {
+    return [
+      "## Plan de diálogo",
+      "Hilo activo: apertura autónoma de una nueva conversación.",
+      "Movimiento recomendado: elegir un solo gancho ligero desde la política de apertura autónoma.",
+      "No trates el último hilo como obligatorio; puedes usar un interés antiguo, una memoria estable, un learning item natural o una apertura neutra.",
+      "Ritmo: 1-3 frases, natural, sin recap y sin sonar a registro CRM.",
+      "No muestres este plan, nombres de movimiento ni estado interno.",
+    ].join("\n");
+  }
   const recent = history.slice(-10);
   const topics = extractTopics([...recent, { role: "user", content: userMessage } as ChatMessage]);
   const move = inferMove(userMessage);

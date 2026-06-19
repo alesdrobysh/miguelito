@@ -20,22 +20,28 @@ interface ProfileInjection {
   calibration: string | null;
   userInterests: string | null;
   dreamMemory: string | null;
+  openerPolicy: string | null;
+}
+
+export interface PromptBuildOptions {
+  sourceType?: "user_chat" | "cron" | "proactive" | "system";
 }
 
 export class PromptBuilder {
   constructor(private repos: PromptRepos, private lang: LanguageConfig) {}
 
-  async build(userMessage?: string, dreamMemoryPath?: string): Promise<string> {
+  async build(userMessage?: string, dreamMemoryPath?: string, options: PromptBuildOptions = {}): Promise<string> {
     const soulContent = this.lang.soulContent ?? fs.readFileSync(this.lang.soulPath, "utf-8");
     const convState = await this.repos.session.getConversationState();
-    const { basicProfile, learnerProfile, calibration, userInterests, dreamMemory } =
-      await this._buildInjection(userMessage, dreamMemoryPath, convState);
+    const { basicProfile, learnerProfile, calibration, userInterests, dreamMemory, openerPolicy } =
+      await this._buildInjection(userMessage, dreamMemoryPath, convState, options);
 
     let fullSystem = this.lang.promptText.languageBlock + soulContent + this.renderProductPolicy() + basicProfile;
     if (dreamMemory) fullSystem += dreamMemory;
     if (learnerProfile) fullSystem += learnerProfile;
     if (calibration) fullSystem += calibration;
     if (userInterests) fullSystem += userInterests;
+    if (openerPolicy) fullSystem += openerPolicy;
 
     fullSystem += this.lang.promptText.conversationState(
       convState.session.turn_count,
@@ -75,6 +81,7 @@ export class PromptBuilder {
     userMessage?: string,
     dreamMemoryPath?: string,
     convState?: ConversationStateResult,
+    options: PromptBuildOptions = {},
   ): Promise<ProfileInjection> {
     const sharedProfile = await this.repos.profile.getProfile();
     const langProfile = await this.repos.langProfile.getProfile();
@@ -120,8 +127,11 @@ export class PromptBuilder {
         .slice(0, 2);
     }
 
+    const isAutonomousOpener = options.sourceType === "cron" || options.sourceType === "proactive";
     const userInterests = selectedInterests.length > 0
       ? `\n\n## ${this.lang.interestsHeader}\n${selectedInterests.join(", ")}\nUse these only as optional background for this turn. Do not steer the conversation toward these interests unless the user's latest message naturally invites it. Do not keep returning to the same interest across turns; vary topics and let the user's latest message lead.`
+      : isAutonomousOpener && allInterests.length > 0
+        ? `\n\n## ${this.lang.interestsHeader}\n${allInterests.slice(0, 30).join(", ")}\nThese are possible conversation hooks, not an agenda. For an autonomous opener, you may choose any one interest, including an older one, if it would feel fresh and natural. Do not always choose the most recent interest and do not keep returning to the same topic.`
       : null;
 
     let dreamMemory: string | null = null;
@@ -130,7 +140,31 @@ export class PromptBuilder {
       if (content) dreamMemory = this.lang.promptText.dreamMemory(content);
     }
 
-    return { basicProfile, learnerProfile, calibration, userInterests, dreamMemory };
+    const openerPolicy = isAutonomousOpener
+      ? this.renderAutonomousOpenerPolicy(allInterests, Boolean(dreamMemory), dueLearningItems.length > 0)
+      : null;
+
+    return { basicProfile, learnerProfile, calibration, userInterests, dreamMemory, openerPolicy };
+  }
+
+  private renderAutonomousOpenerPolicy(interests: string[], hasDreamMemory: boolean, hasDueLearningItems: boolean): string {
+    const interestLine = interests.length > 0
+      ? `Available interests include: ${interests.slice(0, 20).join(", ")}.`
+      : "No explicit interest list is available; use memory or a neutral opener instead.";
+    return [
+      "\n\n## Autonomous conversation opener policy",
+      "This is a morning/evening/proactive start, not a reply to a user question.",
+      "Do NOT assume the new conversation must continue the previous thread or attach recent messages as the agenda.",
+      "Choose one light hook and open naturally in Spanish:",
+      "- recent thread, only sometimes;",
+      hasDreamMemory ? "- one stable personal fact or autobiographical memory from `Memoria de sueño`;" : "- a stable personal fact if present elsewhere in the prompt;",
+      "- one interest from the long-term interest pool, including older interests;",
+      hasDueLearningItems ? "- one due learning item, woven naturally rather than as a quiz;" : "- a gentle language-learning hook if it fits;",
+      "- or a fresh neutral opener with no memory reference.",
+      "Use memory like a human: lightly, variably, and without sounding like a CRM log. Do not say 'yesterday we talked about...' by default.",
+      "If you use an old fact (for example a trip, place, hobby, book, music, training, landscape), make it feel like a conversational invitation, not a recap.",
+      interestLine,
+    ].join("\n");
   }
 
   private async _buildCompetencyVector() {
