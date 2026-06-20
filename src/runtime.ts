@@ -22,6 +22,7 @@ export interface LanguageRuntime {
   db: BuddyDb;
   sharedDb: BuddyDb;
   agentRunner: AgentRunner;
+  evaluatorProvider: LLMProvider;
   promptBuilder: PromptBuilder;
   dreamService: DreamService;
   dreamMemoryPath: string;
@@ -110,7 +111,7 @@ export class RuntimeManager {
       morphologyCategories: new Set(lang.morphologyCategories),
       langId: lang.id,
     }, db);
-    this.runtimes.set(lang.id, { lang, db, sharedDb: this.sharedDb, agentRunner, promptBuilder, dreamService, dreamMemoryPath });
+    this.runtimes.set(lang.id, { lang, db, sharedDb: this.sharedDb, agentRunner, evaluatorProvider: this.evaluatorProvider, promptBuilder, dreamService, dreamMemoryPath });
   }
 
   async addLanguage(language: string): Promise<void> {
@@ -142,7 +143,7 @@ export class RuntimeManager {
       langId: lang.id,
     }, db);
 
-    this.runtimes.set(lang.id, { lang, db, sharedDb: this.sharedDb, agentRunner, promptBuilder, dreamService, dreamMemoryPath });
+    this.runtimes.set(lang.id, { lang, db, sharedDb: this.sharedDb, agentRunner, evaluatorProvider: this.evaluatorProvider, promptBuilder, dreamService, dreamMemoryPath });
   }
 
   runtime(language: string): LanguageRuntime {

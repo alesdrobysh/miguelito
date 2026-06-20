@@ -19,6 +19,21 @@ afterEach(() => {
 });
 
 describe("error log deduplication", () => {
+  it("archives fuzzy repeated correction rows with minor wording differences", async () => {
+    const first = await db.logError("No hay de que", "No hay de qué", "accent", "missing accent");
+    const second = await db.logError("no hay de qué", "No hay de qué", "accent", "same correction with accent");
+    const third = await db.logError("Es qué", "Es que", "accent", "same category but different target");
+
+    const merged = await db.deduplicateFuzzyErrors();
+
+    expect(merged).toBe(1);
+    const active = await db.listErrors("all", 10);
+    expect(new Set(active.map((e) => e.id))).toEqual(new Set([first, third]));
+    const keeper = active.find((e) => e.id === first)!;
+    expect(keeper.note).toContain("missing accent");
+    expect(keeper.note).toContain("same correction with accent");
+  });
+
   it("archives repeated correction rows by normalized learner text, correction, and category", async () => {
     const first = await db.logError("Yo entreno en gym", "Entreno en el gimnasio", "word_choice", "missing article");
     const second = await db.logError("  yo entreno en GYM  ", "entreno en el gimnasio", "word_choice", "duplicate wording");

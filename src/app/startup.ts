@@ -2,6 +2,7 @@ import cron from "node-cron";
 import type { Config } from "../infrastructure/config.js";
 import { logger } from "../infrastructure/logger.js";
 import type { LanguageRuntime, RuntimeManager } from "../runtime.js";
+import { FuzzyDedupeService } from "../services/FuzzyDedupeService.js";
 import type { MetaRepository } from "../repositories/interfaces.js";
 import { startScheduler } from "../services/Scheduler.js";
 import { TelegramTransport } from "../transport/TelegramTransport.js";
@@ -31,27 +32,37 @@ export async function runNightlyMaintenanceIfOverdue(
   config: Config,
   rt: LanguageRuntime,
   meta: MetaRepository,
-): Promise<{ learningItemsMerged: number; errorsMerged: number; fuzzyLearningCandidates: number }> {
+): Promise<{ learningItemsMerged: number; errorsMerged: number; fuzzyLearningCandidates: number; fuzzyLearningItemsMerged: number; fuzzyErrorsMerged: number }> {
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: config.timezone }).format(new Date());
   const key = `last_nightly_maintenance_date:${rt.lang.id}`;
   const lastDate = await meta.getMetaValue(key);
-  if (lastDate && lastDate >= today) return { learningItemsMerged: 0, errorsMerged: 0, fuzzyLearningCandidates: 0 };
+  if (lastDate && lastDate >= today) return { learningItemsMerged: 0, errorsMerged: 0, fuzzyLearningCandidates: 0, fuzzyLearningItemsMerged: 0, fuzzyErrorsMerged: 0 };
 
   const [learningItemsMerged, errorsMerged] = await Promise.all([
     rt.db.deduplicateLearningItems(),
     rt.db.deduplicateErrors(),
   ]);
-  const fuzzyCandidates = await rt.db.findFuzzyLearningItemDuplicateCandidates({ limit: 50 });
+  const fuzzyLearning = new FuzzyDedupeService(rt.db, rt.evaluatorProvider);
+  const [fuzzyLearningResult, fuzzyErrorsMerged] = await Promise.all([
+    fuzzyLearning.adjudicateAndApply({ limit: 50, batchSize: 8, minConfidence: 0.92 }),
+    rt.db.deduplicateFuzzyErrors(),
+  ]);
   await meta.setMetaValue(key, today);
-  return { learningItemsMerged, errorsMerged, fuzzyLearningCandidates: fuzzyCandidates.length };
+  return {
+    learningItemsMerged,
+    errorsMerged,
+    fuzzyLearningCandidates: fuzzyLearningResult.candidates.length,
+    fuzzyLearningItemsMerged: fuzzyLearningResult.appliedMerges,
+    fuzzyErrorsMerged,
+  };
 }
 
 export function startNightlyMaintenance(config: Config, rt: LanguageRuntime, meta: MetaRepository = rt.db): void {
   const run = () => {
     runNightlyMaintenanceIfOverdue(config, rt, meta).then(
-      ({ learningItemsMerged, errorsMerged, fuzzyLearningCandidates }) => {
-        if (learningItemsMerged > 0 || errorsMerged > 0 || fuzzyLearningCandidates > 0) {
-          log.info({ lang: rt.lang.id, learningItemsMerged, errorsMerged, fuzzyLearningCandidates }, "nightly maintenance dedupe audit complete");
+      ({ learningItemsMerged, errorsMerged, fuzzyLearningCandidates, fuzzyLearningItemsMerged, fuzzyErrorsMerged }) => {
+        if (learningItemsMerged > 0 || errorsMerged > 0 || fuzzyLearningCandidates > 0 || fuzzyLearningItemsMerged > 0 || fuzzyErrorsMerged > 0) {
+          log.info({ lang: rt.lang.id, learningItemsMerged, errorsMerged, fuzzyLearningCandidates, fuzzyLearningItemsMerged, fuzzyErrorsMerged }, "nightly maintenance dedupe complete");
         }
       },
       (err) => log.warn({ err, lang: rt.lang.id }, "nightly maintenance failed"),

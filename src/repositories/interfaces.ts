@@ -43,6 +43,7 @@ export interface LearningRepository {
 export interface ErrorRepository {
   logError(userText: string, correct: string, category: string, note: string): Promise<number>;
   deduplicateErrors(limit?: number): Promise<number>;
+  deduplicateFuzzyErrors(limit?: number): Promise<number>;
   listErrors(category: string, limit: number): Promise<ErrorItem[]>;
   listRecentErrors(since: string, categories?: string[]): Promise<ErrorItem[]>;
 }

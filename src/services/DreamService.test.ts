@@ -19,6 +19,7 @@ function makeRepos() {
   const errors: ErrorRepository = {
     logError: vi.fn(),
     deduplicateErrors: vi.fn(),
+    deduplicateFuzzyErrors: vi.fn(),
     listErrors: vi.fn(),
     listRecentErrors: vi.fn().mockResolvedValue([]),
   };

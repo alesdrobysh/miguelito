@@ -17,6 +17,31 @@ function canonicalErrorKey(row: Pick<ErrorItem, "user_text" | "correct_form" | "
   return [row.category, canonicalErrorText(row.user_text), canonicalErrorText(row.correct_form)].join("\u0000");
 }
 
+function levenshteinSimilarity(a: string, b: string): number {
+  const left = canonicalErrorText(a);
+  const right = canonicalErrorText(b);
+  const n = left.length;
+  const m = right.length;
+  if (n === 0 && m === 0) return 1;
+  if (n === 0 || m === 0) return 0;
+  let prev = Array.from({ length: m + 1 }, (_, i) => i);
+  let cur = new Array<number>(m + 1);
+  for (let i = 1; i <= n; i++) {
+    cur[0] = i;
+    for (let j = 1; j <= m; j++) {
+      const cost = left.charCodeAt(i - 1) === right.charCodeAt(j - 1) ? 0 : 1;
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+    }
+    [prev, cur] = [cur, prev];
+  }
+  return 1 - prev[m] / Math.max(n, m);
+}
+
+function mergeNotes(...notes: unknown[]): string | null {
+  const merged = Array.from(new Set(notes.map((n) => String(n ?? "").trim()).filter(Boolean))).join(" | ");
+  return merged || null;
+}
+
 export class SqlErrorRepository extends SqlRepository implements ErrorRepository {
   private readonly validCategories: ReadonlySet<string>;
 
@@ -77,6 +102,49 @@ export class SqlErrorRepository extends SqlRepository implements ErrorRepository
           `UPDATE error_log SET status = 'archived', updated_at = ? WHERE id = ? AND language = ?`,
           [now, dup.id, this.languageId],
         );
+        changed++;
+      }
+    }
+    if (changed > 0) this.save();
+    return changed;
+  }
+
+  async deduplicateFuzzyErrors(limit = 1000): Promise<number> {
+    const capped = Math.max(1, Math.min(5000, Math.round(limit || 1000)));
+    const rows = this.queryAll<ErrorItem & { status?: string }>(
+      `SELECT * FROM error_log
+       WHERE language = ? AND COALESCE(status, 'active') = 'active'
+       ORDER BY datetime(created_at) ASC, id ASC
+       LIMIT ?`,
+      [this.languageId, capped],
+    );
+    let changed = 0;
+    const archived = new Set<number>();
+    const now = nowIso();
+    for (let i = 0; i < rows.length; i++) {
+      const keeper = rows[i];
+      if (archived.has(keeper.id)) continue;
+      for (let j = i + 1; j < rows.length; j++) {
+        const dup = rows[j];
+        if (archived.has(dup.id)) continue;
+        if (keeper.category !== dup.category) continue;
+        const userSimilarity = levenshteinSimilarity(keeper.user_text, dup.user_text);
+        const correctSimilarity = levenshteinSimilarity(keeper.correct_form, dup.correct_form);
+        const sameCorrect = canonicalErrorText(keeper.correct_form) === canonicalErrorText(dup.correct_form);
+        const highConfidence = sameCorrect
+          ? userSimilarity >= 0.82
+          : userSimilarity >= 0.9 && correctSimilarity >= 0.9;
+        if (!highConfidence) continue;
+        this.db.run(
+          `UPDATE error_log SET note = ?, updated_at = ? WHERE id = ? AND language = ?`,
+          [mergeNotes(keeper.note, dup.note), now, keeper.id, this.languageId],
+        );
+        this.db.run(
+          `UPDATE error_log SET status = 'archived', updated_at = ? WHERE id = ? AND language = ?`,
+          [now, dup.id, this.languageId],
+        );
+        archived.add(dup.id);
+        keeper.note = mergeNotes(keeper.note, dup.note) ?? "";
         changed++;
       }
     }
