@@ -116,6 +116,8 @@ export interface ErrorItem {
   correct_form: string;
   category: string;
   note: string | null;
+  status: string;
+  updated_at: string;
   created_at: string;
 }
 

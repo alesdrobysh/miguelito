@@ -140,6 +140,10 @@ export class BuddyDb implements ErrorRepository, SessionRepository, ProfileRepos
     return this.errors.logError(userText, correct, category, note);
   }
 
+  async deduplicateErrors(limit?: number): Promise<number> {
+    return this.errors.deduplicateErrors(limit);
+  }
+
   async listErrors(category: string, limit: number): Promise<ErrorItem[]> {
     return this.errors.listErrors(category, limit);
   }

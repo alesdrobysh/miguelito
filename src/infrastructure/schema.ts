@@ -69,6 +69,8 @@ CREATE TABLE IF NOT EXISTS error_log (
     category TEXT NOT NULL DEFAULT 'other',
     language TEXT NOT NULL DEFAULT '',
     note TEXT,
+    status TEXT NOT NULL DEFAULT 'active',
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_error_category ON error_log(category);

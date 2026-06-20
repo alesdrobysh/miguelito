@@ -124,6 +124,7 @@ export function runMigrations(db: Database): void {
     if (!cols.includes("language")) db.run(`ALTER TABLE ${table} ADD COLUMN language TEXT NOT NULL DEFAULT ''`);
   }
 
+  migrateErrorLogLifecycle(db);
   migrateProficiencyEvidenceChallengeBand(db);
   dropLegacyProficiencyEvidenceLevelColumn(db);
   migrateLearningItemLifecycle(db);
@@ -166,6 +167,16 @@ function migrateLearningItemLifecycle(db: Database): void {
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`);
   db.run("CREATE INDEX IF NOT EXISTS idx_learning_item_evidence_item ON learning_item_evidence(language, learning_item_id, created_at DESC)");
+}
+
+function migrateErrorLogLifecycle(db: Database): void {
+  const cols = (db.exec("PRAGMA table_info(error_log)")[0]?.values ?? []).map((r) => r[1] as string);
+  if (cols.length === 0) return;
+  if (!cols.includes("status")) db.run("ALTER TABLE error_log ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+  if (!cols.includes("updated_at")) db.run("ALTER TABLE error_log ADD COLUMN updated_at TEXT");
+  db.run("UPDATE error_log SET status = COALESCE(NULLIF(status, ''), 'active')");
+  db.run("UPDATE error_log SET updated_at = COALESCE(updated_at, created_at, datetime('now'))");
+  db.run("CREATE INDEX IF NOT EXISTS idx_error_language_status_created ON error_log(language, status, created_at DESC)");
 }
 
 function migrateProficiencyEvidenceChallengeBand(db: Database): void {

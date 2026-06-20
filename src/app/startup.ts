@@ -1,3 +1,4 @@
+import cron from "node-cron";
 import type { Config } from "../infrastructure/config.js";
 import { logger } from "../infrastructure/logger.js";
 import type { LanguageRuntime, RuntimeManager } from "../runtime.js";
@@ -26,21 +27,41 @@ export async function runDreamIfOverdue(
   );
 }
 
-export function startLearningItemMaintenance(rt: LanguageRuntime, intervalMs = 6 * 60 * 60 * 1000): ReturnType<typeof setInterval> {
+export async function runNightlyMaintenanceIfOverdue(
+  config: Config,
+  rt: LanguageRuntime,
+  meta: MetaRepository,
+): Promise<{ learningItemsMerged: number; errorsMerged: number }> {
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: config.timezone }).format(new Date());
+  const key = `last_nightly_maintenance_date:${rt.lang.id}`;
+  const lastDate = await meta.getMetaValue(key);
+  if (lastDate && lastDate >= today) return { learningItemsMerged: 0, errorsMerged: 0 };
+
+  const [learningItemsMerged, errorsMerged] = await Promise.all([
+    rt.db.deduplicateLearningItems(),
+    rt.db.deduplicateErrors(),
+  ]);
+  await meta.setMetaValue(key, today);
+  return { learningItemsMerged, errorsMerged };
+}
+
+export function startNightlyMaintenance(config: Config, rt: LanguageRuntime, meta: MetaRepository = rt.db): void {
   const run = () => {
-    rt.db.deduplicateLearningItems().then(
-      (merged) => {
-        if (merged > 0) log.info({ lang: rt.lang.id, merged }, "learning item maintenance deduplicated items");
+    runNightlyMaintenanceIfOverdue(config, rt, meta).then(
+      ({ learningItemsMerged, errorsMerged }) => {
+        if (learningItemsMerged > 0 || errorsMerged > 0) {
+          log.info({ lang: rt.lang.id, learningItemsMerged, errorsMerged }, "nightly maintenance deduplicated rows");
+        }
       },
-      (err) => log.warn({ err, lang: rt.lang.id }, "learning item maintenance failed"),
+      (err) => log.warn({ err, lang: rt.lang.id }, "nightly maintenance failed"),
     );
   };
   run();
-  return setInterval(run, intervalMs);
+  cron.schedule("15 2 * * *", run, { timezone: config.timezone });
 }
 
 export function startLanguageScheduler(config: Config, rt: LanguageRuntime, transport: Transport): void {
-  startLearningItemMaintenance(rt);
+  startNightlyMaintenance(config, rt);
   const morningCronPrompt = process.env.MORNING_CRON_PROMPT ?? rt.lang.prompts.morning;
   const eveningCronPrompt = process.env.EVENING_CRON_PROMPT ?? rt.lang.prompts.evening;
   startScheduler(
