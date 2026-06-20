@@ -53,6 +53,49 @@ describe("learning item deduplication and scheduling", () => {
     expect([first, second]).toContain(active[0].id);
   });
 
+  it("finds fuzzy duplicate candidates without merging different objectives that share an example", async () => {
+    const pluralTypo = await db.addLearningItem({
+      type: "correction",
+      title: "aplicaciónes → aplicaciones",
+      priority: 0.8,
+      prompt_l2: "aplicaciónes",
+      explanation_l1: "la palabra aplicación pierde la tilde al pluralizarse: aplicaciones",
+    });
+    const pluralRule = await db.addLearningItem({
+      type: "correction",
+      title: "aplicaciones (plural sin tilde)",
+      priority: 0.7,
+      prompt_l2: "aplicaciones",
+      explanation_l1: "when pluralizing nouns that end in -ón, the accent mark is dropped: aplicación → aplicaciones",
+    });
+    const idiom = await db.addLearningItem({
+      type: "phrase",
+      title: "ir sobre ruedas",
+      prompt_l2: "Me alegra que todo vaya sobre ruedas.",
+      explanation_l1: "It means to go smoothly.",
+    });
+    const grammar = await db.addLearningItem({
+      type: "grammar_point",
+      title: "subjunctive with alegrarse de que",
+      prompt_l2: "Me alegra que todo vaya sobre ruedas.",
+      explanation_l1: "After me alegra que, use the subjunctive.",
+    });
+
+    const candidates = await db.findFuzzyLearningItemDuplicateCandidates({ limit: 20 });
+
+    expect(candidates).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        itemA: expect.objectContaining({ id: pluralTypo }),
+        itemB: expect.objectContaining({ id: pluralRule }),
+        reason: expect.stringContaining("prompt"),
+      }),
+    ]));
+    expect(candidates.some((c) => {
+      const ids = [c.itemA.id, c.itemB.id].sort((a, b) => a - b);
+      return ids[0] === idiom && ids[1] === grammar;
+    })).toBe(false);
+  });
+
   it("schedules low-score evidence for next-day reactivation", async () => {
     const id = await db.addLearningItem({ type: "word", title: "interruptor", priority: 0.8 });
     expect(id).not.toBeNull();

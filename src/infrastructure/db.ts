@@ -10,7 +10,7 @@ import type {
   ErrorItem, UserProfile, ConversationStateResult, UpdateResult,
   TurnAnnotationInput, TurnAnnotation, CompetencyVectorRow,
   ProficiencyEvidenceInput, ProficiencyEvidenceRow, ProficiencyChallengeBand,
-  LearningItemInput, LearningItem, LearningItemEvidenceInput, LearningItemEvidenceRow, LearningPracticeAttempt, StartLearningPracticeAttemptInput, FinishLearningPracticeAttemptInput,
+  LearningItemInput, LearningItem, LearningItemEvidenceInput, LearningItemEvidenceRow, LearningPracticeAttempt, StartLearningPracticeAttemptInput, FinishLearningPracticeAttemptInput, FuzzyLearningItemDuplicateCandidate, FuzzyLearningItemDuplicateOptions,
 } from "../domain/types.js";
 import type {
   ErrorRepository, SessionRepository, ProfileRepository,
@@ -102,6 +102,10 @@ export class BuddyDb implements ErrorRepository, SessionRepository, ProfileRepos
 
   async deduplicateLearningItems(limit?: number): Promise<number> {
     return this.learning.deduplicateLearningItems(limit);
+  }
+
+  async findFuzzyLearningItemDuplicateCandidates(options?: FuzzyLearningItemDuplicateOptions): Promise<FuzzyLearningItemDuplicateCandidate[]> {
+    return this.learning.findFuzzyLearningItemDuplicateCandidates(options);
   }
 
   async selectLearningItemsForEvaluation(userMessage: string, assistantText: string, limit: number): Promise<LearningItem[]> {

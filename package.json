@@ -11,6 +11,7 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "db:consolidate": "tsx scripts/consolidate-db.ts",
+    "audit:fuzzy-dedupe": "tsx scripts/audit-fuzzy-dedupe.ts",
     "test": "vitest run"
   },
   "keywords": [],

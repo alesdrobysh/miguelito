@@ -1,5 +1,5 @@
 import type { Database } from "sql.js";
-import type { LearningItem, LearningItemEvidenceInput, LearningItemEvidenceRow, LearningItemInput, LearningItemStatus, LearningItemType, LearningPracticeAttempt, StartLearningPracticeAttemptInput, FinishLearningPracticeAttemptInput } from "../../domain/types.js";
+import type { LearningItem, LearningItemEvidenceInput, LearningItemEvidenceRow, LearningItemInput, LearningItemStatus, LearningItemType, LearningPracticeAttempt, StartLearningPracticeAttemptInput, FinishLearningPracticeAttemptInput, FuzzyLearningItemDuplicateCandidate, FuzzyLearningItemDuplicateOptions } from "../../domain/types.js";
 import { SqlRepository, type SaveFn, nowIso, computeNextReview } from "./sqlRepository.js";
 
 const VALID_TYPES = new Set([
@@ -67,6 +67,53 @@ function canonicalLearningItemKey(type: string, title: string): string {
   // from phrase/word/collocation captures. Vocabulary-like items with the same
   // title are one learning target even if the evaluator alternates word/phrase.
   return type === "correction" ? `correction:${normalizedTitle}` : `lexical:${normalizedTitle}`;
+}
+
+function normalizeFuzzyText(text: unknown): string {
+  return String(text ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[¿?¡!.,;:"'`´()[\]{}→/\\-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function levenshteinSimilarity(a: unknown, b: unknown): number {
+  const left = normalizeFuzzyText(a);
+  const right = normalizeFuzzyText(b);
+  const n = left.length;
+  const m = right.length;
+  if (n === 0 && m === 0) return 1;
+  if (n === 0 || m === 0) return 0;
+  let prev = Array.from({ length: m + 1 }, (_, i) => i);
+  let cur = new Array<number>(m + 1);
+  for (let i = 1; i <= n; i++) {
+    cur[0] = i;
+    for (let j = 1; j <= m; j++) {
+      const cost = left.charCodeAt(i - 1) === right.charCodeAt(j - 1) ? 0 : 1;
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+    }
+    [prev, cur] = [cur, prev];
+  }
+  return 1 - (prev[m] / Math.max(n, m));
+}
+
+function tokenJaccard(a: unknown, b: unknown): number {
+  const tokens = (value: unknown) => new Set(normalizeFuzzyText(value).split(" ").filter((t) => t.length >= 4));
+  const left = tokens(a);
+  const right = tokens(b);
+  if (left.size === 0 && right.size === 0) return 1;
+  const union = new Set([...left, ...right]);
+  let intersection = 0;
+  for (const token of left) if (right.has(token)) intersection++;
+  return intersection / Math.max(1, union.size);
+}
+
+function isSameLearningObjectiveCandidate(a: LearningItem, b: LearningItem): boolean {
+  if (a.type === b.type) return true;
+  const lexical = new Set(["word", "phrase", "collocation", "idiom"]);
+  return lexical.has(String(a.type)) && lexical.has(String(b.type));
 }
 
 function stabilityFor(activeScore: number, passiveScore: number, evidenceCount: number): string {
@@ -227,6 +274,61 @@ export class SqlLearningRepository extends SqlRepository {
     }
     if (changed > 0) this.save();
     return changed;
+  }
+
+  async findFuzzyLearningItemDuplicateCandidates(options: FuzzyLearningItemDuplicateOptions = {}): Promise<FuzzyLearningItemDuplicateCandidate[]> {
+    const scanLimit = Math.max(2, Math.min(5000, Math.round(options.scanLimit ?? 1000)));
+    const limit = Math.max(1, Math.min(200, Math.round(options.limit ?? 50)));
+    const items = this.queryAll<LearningItem>(
+      `SELECT * FROM learning_items
+       WHERE language = ? AND status NOT IN ('ignored', 'archived', 'mastered')
+       ORDER BY datetime(created_at) ASC, id ASC
+       LIMIT ?`,
+      [this.languageId, scanLimit],
+    );
+    const candidates: FuzzyLearningItemDuplicateCandidate[] = [];
+    for (let i = 0; i < items.length; i++) {
+      for (let j = i + 1; j < items.length; j++) {
+        const itemA = items[i];
+        const itemB = items[j];
+        if (!isSameLearningObjectiveCandidate(itemA, itemB)) continue;
+        const titleSimilarity = levenshteinSimilarity(itemA.title, itemB.title);
+        const promptSimilarity = levenshteinSimilarity(itemA.prompt_l2, itemB.prompt_l2);
+        const explanationSimilarity = levenshteinSimilarity(itemA.explanation_l1, itemB.explanation_l1);
+        const textA = [itemA.title, itemA.prompt_l2, itemA.explanation_l1].filter(Boolean).join(" ");
+        const textB = [itemB.title, itemB.prompt_l2, itemB.explanation_l1].filter(Boolean).join(" ");
+        const tokenSimilarity = tokenJaccard(textA, textB);
+        const rawSignals = [
+          { name: "title", value: titleSimilarity, threshold: String(itemA.type) === "correction" ? 0.52 : 0.68 },
+          { name: "prompt", value: promptSimilarity, threshold: String(itemA.type) === "correction" ? 0.78 : 0.88 },
+          { name: "explanation", value: explanationSimilarity, threshold: 0.78 },
+          { name: "tokens", value: tokenSimilarity, threshold: 0.58 },
+        ];
+        const titleOverlap = titleSimilarity >= 0.45;
+        const strongTitleOrPrompt = titleOverlap || promptSimilarity >= 0.45;
+        const promptIsEnough = promptSimilarity >= (String(itemA.type) === "correction" ? 0.78 : 0.88) && (String(itemA.type) === "correction" ? strongTitleOrPrompt : titleOverlap);
+        const titleIsEnough = titleSimilarity >= (String(itemA.type) === "correction" ? 0.52 : 0.68);
+        const semanticIsEnough = strongTitleOrPrompt && (explanationSimilarity >= 0.78 || tokenSimilarity >= 0.58);
+        if (!titleIsEnough && !promptIsEnough && !semanticIsEnough) continue;
+        const signals = rawSignals.filter((signal) => signal.value >= signal.threshold);
+        const score = Math.max(titleSimilarity, promptSimilarity, explanationSimilarity, tokenSimilarity);
+        const reason = signals
+          .sort((a, b) => b.value - a.value)
+          .map((signal) => `${signal.name} similarity ${signal.value.toFixed(2)}`)
+          .join("; ");
+        candidates.push({
+          itemA,
+          itemB,
+          score: Number(score.toFixed(3)),
+          titleSimilarity: Number(titleSimilarity.toFixed(3)),
+          promptSimilarity: Number(promptSimilarity.toFixed(3)),
+          explanationSimilarity: Number(explanationSimilarity.toFixed(3)),
+          tokenSimilarity: Number(tokenSimilarity.toFixed(3)),
+          reason,
+        });
+      }
+    }
+    return candidates.sort((a, b) => b.score - a.score || a.itemA.id - b.itemA.id || a.itemB.id - b.itemB.id).slice(0, limit);
   }
 
   async listLearningItems(status: string, limit: number): Promise<LearningItem[]> {

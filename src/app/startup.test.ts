@@ -102,7 +102,7 @@ describe("runDreamIfOverdue", () => {
 });
 
 describe("runNightlyMaintenanceIfOverdue", () => {
-  it("runs learning-item and error dedupe once per local date", async () => {
+  it("runs exact dedupe and fuzzy duplicate audit once per local date", async () => {
     const today = new Intl.DateTimeFormat("en-CA", { timeZone: "UTC" }).format(new Date());
     const meta: MetaRepository = {
       getMetaValue: vi.fn().mockResolvedValue("2020-01-01"),
@@ -110,13 +110,17 @@ describe("runNightlyMaintenanceIfOverdue", () => {
     };
     const deduplicateLearningItems = vi.fn().mockResolvedValue(2);
     const deduplicateErrors = vi.fn().mockResolvedValue(3);
-    const rt = makeRuntime("spanish", vi.fn(), [], { deduplicateLearningItems, deduplicateErrors });
+    const findFuzzyLearningItemDuplicateCandidates = vi.fn().mockResolvedValue([
+      { itemA: { id: 1, title: "a", type: "correction" }, itemB: { id: 2, title: "b", type: "correction" }, score: 0.91, reason: "prompt similarity 0.91" },
+    ]);
+    const rt = makeRuntime("spanish", vi.fn(), [], { deduplicateLearningItems, deduplicateErrors, findFuzzyLearningItemDuplicateCandidates });
 
     const result = await runNightlyMaintenanceIfOverdue(makeConfig(), rt, meta);
 
-    expect(result).toEqual({ learningItemsMerged: 2, errorsMerged: 3 });
+    expect(result).toEqual({ learningItemsMerged: 2, errorsMerged: 3, fuzzyLearningCandidates: 1 });
     expect(deduplicateLearningItems).toHaveBeenCalledTimes(1);
     expect(deduplicateErrors).toHaveBeenCalledTimes(1);
+    expect(findFuzzyLearningItemDuplicateCandidates).toHaveBeenCalledWith({ limit: 50 });
     expect(meta.setMetaValue).toHaveBeenCalledWith("last_nightly_maintenance_date:spanish", today);
   });
 
@@ -132,7 +136,7 @@ describe("runNightlyMaintenanceIfOverdue", () => {
 
     const result = await runNightlyMaintenanceIfOverdue(makeConfig(), rt, meta);
 
-    expect(result).toEqual({ learningItemsMerged: 0, errorsMerged: 0 });
+    expect(result).toEqual({ learningItemsMerged: 0, errorsMerged: 0, fuzzyLearningCandidates: 0 });
     expect(deduplicateLearningItems).not.toHaveBeenCalled();
     expect(deduplicateErrors).not.toHaveBeenCalled();
     expect(meta.setMetaValue).not.toHaveBeenCalled();

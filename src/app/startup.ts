@@ -31,26 +31,27 @@ export async function runNightlyMaintenanceIfOverdue(
   config: Config,
   rt: LanguageRuntime,
   meta: MetaRepository,
-): Promise<{ learningItemsMerged: number; errorsMerged: number }> {
+): Promise<{ learningItemsMerged: number; errorsMerged: number; fuzzyLearningCandidates: number }> {
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: config.timezone }).format(new Date());
   const key = `last_nightly_maintenance_date:${rt.lang.id}`;
   const lastDate = await meta.getMetaValue(key);
-  if (lastDate && lastDate >= today) return { learningItemsMerged: 0, errorsMerged: 0 };
+  if (lastDate && lastDate >= today) return { learningItemsMerged: 0, errorsMerged: 0, fuzzyLearningCandidates: 0 };
 
   const [learningItemsMerged, errorsMerged] = await Promise.all([
     rt.db.deduplicateLearningItems(),
     rt.db.deduplicateErrors(),
   ]);
+  const fuzzyCandidates = await rt.db.findFuzzyLearningItemDuplicateCandidates({ limit: 50 });
   await meta.setMetaValue(key, today);
-  return { learningItemsMerged, errorsMerged };
+  return { learningItemsMerged, errorsMerged, fuzzyLearningCandidates: fuzzyCandidates.length };
 }
 
 export function startNightlyMaintenance(config: Config, rt: LanguageRuntime, meta: MetaRepository = rt.db): void {
   const run = () => {
     runNightlyMaintenanceIfOverdue(config, rt, meta).then(
-      ({ learningItemsMerged, errorsMerged }) => {
-        if (learningItemsMerged > 0 || errorsMerged > 0) {
-          log.info({ lang: rt.lang.id, learningItemsMerged, errorsMerged }, "nightly maintenance deduplicated rows");
+      ({ learningItemsMerged, errorsMerged, fuzzyLearningCandidates }) => {
+        if (learningItemsMerged > 0 || errorsMerged > 0 || fuzzyLearningCandidates > 0) {
+          log.info({ lang: rt.lang.id, learningItemsMerged, errorsMerged, fuzzyLearningCandidates }, "nightly maintenance dedupe audit complete");
         }
       },
       (err) => log.warn({ err, lang: rt.lang.id }, "nightly maintenance failed"),

@@ -84,6 +84,22 @@ export interface LearningItem extends Required<Pick<LearningItemInput, "type" | 
   avoidance_count: number;
 }
 
+export interface FuzzyLearningItemDuplicateCandidate {
+  itemA: LearningItem;
+  itemB: LearningItem;
+  score: number;
+  titleSimilarity: number;
+  promptSimilarity: number;
+  explanationSimilarity: number;
+  tokenSimilarity: number;
+  reason: string;
+}
+
+export interface FuzzyLearningItemDuplicateOptions {
+  limit?: number;
+  scanLimit?: number;
+}
+
 export interface LearningPracticeAttempt {
   id: number;
   learning_item_id: number;
