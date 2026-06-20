@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "db:consolidate": "tsx scripts/consolidate-db.ts",
     "audit:fuzzy-dedupe": "tsx scripts/audit-fuzzy-dedupe.ts",
+    "adjudicate:fuzzy-dedupe": "tsx scripts/adjudicate-fuzzy-dedupe.ts",
     "test": "vitest run"
   },
   "keywords": [],

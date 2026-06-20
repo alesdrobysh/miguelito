@@ -100,6 +100,25 @@ export interface FuzzyLearningItemDuplicateOptions {
   scanLimit?: number;
 }
 
+export type FuzzyLearningItemDuplicateDecisionKind = "merge" | "related" | "keep_separate";
+
+export interface FuzzyLearningItemDuplicateDecision {
+  itemAId: number;
+  itemBId: number;
+  decision: FuzzyLearningItemDuplicateDecisionKind;
+  keeperId?: number;
+  confidence: number;
+  reason: string;
+  mergedTitle?: string;
+  mergedPromptL2?: string;
+  mergedExplanationL1?: string;
+}
+
+export interface AppliedFuzzyLearningItemMerge {
+  keeperId: number;
+  archivedId: number;
+}
+
 export interface LearningPracticeAttempt {
   id: number;
   learning_item_id: number;

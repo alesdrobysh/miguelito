@@ -1,5 +1,5 @@
 import type { Database } from "sql.js";
-import type { LearningItem, LearningItemEvidenceInput, LearningItemEvidenceRow, LearningItemInput, LearningItemStatus, LearningItemType, LearningPracticeAttempt, StartLearningPracticeAttemptInput, FinishLearningPracticeAttemptInput, FuzzyLearningItemDuplicateCandidate, FuzzyLearningItemDuplicateOptions } from "../../domain/types.js";
+import type { LearningItem, LearningItemEvidenceInput, LearningItemEvidenceRow, LearningItemInput, LearningItemStatus, LearningItemType, LearningPracticeAttempt, StartLearningPracticeAttemptInput, FinishLearningPracticeAttemptInput, FuzzyLearningItemDuplicateCandidate, FuzzyLearningItemDuplicateOptions, FuzzyLearningItemDuplicateDecision, AppliedFuzzyLearningItemMerge } from "../../domain/types.js";
 import { SqlRepository, type SaveFn, nowIso, computeNextReview } from "./sqlRepository.js";
 
 const VALID_TYPES = new Set([
@@ -329,6 +329,88 @@ export class SqlLearningRepository extends SqlRepository {
       }
     }
     return candidates.sort((a, b) => b.score - a.score || a.itemA.id - b.itemA.id || a.itemB.id - b.itemB.id).slice(0, limit);
+  }
+
+  async applyFuzzyLearningItemMerge(decision: FuzzyLearningItemDuplicateDecision): Promise<AppliedFuzzyLearningItemMerge | null> {
+    if (decision.decision !== "merge") return null;
+    const ids = [Number(decision.itemAId), Number(decision.itemBId)];
+    const keeperId = Number(decision.keeperId);
+    if (!ids.every(Number.isFinite) || !ids.includes(keeperId)) return null;
+    const archivedId = ids.find((id) => id !== keeperId)!;
+    const keeper = this.queryRow<LearningItem>(
+      `SELECT * FROM learning_items WHERE language = ? AND id = ? AND status NOT IN ('ignored', 'archived', 'mastered')`,
+      [this.languageId, keeperId],
+    );
+    const dup = this.queryRow<LearningItem>(
+      `SELECT * FROM learning_items WHERE language = ? AND id = ? AND status NOT IN ('ignored', 'archived', 'mastered')`,
+      [this.languageId, archivedId],
+    );
+    if (!keeper || !dup) return null;
+    const now = nowIso();
+    this.db.run(`UPDATE learning_item_evidence SET learning_item_id = ? WHERE language = ? AND learning_item_id = ?`, [keeper.id, this.languageId, dup.id]);
+    this.db.run(`UPDATE learning_practice_attempts SET learning_item_id = ? WHERE language = ? AND learning_item_id = ?`, [keeper.id, this.languageId, dup.id]);
+    const passiveScore = clamp01(Math.max(Number(keeper.passive_score ?? 0), Number(dup.passive_score ?? 0)));
+    const activeScore = clamp01(Math.max(Number(keeper.active_score ?? 0), Number(dup.active_score ?? 0)));
+    const evidenceCount = this.queryRow<{ count: number }>(`SELECT COUNT(*) AS count FROM learning_item_evidence WHERE language = ? AND learning_item_id = ?`, [this.languageId, keeper.id])?.count ?? (Number(keeper.evidence_count ?? 0) + Number(dup.evidence_count ?? 0));
+    const failureCount = Number(keeper.failure_count ?? 0) + Number(dup.failure_count ?? 0);
+    const avoidanceCount = Number(keeper.avoidance_count ?? 0) + Number(dup.avoidance_count ?? 0);
+    const stability = stabilityFor(activeScore, passiveScore, evidenceCount);
+    const status = stability === "stable" ? "stable" : keeper.status;
+    this.db.run(
+      `UPDATE learning_items
+       SET title = COALESCE(NULLIF(?, ''), title),
+           priority = MAX(priority, ?), passive_score = ?, active_score = ?, stability = ?,
+           evidence_count = ?, failure_count = ?, avoidance_count = ?, status = ?,
+           prompt_l2 = COALESCE(NULLIF(?, ''), NULLIF(prompt_l2, ''), ?),
+           explanation_l1 = COALESCE(NULLIF(?, ''), NULLIF(explanation_l1, ''), ?),
+           evidence_snippet = COALESCE(NULLIF(evidence_snippet, ''), ?),
+           last_seen_at = COALESCE(last_seen_at, ?),
+           last_reactivated_at = COALESCE(last_reactivated_at, ?),
+           last_understood_at = COALESCE(last_understood_at, ?),
+           last_produced_at = COALESCE(last_produced_at, ?),
+           next_reactivation_at = CASE
+             WHEN next_reactivation_at IS NULL THEN ?
+             WHEN ? IS NULL THEN next_reactivation_at
+             WHEN datetime(?) < datetime(next_reactivation_at) THEN ?
+             ELSE next_reactivation_at
+           END,
+           reactivation_pressure = ?, updated_at = ?
+       WHERE id = ? AND language = ?`,
+      [
+        decision.mergedTitle?.trim() || null,
+        Number(dup.priority ?? 0),
+        passiveScore,
+        activeScore,
+        stability,
+        evidenceCount,
+        failureCount,
+        avoidanceCount,
+        status,
+        decision.mergedPromptL2?.trim() || null,
+        dup.prompt_l2,
+        decision.mergedExplanationL1?.trim() || null,
+        dup.explanation_l1,
+        dup.evidence_snippet,
+        dup.last_seen_at,
+        dup.last_reactivated_at,
+        dup.last_understood_at,
+        dup.last_produced_at,
+        dup.next_reactivation_at,
+        dup.next_reactivation_at,
+        dup.next_reactivation_at,
+        dup.next_reactivation_at,
+        pressureFor(activeScore, passiveScore),
+        now,
+        keeper.id,
+        this.languageId,
+      ],
+    );
+    this.db.run(
+      `UPDATE learning_items SET status = 'archived', updated_at = ? WHERE id = ? AND language = ?`,
+      [now, dup.id, this.languageId],
+    );
+    this.save();
+    return { keeperId: keeper.id, archivedId: dup.id };
   }
 
   async listLearningItems(status: string, limit: number): Promise<LearningItem[]> {

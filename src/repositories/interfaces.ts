@@ -18,6 +18,8 @@ import type {
   FinishLearningPracticeAttemptInput,
   FuzzyLearningItemDuplicateCandidate,
   FuzzyLearningItemDuplicateOptions,
+  FuzzyLearningItemDuplicateDecision,
+  AppliedFuzzyLearningItemMerge,
 } from "../domain/types.js";
 
 export interface LearningRepository {
@@ -26,6 +28,7 @@ export interface LearningRepository {
   listDueLearningItems(limit: number): Promise<LearningItem[]>;
   deduplicateLearningItems(limit?: number): Promise<number>;
   findFuzzyLearningItemDuplicateCandidates(options?: FuzzyLearningItemDuplicateOptions): Promise<FuzzyLearningItemDuplicateCandidate[]>;
+  applyFuzzyLearningItemMerge(decision: FuzzyLearningItemDuplicateDecision): Promise<AppliedFuzzyLearningItemMerge | null>;
   selectLearningItemsForEvaluation(userMessage: string, assistantText: string, limit: number): Promise<LearningItem[]>;
   markLearningItemsReintroduced(ids: number[]): Promise<number>;
   recordLearningItemEvidence(input: LearningItemEvidenceInput): Promise<number>;
