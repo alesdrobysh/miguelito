@@ -1,5 +1,9 @@
 # Miguelito
 
+<p align="center">
+  <img src="web/public/SCR-20260603-jsmp.jpeg" alt="Miguelito" width="180" />
+</p>
+
 An AI language tutor that lives in your Telegram or browser. It has memory — it tracks vocabulary, your interests, your goals — and sends you practice prompts morning and evening.
 
 Currently supports Spanish.
