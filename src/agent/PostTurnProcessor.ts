@@ -90,6 +90,9 @@ export interface PostTurnProcessResult {
 
 const VALID_COMPREHENSION = new Set(["smooth", "asked_clarify", "requested_simpler"]);
 const VALID_MODES = new Set(["REACT", "DIG", "OFFER", "TEACH", "PLAY"]);
+const CORE_EVALUATOR_MAX_TOKENS = 2_500;
+const LEARNING_EVALUATOR_MAX_TOKENS = 3_000;
+const LEARNING_EVALUATOR_ITEM_LIMIT = 30;
 
 export class PostTurnProcessor {
   constructor(private deps: PostTurnProcessorDeps) {}
@@ -105,14 +108,38 @@ export class PostTurnProcessor {
   }
 
   private async evaluate(input: PostTurnProcessInput): Promise<PostTurnEvaluation | null> {
-    const systemPrompt = [
+    const core = await this.evaluateCore(input);
+    if (!core) return null;
+
+    const learning = await this.evaluateLearning(input);
+    return {
+      ...core,
+      learning_items: learning?.learning_items ?? [],
+      item_evidence: learning?.item_evidence ?? [],
+    };
+  }
+
+  private recentHistory(input: PostTurnProcessInput): string {
+    return input.chatHistory.slice(-8).map((m) => `${m.role}: ${m.content}`).join("\n") || "(none)";
+  }
+
+  private baseEvaluatorSystemPrompt(task: string, schema: object): string {
+    return [
       `You are a deterministic evaluator for a ${this.deps.lang.name} tutoring chatbot.`,
       "Return only JSON. Do not write learner-facing text.",
-      "Extract post-turn learning events from the latest user message and assistant reply.",
+      task,
       "This evaluator, not the chat model, owns annotation, error extraction, and learning-item evidence.",
       `Valid error categories: ${this.deps.lang.errorCategories.join(", ")}.`,
       "Schema:",
-      JSON.stringify({
+      JSON.stringify(schema),
+      "Use empty arrays when there is nothing to extract.",
+    ].join("\n");
+  }
+
+  private async evaluateCore(input: PostTurnProcessInput): Promise<PostTurnEvaluation | null> {
+    const systemPrompt = this.baseEvaluatorSystemPrompt(
+      "Extract only turn annotation, conversation mode, learner errors, and learner interests from the latest exchange. Do not create learning_items or item_evidence in this pass.",
+      {
         annotation: {
           obligatory: [{ type: "category_from_valid_list" }],
           used: ["construction actually produced by learner"],
@@ -124,19 +151,39 @@ export class PostTurnProcessor {
         },
         mode: "REACT|DIG|OFFER|TEACH|PLAY",
         errors: [{ user_text: "wrong learner text", correct: "correct form", category: "category", note: "short note" }],
+        interests: ["hobby or topic the learner mentioned (lowercase, e.g. 'fútbol', 'cocina')"],
+      },
+    );
+    const userPrompt = [
+      "Recent history:",
+      this.recentHistory(input),
+      "Latest learner message:",
+      input.userMessage,
+      "Assistant reply:",
+      input.assistantText,
+      "For interests: extract hobbies, topics, or preferences the learner mentioned; use lowercase; omit generic words like 'español' or 'idiomas'.",
+    ].join("\n\n");
+
+    try {
+      return await this.completeJsonWithRetries<PostTurnEvaluation>(systemPrompt, userPrompt, CORE_EVALUATOR_MAX_TOKENS);
+    } catch (err) {
+      log.warn({ err }, "post-turn core evaluation failed");
+      return null;
+    }
+  }
+
+  private async evaluateLearning(input: PostTurnProcessInput): Promise<Pick<PostTurnEvaluation, "learning_items" | "item_evidence"> | null> {
+    const systemPrompt = this.baseEvaluatorSystemPrompt(
+      "Extract only reusable learning_items and item_evidence from the latest exchange. Do not return annotation, mode, errors, or interests in this pass. Capture reusable material as learning_items only; do not create separate review queues or table-specific artifacts.",
+      {
         learning_items: [{ type: "grammar_point|correction|phrase|word|collocation|idiom|register_note|pronunciation", title: "por vs para", prompt_l2: "optional L2 prompt", explanation_l1: "short explanation", source_type: "user_question|conversation|correction", priority: "0.9=correction/explicitly asked, 0.7=useful, 0.5=niche", practice_modes: ["short_drill"] }],
         item_evidence: [{ learning_item_id: 123, skill: "passive|active|reactivation", event: "recognized|responded_appropriately|asked_clarification|misunderstood|spontaneous_production|elicited_production|hinted_production|self_correction|incorrect_production|avoidance|assistant_reintroduced", independence: "spontaneous|elicited|hinted|observed", score_delta: "-0.2..0.3", confidence: "0..1", evidence_snippet: "short quote" }],
-        interests: ["hobby or topic the learner mentioned (lowercase, e.g. 'fútbol', 'cocina')"],
-      }),
-      "Use empty arrays when there is nothing to extract. For interests: extract hobbies, topics, or preferences the learner mentioned; use lowercase; omit generic words like 'español' or 'idiomas'.",
-      "Capture all reusable material as learning_items only; do not create separate review queues or table-specific artifacts.",
-    ].join("\n");
-
-    const recent = input.chatHistory.slice(-8).map((m) => `${m.role}: ${m.content}`).join("\n");
+      },
+    );
     const activeItems = await this.recentLearningItemsForEvaluation(input);
     const userPrompt = [
       "Recent history:",
-      recent || "(none)",
+      this.recentHistory(input),
       "Active learning items that may receive item_evidence (use these ids only):",
       activeItems,
       "Latest learner message:",
@@ -146,25 +193,29 @@ export class PostTurnProcessor {
     ].join("\n\n");
 
     try {
-      let lastErr: unknown;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          return await this.deps.provider.completeJson<PostTurnEvaluation>(systemPrompt, userPrompt, {
-            temperature: 0,
-            maxTokens: 1200,
-            structured: true,
-            timeoutMs: 60_000,
-          });
-        } catch (err) {
-          lastErr = err;
-          if (!this.isTransientEvaluatorError(err) || attempt === 2) throw err;
-        }
-      }
-      throw lastErr;
+      return await this.completeJsonWithRetries<Pick<PostTurnEvaluation, "learning_items" | "item_evidence">>(systemPrompt, userPrompt, LEARNING_EVALUATOR_MAX_TOKENS);
     } catch (err) {
-      log.warn({ err }, "post-turn evaluation failed");
+      log.warn({ err }, "post-turn learning extraction failed");
       return null;
     }
+  }
+
+  private async completeJsonWithRetries<T>(systemPrompt: string, userPrompt: string, maxTokens: number): Promise<T> {
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        return await this.deps.provider.completeJson<T>(systemPrompt, userPrompt, {
+          temperature: 0,
+          maxTokens,
+          structured: true,
+          timeoutMs: 60_000,
+        });
+      } catch (err) {
+        lastErr = err;
+        if (!this.isTransientEvaluatorError(err) || attempt === 2) throw err;
+      }
+    }
+    throw lastErr;
   }
 
   private async apply(evaluation: PostTurnEvaluation, _input: PostTurnProcessInput): Promise<PostTurnProcessResult> {
@@ -274,7 +325,7 @@ export class PostTurnProcessor {
 
   private async recentLearningItemsForEvaluation(input: PostTurnProcessInput): Promise<string> {
     try {
-      const items = await this.learningRepo().selectLearningItemsForEvaluation(input.userMessage, input.assistantText, 80);
+      const items = await this.learningRepo().selectLearningItemsForEvaluation(input.userMessage, input.assistantText, LEARNING_EVALUATOR_ITEM_LIMIT);
       if (items.length === 0) return "[]";
       return JSON.stringify(items.map((i: LearningItem) => ({ id: i.id, type: i.type, title: i.title, prompt_l2: i.prompt_l2, passive_score: i.passive_score, active_score: i.active_score, stability: i.stability, last_reactivated_at: i.last_reactivated_at })));
     } catch {
