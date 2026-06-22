@@ -104,13 +104,16 @@ export class PromptBuilder {
     const weakAreas = await this._getWeakAreas(3);
     const errorInfo = weakAreas.length > 0 ? await this._getRecentErrorForCategory(weakAreas[0]) : null;
 
+    const isAutonomousOpener = options.sourceType === "cron" || options.sourceType === "proactive";
     const dueLearningItems = await this._getDueLearningItems(5);
     const hasLearnerData = errorInfo != null || weakAreas.length > 0 || dueLearningItems.length > 0;
     const learnerProfileBase = hasLearnerData
       ? this.lang.promptText.currentLearnerProfile({ receptiveWords: [], productiveWords: [], errorInfo, weakAreas })
       : null;
     const learnerProfile = dueLearningItems.length > 0
-      ? `${learnerProfileBase ?? ""}\n\n## Conversation-native learning items due\n${dueLearningItems.map((i) => `- #${i.id} ${i.title} (${i.type}; passive=${i.passive_score.toFixed(2)}, active=${i.active_score.toFixed(2)}, pressure=${i.reactivation_pressure})`).join("\n")}\nThese are priority learning targets. Weave exactly one into this turn when at all plausible; for high-pressure items, prefer an active-production opportunity (a natural cue, micro-cloze, or short follow-up) over mere exposure. Keep it conversational, do not dump a quiz list, and do not create a /practice mode.`
+      ? isAutonomousOpener
+        ? `${learnerProfileBase ?? ""}\n\n## Optional learning hooks due\n${this.renderDueLearningItems(dueLearningItems)}\nThese items are optional hooks for an autonomous opener, not the agenda. Do not let due items override opener variety; choose a due item only if it makes a fresh, natural start. If the due items cluster around the same recent topic, prefer a different interest, stable memory, or neutral opener instead.`
+        : `${learnerProfileBase ?? ""}\n\n## Conversation-native learning items due\n${this.renderDueLearningItems(dueLearningItems)}\nThese are priority learning targets. Weave exactly one into this turn when at all plausible; for high-pressure items, prefer an active-production opportunity (a natural cue, micro-cloze, or short follow-up) over mere exposure. Keep it conversational, do not dump a quiz list, and do not create a /practice mode.`
       : learnerProfileBase;
 
     // Dynamic Interest Injection
@@ -127,11 +130,10 @@ export class PromptBuilder {
         .slice(0, 2);
     }
 
-    const isAutonomousOpener = options.sourceType === "cron" || options.sourceType === "proactive";
     const userInterests = selectedInterests.length > 0
       ? `\n\n## ${this.lang.interestsHeader}\n${selectedInterests.join(", ")}\nUse these only as optional background for this turn. Do not steer the conversation toward these interests unless the user's latest message naturally invites it. Do not keep returning to the same interest across turns; vary topics and let the user's latest message lead.`
       : isAutonomousOpener && allInterests.length > 0
-        ? `\n\n## ${this.lang.interestsHeader}\n${allInterests.slice(0, 30).join(", ")}\nThese are possible conversation hooks, not an agenda. For an autonomous opener, you may choose any one interest, including an older one, if it would feel fresh and natural. Do not always choose the most recent interest and do not keep returning to the same topic.`
+        ? `\n\n## ${this.lang.interestsHeader}\n${this.selectAutonomousInterests(allInterests, 30).join(", ")}\nThese are possible conversation hooks, not an agenda. For an autonomous opener, you may choose any one interest, including an older one, if it would feel fresh and natural. Do not always choose the most recent interest and do not keep returning to the same topic.`
       : null;
 
     let dreamMemory: string | null = null;
@@ -149,7 +151,7 @@ export class PromptBuilder {
 
   private renderAutonomousOpenerPolicy(interests: string[], hasDreamMemory: boolean, hasDueLearningItems: boolean): string {
     const interestLine = interests.length > 0
-      ? `Available interests include: ${interests.slice(0, 20).join(", ")}.`
+      ? `Available interests include: ${this.selectAutonomousInterests(interests, 20).join(", ")}.`
       : "No explicit interest list is available; use memory or a neutral opener instead.";
     return [
       "\n\n## Autonomous conversation opener policy",
@@ -165,6 +167,43 @@ export class PromptBuilder {
       "If you use an old fact (for example a trip, place, hobby, book, music, training, landscape), make it feel like a conversational invitation, not a recap.",
       interestLine,
     ].join("\n");
+  }
+
+  private renderDueLearningItems(items: Array<{ id: number; title: string; type: string; passive_score: number; active_score: number; reactivation_pressure: string }>): string {
+    return items
+      .map((i) => `- #${i.id} ${i.title} (${i.type}; passive=${Number(i.passive_score).toFixed(2)}, active=${Number(i.active_score).toFixed(2)}, pressure=${i.reactivation_pressure})`)
+      .join("\n");
+  }
+
+  private interestCluster(interest: string): string {
+    const lower = interest.toLowerCase();
+    if (/gimnas|gym|entren|ejerc|calisten|peso|pesas|squat|fuerza|fitness/.test(lower)) return "training";
+    if (/viaj|canarias|tenerife|teide|montañ|sender|paisaj|bosque|mar|playa|vacacion|ruta|excurs/.test(lower)) return "travel-nature";
+    if (/músic|ritmo|hardcore|canc/i.test(lower)) return "music";
+    if (/libro|lect|ciencia ficción|película|cine/.test(lower)) return "culture";
+    if (/fútbol|mundial|deporte/.test(lower)) return "sports";
+    if (/trabajo|teletrabajo|proyecto/.test(lower)) return "work";
+    return lower.split(/\s+/)[0] || "other";
+  }
+
+  private selectAutonomousInterests(interests: string[], limit: number): string[] {
+    const selected: string[] = [];
+    const seen = new Set<string>();
+    const clusterCounts = new Map<string, number>();
+    const add = (interest: string, maxPerCluster: number) => {
+      const clean = interest.trim();
+      if (!clean || seen.has(clean.toLowerCase()) || selected.length >= limit) return;
+      const cluster = this.interestCluster(clean);
+      const count = clusterCounts.get(cluster) ?? 0;
+      if (count >= maxPerCluster) return;
+      selected.push(clean);
+      seen.add(clean.toLowerCase());
+      clusterCounts.set(cluster, count + 1);
+    };
+
+    for (const interest of interests) add(interest, 1);
+    for (const interest of interests) add(interest, 2);
+    return selected.slice(0, limit);
   }
 
   private async _buildCompetencyVector() {

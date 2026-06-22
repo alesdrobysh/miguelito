@@ -7,7 +7,7 @@ import { buildConversationPlan } from "./ConversationPlanner.js";
 import { SpanishLanguage } from "../languages/spanish/index.js";
 import type { PromptRepos } from "./PromptBuilder.js";
 
-function repos(interests: string[] = []): PromptRepos {
+function repos(interests: string[] = [], dueLearningItems: any[] = []): PromptRepos {
   const convState = {
     session: {
       id: 1,
@@ -30,7 +30,7 @@ function repos(interests: string[] = []): PromptRepos {
     errors: { listErrors: async () => [], listRecentErrors: async () => [], logError: async () => 1 } as any,
     competency: { getCompetencyVector: async () => { throw new Error("no vector"); } } as any,
     session: { getConversationState: async () => convState } as any,
-    learning: { listDueLearningItems: async () => [], markLearningItemsReintroduced: async () => 0 } as any,
+    learning: { listDueLearningItems: async () => dueLearningItems, markLearningItemsReintroduced: async () => 0 } as any,
   };
 }
 
@@ -47,6 +47,45 @@ describe("autonomous opener policy", () => {
     expect(prompt).toContain("Do NOT assume the new conversation must continue the previous thread");
     expect(prompt).toContain("gimnasio, música, Canarias, mar");
     expect(prompt).toContain("Tenerife");
+  });
+
+  it("diversifies autonomous opener interests instead of letting one recent gym cluster dominate", async () => {
+    const interests = [
+      "calistenia",
+      "gimnasio",
+      "entrenamiento",
+      "ejercicio",
+      "entrenar",
+      "entrenar con pesos",
+      "pesas",
+      "fútbol",
+      "música",
+      "libros",
+      "viajes",
+      "Canarias",
+    ];
+    const builder = new PromptBuilder(repos(interests), SpanishLanguage);
+    const prompt = await builder.build(SpanishLanguage.prompts.morning, undefined, { sourceType: "cron" });
+
+    const available = prompt.match(/Available interests include: ([^.]+)\./)?.[1] ?? "";
+    expect(available).toContain("fútbol");
+    expect(available).toContain("música");
+    expect(available).toContain("libros");
+    expect(available).toContain("viajes");
+    expect((available.match(/gimnasio|entren|pesas|calistenia|ejercicio/g) ?? []).length).toBeLessThanOrEqual(2);
+  });
+
+  it("treats due learning items as optional hooks during autonomous openers", async () => {
+    const due = [
+      { id: 18, title: "me entreno → entreno", type: "correction", passive_score: 0, active_score: 0, reactivation_pressure: "high" },
+      { id: 53, title: "overhead squats", type: "phrase", passive_score: 0, active_score: 0.2, reactivation_pressure: "high" },
+    ];
+    const builder = new PromptBuilder(repos(["gimnasio", "música", "viajes"], due), SpanishLanguage);
+    const prompt = await builder.build(SpanishLanguage.prompts.morning, undefined, { sourceType: "cron" });
+
+    expect(prompt).toContain("Optional learning hooks due");
+    expect(prompt).toContain("Do not let due items override opener variety");
+    expect(prompt).not.toContain("These are priority learning targets. Weave exactly one into this turn");
   });
 
   it("does not inject the autonomous opener policy during normal user chat", async () => {
