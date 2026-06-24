@@ -105,7 +105,10 @@ export class PromptBuilder {
     const errorInfo = weakAreas.length > 0 ? await this._getRecentErrorForCategory(weakAreas[0]) : null;
 
     const isAutonomousOpener = options.sourceType === "cron" || options.sourceType === "proactive";
-    const dueLearningItems = await this._getDueLearningItems(5);
+    const rawDueLearningItems = await this._getDueLearningItems(5);
+    const dueLearningItems = isAutonomousOpener
+      ? rawDueLearningItems
+      : this.filterDueLearningItemsForUserTurn(rawDueLearningItems, userMessage).slice(0, 5);
     const hasLearnerData = errorInfo != null || weakAreas.length > 0 || dueLearningItems.length > 0;
     const learnerProfileBase = hasLearnerData
       ? this.lang.promptText.currentLearnerProfile({ receptiveWords: [], productiveWords: [], errorInfo, weakAreas })
@@ -173,6 +176,28 @@ export class PromptBuilder {
     return items
       .map((i) => `- #${i.id} ${i.title} (${i.type}; passive=${Number(i.passive_score).toFixed(2)}, active=${Number(i.active_score).toFixed(2)}, pressure=${i.reactivation_pressure})`)
       .join("\n");
+  }
+
+  private filterDueLearningItemsForUserTurn<T extends { title: string; type: string }>(items: T[], userMessage?: string): T[] {
+    if (!userMessage?.trim()) return [];
+    const message = this.normalizeForMatching(userMessage);
+    const messageTokens = new Set(this.matchTokens(userMessage));
+    return items.filter((item) => {
+      if (item.type === "correction") {
+        const leftSide = item.title.split(/→|->/)[0]?.trim();
+        if (leftSide && message.includes(this.normalizeForMatching(leftSide))) return true;
+      }
+      return this.matchTokens(item.title).some((token) => messageTokens.has(token));
+    });
+  }
+
+  private normalizeForMatching(text: string): string {
+    return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  }
+
+  private matchTokens(text: string): string[] {
+    const stop = new Set(["para", "pero", "porque", "como", "mucho", "mucha", "tiempo", "tener", "tenido", "descansar", "descanso"]);
+    return this.normalizeForMatching(text).match(/[\p{L}\p{N}]{4,}/gu)?.filter((token) => !stop.has(token)) ?? [];
   }
 
   private interestCluster(interest: string): string {

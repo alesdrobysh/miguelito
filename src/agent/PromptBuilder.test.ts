@@ -47,6 +47,7 @@ describe("autonomous opener policy", () => {
     expect(prompt).toContain("Do NOT assume the new conversation must continue the previous thread");
     expect(prompt).toContain("gimnasio, música, Canarias, mar");
     expect(prompt).toContain("Tenerife");
+    expect(prompt).toContain("not an agenda");
   });
 
   it("diversifies autonomous opener interests instead of letting one recent gym cluster dominate", async () => {
@@ -98,6 +99,20 @@ describe("autonomous opener policy", () => {
 
     expect(prompt).toContain("partida → partido");
     expect(marked).toEqual([]);
+  });
+
+  it("does not drag generic rest messages back to training just because training hooks are due", async () => {
+    const due = [
+      { id: 17, title: "entrenar con pesos", type: "phrase", passive_score: 0.2, active_score: 0, reactivation_pressure: "high" },
+      { id: 53, title: "overhead squats", type: "phrase", passive_score: 0, active_score: 0.2, reactivation_pressure: "high" },
+    ];
+    const builder = new PromptBuilder(repos(["gimnasio", "descanso", "músculos"], due), SpanishLanguage);
+
+    const prompt = await builder.build("He tenido mucho tiempo para descansar", undefined, { sourceType: "user_chat" });
+
+    expect(prompt).not.toContain("entrenar con pesos");
+    expect(prompt).not.toContain("overhead squats");
+    expect(prompt).not.toContain("These are priority learning targets. Weave exactly one into this turn");
   });
 
   it("does not inject the autonomous opener policy during normal user chat", async () => {

@@ -62,7 +62,7 @@ export const spanishBaseConfig: Omit<LanguageConfig, "frequency" | "soulPath"> =
       if (errorInfo) lines.push(`**Error que reforzar**: "${errorInfo.user_text}" → "${errorInfo.correct}" (${errorInfo.category})`);
       return lines.join("\n");
     },
-    dreamMemory: (content) => `\n\n## Memoria de sueño\n${content}`,
+    dreamMemory: (content) => `\n\n## Memoria de sueño\n${content}\n\nUse this memory as optional background, not an agenda. The latest user message leads; do not steer generic rest, greeting, or status messages back to training/gym/sports unless the user explicitly mentions that topic in the current turn.`,
   },
   interestsHeader: "Lo que sé de esta persona",
   prompts: {
