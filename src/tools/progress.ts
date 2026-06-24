@@ -10,6 +10,7 @@ function progressSummary(ctx: ToolContext, lang: LanguageConfig) {
     execute: async () => {
       const activeItems = await ctx.learning.listLearningItems("active", 1000);
       const dueItems = await ctx.learning.listDueLearningItems(1000);
+      const hygiene = await ctx.learning.getLearningHygieneSnapshot();
       const errors = await ctx.errors.listErrors("all", 1000);
       const errorCategories = errors.reduce<Record<string, number>>((acc, e) => {
         acc[e.category] = (acc[e.category] ?? 0) + 1;
@@ -44,6 +45,15 @@ function progressSummary(ctx: ToolContext, lang: LanguageConfig) {
           new: activeItems.filter((i) => i.stability === "new").length,
           practiced: activeItems.filter((i) => i.evidence_count > 0).length,
           stable: activeItems.filter((i) => i.stability === "stable" || i.status === "stable").length,
+        },
+        hygiene: {
+          backlog_status: hygiene.backlog_status,
+          active_without_evidence: hygiene.active_without_evidence,
+          candidate_without_evidence: hygiene.candidate_without_evidence,
+          stale_new_items: hygiene.stale_new_items,
+          due_high_pressure: hygiene.due_high_pressure,
+          reintroduced_without_production: hygiene.reintroduced_without_production,
+          suspicious_items: hygiene.suspicious_items,
         },
         recent_items: activeItems.slice(0, 5).map((i) => i.title),
         error_categories: errorCategories,

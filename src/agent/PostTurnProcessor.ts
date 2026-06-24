@@ -250,10 +250,29 @@ export class PostTurnProcessor {
       errorsLogged++;
     }
 
+    const hygiene = await this.learningRepo().getLearningHygieneSnapshot();
+    const learningBudget = {
+      corrections: hygiene.backlog_status === "blocked" ? 1 : 2,
+      lexical: hygiene.backlog_status === "healthy" ? 1 : 0,
+    };
+    let correctionsAddedThisTurn = 0;
+    let lexicalAddedThisTurn = 0;
+    const canAddLearningInput = (input: LearningItemInput): boolean => {
+      const type = this.clean(input.type).toLowerCase();
+      if (type === "correction") {
+        if (correctionsAddedThisTurn >= learningBudget.corrections) return false;
+        correctionsAddedThisTurn++;
+        return true;
+      }
+      if (lexicalAddedThisTurn >= learningBudget.lexical) return false;
+      lexicalAddedThisTurn++;
+      return true;
+    };
+
     for (const item of evaluation.vocabulary ?? []) {
       const word = this.clean(item.word).toLowerCase();
       if (!word) continue;
-      const learningId = await this.learningRepo().addLearningItem({
+      const learningInput: LearningItemInput = {
         type: "phrase",
         title: word,
         prompt_l2: this.clean(item.context),
@@ -263,7 +282,9 @@ export class PostTurnProcessor {
         priority: Math.max(0, Math.min(1, Number(item.priority ?? 0.6) || 0.6)),
         practice_modes: ["active_production", "cloze"],
         tags: Array.isArray(item.topic_tags) ? item.topic_tags.map((x) => String(x)).filter(Boolean) : [],
-      });
+      };
+      if (!canAddLearningInput(learningInput)) continue;
+      const learningId = await this.learningRepo().addLearningItem(learningInput);
       if (learningId !== null) learningItemsAdded++;
     }
 
@@ -271,7 +292,7 @@ export class PostTurnProcessor {
       const userText = this.clean(item.user_text);
       const correct = this.clean(item.correct);
       if (!userText || !correct) continue;
-      const learningId = await this.learningRepo().addLearningItem({
+      const learningInput: LearningItemInput = {
         type: "correction",
         title: `${userText} → ${correct}`,
         prompt_l2: userText,
@@ -280,7 +301,9 @@ export class PostTurnProcessor {
         evidence_snippet: _input.userMessage,
         priority: 0.9,
         practice_modes: ["rewrite"],
-      });
+      };
+      if (!canAddLearningInput(learningInput)) continue;
+      const learningId = await this.learningRepo().addLearningItem(learningInput);
       if (learningId !== null) learningItemsAdded++;
     }
 
@@ -289,7 +312,7 @@ export class PostTurnProcessor {
       .filter((e) => e.userText && e.correct);
     for (const item of evaluation.learning_items ?? []) {
       const input = this.learningItemInput(item, _input);
-      if (!input || this.isDuplicateCorrectionLearningItem(input, appliedCorrections)) continue;
+      if (!input || this.isDuplicateCorrectionLearningItem(input, appliedCorrections) || !canAddLearningInput(input)) continue;
       const learningId = await this.learningRepo().addLearningItem(input);
       if (learningId !== null) learningItemsAdded++;
     }

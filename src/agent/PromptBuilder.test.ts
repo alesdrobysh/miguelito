@@ -88,6 +88,18 @@ describe("autonomous opener policy", () => {
     expect(prompt).not.toContain("These are priority learning targets. Weave exactly one into this turn");
   });
 
+  it("does not mark due learning items reintroduced while only building the prompt", async () => {
+    const marked: number[][] = [];
+    const reposWithDue = repos([], [{ id: 18, title: "partida → partido", type: "correction", passive_score: 0, active_score: 0, reactivation_pressure: "high" }]);
+    reposWithDue.learning.markLearningItemsReintroduced = async (ids: number[]) => { marked.push(ids); return ids.length; };
+    const builder = new PromptBuilder(reposWithDue, SpanishLanguage);
+
+    const prompt = await builder.build("No hay ninguna partida interesante", undefined, { sourceType: "user_chat" });
+
+    expect(prompt).toContain("partida → partido");
+    expect(marked).toEqual([]);
+  });
+
   it("does not inject the autonomous opener policy during normal user chat", async () => {
     const builder = new PromptBuilder(repos(["Canarias", "mar"]), SpanishLanguage);
     const prompt = await builder.build("hola", undefined, { sourceType: "user_chat" });

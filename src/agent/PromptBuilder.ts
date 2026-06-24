@@ -214,7 +214,6 @@ export class PromptBuilder {
     try {
       if (!this.repos.learning) return [];
       const items = await this.repos.learning.listDueLearningItems(limit);
-      if (items.length > 0) await this.repos.learning.markLearningItemsReintroduced(items.map((i) => i.id));
       return items;
     } catch {
       return [];

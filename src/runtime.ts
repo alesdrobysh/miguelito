@@ -10,6 +10,7 @@ import type { LLMProvider } from "./providers/interfaces.js";
 import { PromptBuilder } from "./agent/PromptBuilder.js";
 import { AgentRunner } from "./agent/AgentRunner.js";
 import { DreamService } from "./services/DreamService.js";
+import { LearningHygieneService } from "./services/LearningHygieneService.js";
 import type { ChatMessage } from "./llm.js";
 
 export interface RuntimeDeps {
@@ -110,7 +111,7 @@ export class RuntimeManager {
       dreamSystemPrompt: lang.prompts.dream,
       morphologyCategories: new Set(lang.morphologyCategories),
       langId: lang.id,
-    }, db);
+    }, db, new LearningHygieneService(db));
     this.runtimes.set(lang.id, { lang, db, sharedDb: this.sharedDb, agentRunner, evaluatorProvider: this.evaluatorProvider, promptBuilder, dreamService, dreamMemoryPath });
   }
 
@@ -141,7 +142,7 @@ export class RuntimeManager {
       dreamSystemPrompt: lang.prompts.dream,
       morphologyCategories: new Set(lang.morphologyCategories),
       langId: lang.id,
-    }, db);
+    }, db, new LearningHygieneService(db));
 
     this.runtimes.set(lang.id, { lang, db, sharedDb: this.sharedDb, agentRunner, evaluatorProvider: this.evaluatorProvider, promptBuilder, dreamService, dreamMemoryPath });
   }

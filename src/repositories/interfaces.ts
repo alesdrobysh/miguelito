@@ -20,6 +20,7 @@ import type {
   FuzzyLearningItemDuplicateOptions,
   FuzzyLearningItemDuplicateDecision,
   AppliedFuzzyLearningItemMerge,
+  LearningHygieneSnapshot,
 } from "../domain/types.js";
 
 export interface LearningRepository {
@@ -37,6 +38,7 @@ export interface LearningRepository {
   listActiveLearningPracticeAttempts(limit?: number): Promise<LearningPracticeAttempt[]>;
   finishLearningPracticeAttempt(input: FinishLearningPracticeAttemptInput): Promise<LearningPracticeAttempt>;
   abandonActiveLearningPracticeAttempts(note?: string): Promise<number>;
+  getLearningHygieneSnapshot(): Promise<LearningHygieneSnapshot>;
 }
 
 

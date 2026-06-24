@@ -92,6 +92,7 @@ function makeProcessor(provider: RecordingProvider) {
     interests: { addInterest: async (interest: string) => { interests.push(interest); return true; } } as unknown as InterestRepository,
     learning: {
       selectLearningItemsForEvaluation: async (_user: string, _assistant: string, limit: number) => learningItems.slice(0, limit),
+      getLearningHygieneSnapshot: async () => ({ backlog_status: "healthy", active_without_evidence: 0 }),
       listLearningItems: async (_status: string, limit: number) => learningItems.slice(0, limit),
       addLearningItem: async (input: LearningItemInput) => { addedLearningItems.push(input); return addedLearningItems.length; },
       recordLearningItemEvidence: async (input: LearningItemEvidenceInput) => { recordedEvidence.push(input); return recordedEvidence.length; },
@@ -121,5 +122,49 @@ describe("PostTurnProcessor extraction", () => {
     expect(addedLearningItems.some((item) => item.title === "voy gimnasio → voy al gimnasio")).toBe(true);
     expect(recordedEvidence).toHaveLength(1);
     expect(interests).toEqual(["gimnasio"]);
+  });
+
+  it("limits new learning items when hygiene backlog is blocked", async () => {
+    const provider: LLMProvider = {
+      chat: async () => { throw new Error("unused"); },
+      complete: async () => { throw new Error("unused"); },
+      completeJson: async <T,>(_system: string | null, _user: string, _opts?: ChatOptions): Promise<T> => {
+        const callCount = ((provider as any).callCount = ((provider as any).callCount ?? 0) + 1);
+        if (callCount === 1) {
+          return { annotation: { naturalness: 1, comprehension: "smooth", tunit_length: 1, obligatory: [], used: [] }, mode: "REACT", errors: [], interests: [] } as T;
+        }
+        return {
+          learning_items: [
+            { type: "phrase", title: "farmer's walk", priority: 0.7 },
+            { type: "word", title: "agarre", priority: 0.7 },
+            { type: "correction", title: "partida → partido", priority: 0.9 },
+            { type: "correction", title: "un otro día → otro día", priority: 0.9 },
+          ],
+          item_evidence: [],
+        } as T;
+      },
+    };
+    const addedLearningItems: LearningItemInput[] = [];
+    const processor = new PostTurnProcessor({
+      provider,
+      lang,
+      errors: { logError: async () => 1 } as unknown as ErrorRepository,
+      competency: { insertTurnAnnotation: async () => undefined, insertProficiencyEvidence: async () => 1 } as unknown as CompetencyRepository,
+      session: {
+        getConversationState: async () => ({ session: { session_id: "s1", turn_count: 0, mode: "REACT" }, lastModes: [], moodHint: "", topicsTouched: "" }),
+        updateConversationState: async () => ({ ok: true, changed: true }),
+      } as unknown as SessionRepository,
+      learning: {
+        getLearningHygieneSnapshot: async () => ({ backlog_status: "blocked", active_without_evidence: 99 }),
+        selectLearningItemsForEvaluation: async () => [],
+        listLearningItems: async () => [],
+        addLearningItem: async (input: LearningItemInput) => { addedLearningItems.push(input); return addedLearningItems.length; },
+        recordLearningItemEvidence: async () => 1,
+      } as unknown as LearningRepository,
+    });
+
+    await processor.process({ userMessage: "hola", assistantText: "hola", chatHistory: [] });
+
+    expect(addedLearningItems.map((item) => item.title)).toEqual(["partida → partido"]);
   });
 });

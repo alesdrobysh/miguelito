@@ -84,6 +84,28 @@ export interface LearningItem extends Required<Pick<LearningItemInput, "type" | 
   avoidance_count: number;
 }
 
+export type LearningBacklogStatus = "healthy" | "crowded" | "blocked";
+
+export interface LearningHygieneSnapshot {
+  active: number;
+  candidate: number;
+  active_without_evidence: number;
+  candidate_without_evidence: number;
+  stale_new_items: number;
+  due_high_pressure: number;
+  reintroduced_without_production: number;
+  suspicious_items: string[];
+  backlog_status: LearningBacklogStatus;
+}
+
+export interface LearningHygieneRunResult {
+  archived: number;
+  cooledDown: number;
+  promoted: number;
+  mastered: number;
+  ignored: number;
+}
+
 export interface FuzzyLearningItemDuplicateCandidate {
   itemA: LearningItem;
   itemB: LearningItem;

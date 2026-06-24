@@ -1,5 +1,5 @@
 import type { Database } from "sql.js";
-import type { LearningItem, LearningItemEvidenceInput, LearningItemEvidenceRow, LearningItemInput, LearningItemStatus, LearningItemType, LearningPracticeAttempt, StartLearningPracticeAttemptInput, FinishLearningPracticeAttemptInput, FuzzyLearningItemDuplicateCandidate, FuzzyLearningItemDuplicateOptions, FuzzyLearningItemDuplicateDecision, AppliedFuzzyLearningItemMerge } from "../../domain/types.js";
+import type { LearningItem, LearningItemEvidenceInput, LearningItemEvidenceRow, LearningItemInput, LearningItemStatus, LearningItemType, LearningPracticeAttempt, StartLearningPracticeAttemptInput, FinishLearningPracticeAttemptInput, FuzzyLearningItemDuplicateCandidate, FuzzyLearningItemDuplicateOptions, FuzzyLearningItemDuplicateDecision, AppliedFuzzyLearningItemMerge, LearningHygieneSnapshot } from "../../domain/types.js";
 import { SqlRepository, type SaveFn, nowIso, computeNextReview } from "./sqlRepository.js";
 
 const VALID_TYPES = new Set([
@@ -41,6 +41,47 @@ function afterReintroductionDate(activeScore: number, passiveScore: number): str
   const d = new Date();
   d.setHours(d.getHours() + (score >= 0.35 ? 24 : 12));
   return d.toISOString();
+}
+
+function correctionSides(title: string): { left: string; right: string } | null {
+  const parts = title.split(/→|->/).map((p) => p.trim()).filter(Boolean);
+  return parts.length === 2 ? { left: parts[0], right: parts[1] } : null;
+}
+
+function looksLikeSuspiciousCorrection(type: string, title: string, prompt?: string | null): boolean {
+  if (type !== "correction") return false;
+  const sides = correctionSides(title);
+  if (!sides) return false;
+  const left = (prompt?.trim() || sides.left).trim();
+  const right = sides.right.trim();
+  if (left.toLowerCase() === right.toLowerCase()) return true;
+  const leftTokens = left.match(/[\p{L}\p{N}]+/gu) ?? [];
+  const rightTokens = right.match(/[\p{L}\p{N}]+/gu) ?? [];
+  return leftTokens.length === 1
+    && rightTokens.length === 1
+    && /^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]{1,3}$/.test(leftTokens[0])
+    && /^[A-ZÁÉÍÓÚÑ][\p{L}]{4,}$/u.test(rightTokens[0]);
+}
+
+function statusForNewLearningItem(type: LearningItemType, title: string, priority: number, requested: LearningItemStatus, snapshot: LearningHygieneSnapshot, prompt?: string | null): LearningItemStatus {
+  if (requested === "ignored" || requested === "archived" || requested === "mastered") return requested;
+  if (looksLikeSuspiciousCorrection(type, title, prompt)) return "ignored";
+  if (requested === "candidate") return "candidate";
+  if (type === "correction" && priority >= 0.85) return "active";
+  if (snapshot.backlog_status === "blocked" || snapshot.backlog_status === "crowded") return "candidate";
+  return requested;
+}
+
+function evidenceAdjustedScores(item: LearningItem, skill: string, event: string, rawDelta: number): { passiveScore: number; activeScore: number } {
+  let passiveDelta = 0;
+  let activeDelta = 0;
+  if (skill === "active") activeDelta = rawDelta;
+  else if (skill === "passive") passiveDelta = rawDelta;
+  else if (skill === "reactivation" && event === "assistant_reintroduced") passiveDelta = Math.min(0.05, Math.max(0, rawDelta));
+  return {
+    passiveScore: clamp01(Number(item.passive_score ?? 0) + passiveDelta, 0),
+    activeScore: clamp01(Number(item.active_score ?? 0) + activeDelta, 0),
+  };
 }
 
 function tokenizeForMatching(text: string): string[] {
@@ -140,9 +181,11 @@ export class SqlLearningRepository extends SqlRepository {
     const rawType = String(input.type ?? "phrase").trim().toLowerCase();
     const type = (VALID_TYPES.has(rawType) ? rawType : "phrase") as LearningItemType;
     const rawStatus = String(input.status ?? "active").trim().toLowerCase();
-    const status = (VALID_STATUSES.has(rawStatus) ? rawStatus : "active") as LearningItemStatus;
+    const requestedStatus = (VALID_STATUSES.has(rawStatus) ? rawStatus : "active") as LearningItemStatus;
     const now = nowIso();
     const priority = Math.max(0, Math.min(1, Number(input.priority ?? 0.5) || 0.5));
+    const snapshot = await this.getLearningHygieneSnapshot();
+    const status = statusForNewLearningItem(type, title, priority, requestedStatus, snapshot, input.prompt_l2);
     const existing = this.findDuplicateLearningItem(type, title);
     if (existing) {
       const next = initialReactivationDate(priority);
@@ -413,6 +456,51 @@ export class SqlLearningRepository extends SqlRepository {
     return { keeperId: keeper.id, archivedId: dup.id };
   }
 
+  async getLearningHygieneSnapshot(): Promise<LearningHygieneSnapshot> {
+    const row = this.queryRow<{
+      active: number;
+      candidate: number;
+      active_without_evidence: number;
+      candidate_without_evidence: number;
+      stale_new_items: number;
+      due_high_pressure: number;
+      reintroduced_without_production: number;
+    }>(
+      `SELECT
+         SUM(CASE WHEN status IN ('active', 'cooling_down') THEN 1 ELSE 0 END) AS active,
+         SUM(CASE WHEN status = 'candidate' THEN 1 ELSE 0 END) AS candidate,
+         SUM(CASE WHEN status IN ('active', 'cooling_down') AND evidence_count = 0 THEN 1 ELSE 0 END) AS active_without_evidence,
+         SUM(CASE WHEN status = 'candidate' AND evidence_count = 0 THEN 1 ELSE 0 END) AS candidate_without_evidence,
+         SUM(CASE WHEN status IN ('active', 'candidate') AND stability = 'new' AND evidence_count = 0 AND datetime(created_at) <= datetime('now', '-14 days') THEN 1 ELSE 0 END) AS stale_new_items,
+         SUM(CASE WHEN status IN ('active', 'cooling_down') AND reactivation_pressure = 'high' AND (next_reactivation_at IS NULL OR datetime(next_reactivation_at) <= datetime('now')) THEN 1 ELSE 0 END) AS due_high_pressure,
+         SUM(CASE WHEN status IN ('active', 'cooling_down') AND last_reactivated_at IS NOT NULL AND last_produced_at IS NULL THEN 1 ELSE 0 END) AS reintroduced_without_production
+       FROM learning_items
+       WHERE language = ? AND status NOT IN ('ignored', 'archived', 'mastered')`,
+      [this.languageId],
+    ) ?? { active: 0, candidate: 0, active_without_evidence: 0, candidate_without_evidence: 0, stale_new_items: 0, due_high_pressure: 0, reintroduced_without_production: 0 };
+    const suspicious = this.queryAll<{ title: string }>(
+      `SELECT title FROM learning_items
+       WHERE language = ? AND status NOT IN ('ignored', 'archived', 'mastered')
+         AND type = 'correction'
+       ORDER BY datetime(created_at) DESC, id DESC
+       LIMIT 100`,
+      [this.languageId],
+    ).filter((item) => looksLikeSuspiciousCorrection("correction", item.title)).map((item) => item.title).slice(0, 10);
+    const activeWithoutEvidence = Number(row.active_without_evidence ?? 0);
+    const backlog_status = activeWithoutEvidence > 50 ? "blocked" : activeWithoutEvidence > 20 ? "crowded" : "healthy";
+    return {
+      active: Number(row.active ?? 0),
+      candidate: Number(row.candidate ?? 0),
+      active_without_evidence: activeWithoutEvidence,
+      candidate_without_evidence: Number(row.candidate_without_evidence ?? 0),
+      stale_new_items: Number(row.stale_new_items ?? 0),
+      due_high_pressure: Number(row.due_high_pressure ?? 0),
+      reintroduced_without_production: Number(row.reintroduced_without_production ?? 0),
+      suspicious_items: suspicious,
+      backlog_status,
+    };
+  }
+
   async listLearningItems(status: string, limit: number): Promise<LearningItem[]> {
     const capped = Math.max(1, Math.min(200, Math.round(limit || 50)));
     if (status === "all") {
@@ -539,8 +627,7 @@ export class SqlLearningRepository extends SqlRepository {
     );
     const evidenceId = this.db.exec("SELECT last_insert_rowid()")[0].values[0][0] as number;
 
-    const passiveScore = clamp01(Number(item.passive_score ?? 0) + (skill === "passive" ? scoreDelta : 0), 0);
-    const activeScore = clamp01(Number(item.active_score ?? 0) + (skill === "active" ? scoreDelta : 0), 0);
+    const { passiveScore, activeScore } = evidenceAdjustedScores(item, skill, event, scoreDelta);
     const evidenceCount = Number(item.evidence_count ?? 0) + 1;
     const failureCount = Number(item.failure_count ?? 0) + (scoreDelta < 0 ? 1 : 0);
     const avoidanceCount = Number(item.avoidance_count ?? 0) + (event === "avoidance" ? 1 : 0);

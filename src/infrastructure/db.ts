@@ -10,7 +10,7 @@ import type {
   ErrorItem, UserProfile, ConversationStateResult, UpdateResult,
   TurnAnnotationInput, TurnAnnotation, CompetencyVectorRow,
   ProficiencyEvidenceInput, ProficiencyEvidenceRow, ProficiencyChallengeBand,
-  LearningItemInput, LearningItem, LearningItemEvidenceInput, LearningItemEvidenceRow, LearningPracticeAttempt, StartLearningPracticeAttemptInput, FinishLearningPracticeAttemptInput, FuzzyLearningItemDuplicateCandidate, FuzzyLearningItemDuplicateOptions, FuzzyLearningItemDuplicateDecision, AppliedFuzzyLearningItemMerge,
+  LearningItemInput, LearningItem, LearningItemEvidenceInput, LearningItemEvidenceRow, LearningPracticeAttempt, StartLearningPracticeAttemptInput, FinishLearningPracticeAttemptInput, FuzzyLearningItemDuplicateCandidate, FuzzyLearningItemDuplicateOptions, FuzzyLearningItemDuplicateDecision, AppliedFuzzyLearningItemMerge, LearningHygieneSnapshot,
 } from "../domain/types.js";
 import type {
   ErrorRepository, SessionRepository, ProfileRepository,
@@ -41,7 +41,7 @@ export class BuddyDb implements ErrorRepository, SessionRepository, ProfileRepos
   private constructor(
     db: Database,
     dbPath: string,
-    languageId: string,
+    public readonly languageId: string,
     validCategories: readonly string[],
     morphologyCategories: readonly string[],
   ) {
@@ -142,6 +142,10 @@ export class BuddyDb implements ErrorRepository, SessionRepository, ProfileRepos
 
   async abandonActiveLearningPracticeAttempts(note?: string): Promise<number> {
     return this.learning.abandonActiveLearningPracticeAttempts(note);
+  }
+
+  async getLearningHygieneSnapshot(): Promise<LearningHygieneSnapshot> {
+    return this.learning.getLearningHygieneSnapshot();
   }
 
   async logError(userText: string, correct: string, category: string, note: string): Promise<number> {

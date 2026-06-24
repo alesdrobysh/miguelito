@@ -103,6 +103,8 @@ describe("integration: progress summary aggregates", () => {
     expect((summary as any).learning_items.new).toBe(0);
     expect((summary as any).learning_items.practiced).toBe(0);
     expect((summary as any).learning_items.due_now).toBe(0);
+    expect((summary as any).hygiene.backlog_status).toBe("healthy");
+    expect((summary as any).hygiene.active_without_evidence).toBe(0);
     expect((summary as any).error_categories["gender"]).toBe(2);
     expect((summary as any).error_categories["verb_conjugation"]).toBe(1);
   });

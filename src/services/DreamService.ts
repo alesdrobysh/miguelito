@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import type { SessionRepository, ErrorRepository, CompetencyRepository, MetaRepository } from "../repositories/interfaces.js";
+import type { LearningHygieneRunResult } from "../domain/types.js";
 import type { LLMProvider } from "../providers/interfaces.js";
 import { logger } from "../infrastructure/logger.js";
 
@@ -22,6 +23,7 @@ export class DreamService {
     private provider: LLMProvider,
     private config: DreamConfig,
     private meta: MetaRepository,
+    private hygiene?: { run(): Promise<LearningHygieneRunResult> },
   ) {}
 
   async run(): Promise<string> {
@@ -134,6 +136,14 @@ export class DreamService {
       const rate = vec.idiom_successes / vec.idiom_trials;
       await this.competency.updateCompetencyVector({ idiom_successes: rate * 2, idiom_trials: 2 });
       notes.push("Idiomaticity EWMA recalibrated after idle period.");
+    }
+
+    if (this.hygiene) {
+      const result = await this.hygiene.run();
+      const total = result.archived + result.cooledDown + result.promoted + result.mastered + result.ignored;
+      if (total > 0) {
+        notes.push(`Learning hygiene: archived ${result.archived}, cooled ${result.cooledDown}, promoted ${result.promoted}, mastered ${result.mastered}, ignored ${result.ignored}.`);
+      }
     }
 
     return notes;
