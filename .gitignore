@@ -13,4 +13,5 @@ logs/
 *.pid
 dogfood-output/
 reports/
+archives/backups/
 .vercel
