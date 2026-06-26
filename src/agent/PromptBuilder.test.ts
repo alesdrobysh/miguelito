@@ -115,6 +115,31 @@ describe("autonomous opener policy", () => {
     expect(prompt).not.toContain("These are priority learning targets. Weave exactly one into this turn");
   });
 
+  it("injects due learning items when the user asks for generic practice", async () => {
+    const due = [
+      { id: 252, title: "Me parece impactante / efectivo / sugerente", type: "phrase", passive_score: 0, active_score: 0, reactivation_pressure: "medium" },
+      { id: 270, title: "Me ha dicho que...", type: "phrase", passive_score: 0, active_score: 0, reactivation_pressure: "medium" },
+    ];
+    const builder = new PromptBuilder(repos([], due), SpanishLanguage);
+
+    const prompt = await builder.build("quiero practicar learning items", undefined, { sourceType: "user_chat" });
+
+    expect(prompt).toContain("Conversation-native learning items due");
+    expect(prompt).toContain("Me parece impactante / efectivo / sugerente");
+    expect(prompt).toContain("Me ha dicho que...");
+  });
+
+  it("does not treat ordinary sports training talk as generic learning practice intent", async () => {
+    const due = [
+      { id: 252, title: "Me parece impactante / efectivo / sugerente", type: "phrase", passive_score: 0, active_score: 0, reactivation_pressure: "medium" },
+    ];
+    const builder = new PromptBuilder(repos([], due), SpanishLanguage);
+
+    const prompt = await builder.build("Hoy quiero entrenar en el gimnasio", undefined, { sourceType: "user_chat" });
+
+    expect(prompt).not.toContain("Conversation-native learning items due");
+  });
+
   it("does not inject the autonomous opener policy during normal user chat", async () => {
     const builder = new PromptBuilder(repos(["Canarias", "mar"]), SpanishLanguage);
     const prompt = await builder.build("hola", undefined, { sourceType: "user_chat" });

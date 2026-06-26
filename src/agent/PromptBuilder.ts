@@ -105,8 +105,9 @@ export class PromptBuilder {
     const errorInfo = weakAreas.length > 0 ? await this._getRecentErrorForCategory(weakAreas[0]) : null;
 
     const isAutonomousOpener = options.sourceType === "cron" || options.sourceType === "proactive";
+    const wantsPractice = this.detectPracticeIntent(userMessage);
     const rawDueLearningItems = await this._getDueLearningItems(5);
-    const dueLearningItems = isAutonomousOpener
+    const dueLearningItems = isAutonomousOpener || wantsPractice
       ? rawDueLearningItems
       : this.filterDueLearningItemsForUserTurn(rawDueLearningItems, userMessage).slice(0, 5);
     const hasLearnerData = errorInfo != null || weakAreas.length > 0 || dueLearningItems.length > 0;
@@ -176,6 +177,14 @@ export class PromptBuilder {
     return items
       .map((i) => `- #${i.id} ${i.title} (${i.type}; passive=${Number(i.passive_score).toFixed(2)}, active=${Number(i.active_score).toFixed(2)}, pressure=${i.reactivation_pressure})`)
       .join("\n");
+  }
+
+  private detectPracticeIntent(userMessage?: string): boolean {
+    if (!userMessage?.trim()) return false;
+    const message = this.normalizeForMatching(userMessage);
+    // ponytail: generic practice intent only; topic/source ranking can move into the repository if this grows.
+    return /\b(practic|repas|ejercit|revis)/u.test(message)
+      || /\b(lo pendiente|pendientes|material guardado|algo guardado|learning items)\b/u.test(message);
   }
 
   private filterDueLearningItemsForUserTurn<T extends { title: string; type: string }>(items: T[], userMessage?: string): T[] {
