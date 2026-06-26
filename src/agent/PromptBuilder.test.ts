@@ -124,7 +124,9 @@ describe("autonomous opener policy", () => {
 
     const prompt = await builder.build("quiero practicar learning items", undefined, { sourceType: "user_chat" });
 
-    expect(prompt).toContain("Conversation-native learning items due");
+    expect(prompt).toContain("Explicit practice request: due learning items");
+    expect(prompt).toContain("Pick exactly one item from this list");
+    expect(prompt).toContain("Respect exclusions like \"sin gimnasio\"");
     expect(prompt).toContain("Me parece impactante / efectivo / sugerente");
     expect(prompt).toContain("Me ha dicho que...");
   });

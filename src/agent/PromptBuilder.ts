@@ -117,7 +117,9 @@ export class PromptBuilder {
     const learnerProfile = dueLearningItems.length > 0
       ? isAutonomousOpener
         ? `${learnerProfileBase ?? ""}\n\n## Optional learning hooks due\n${this.renderDueLearningItems(dueLearningItems)}\nThese items are optional hooks for an autonomous opener, not the agenda. Do not let due items override opener variety; choose a due item only if it makes a fresh, natural start. If the due items cluster around the same recent topic, prefer a different interest, stable memory, or neutral opener instead.`
-        : `${learnerProfileBase ?? ""}\n\n## Conversation-native learning items due\n${this.renderDueLearningItems(dueLearningItems)}\nThese are priority learning targets. Weave exactly one into this turn when at all plausible; for high-pressure items, prefer an active-production opportunity (a natural cue, micro-cloze, or short follow-up) over mere exposure. Keep it conversational, do not dump a quiz list, and do not create a /practice mode.`
+        : wantsPractice
+          ? `${learnerProfileBase ?? ""}\n\n## Explicit practice request: due learning items\n${this.renderDueLearningItems(dueLearningItems)}\nThe learner explicitly asked to practice saved/pending material. Pick exactly one item from this list and make a tiny conversational production task from that item itself. Do not steer to unrelated memories, hobbies, or recent topics unless the learner named that topic in the latest message. Respect exclusions like "sin gimnasio". No quiz list and no /practice mode.`
+          : `${learnerProfileBase ?? ""}\n\n## Conversation-native learning items due\n${this.renderDueLearningItems(dueLearningItems)}\nThese are priority learning targets. Weave exactly one into this turn when at all plausible; for high-pressure items, prefer an active-production opportunity (a natural cue, micro-cloze, or short follow-up) over mere exposure. Keep it conversational, do not dump a quiz list, and do not create a /practice mode.`
       : learnerProfileBase;
 
     // Dynamic Interest Injection
