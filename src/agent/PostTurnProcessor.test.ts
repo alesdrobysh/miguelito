@@ -37,6 +37,7 @@ const lang: LanguageConfig = {
   id: "es",
   name: "Spanish",
   errorCategories: ["preposition", "other"],
+  errorExplanations: {},
   morphologyCategories: [],
   calibrationThresholds: { morphology: 0, idiomaticity: 0 },
   calibrationText: {

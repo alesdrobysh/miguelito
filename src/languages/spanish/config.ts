@@ -7,9 +7,29 @@ export const spanishBaseConfig: Omit<LanguageConfig, "frequency" | "soulPath"> =
   name: "Spanish",
   errorCategories: [
     "gender", "verb_conjugation", "preposition", "spelling",
-    "word_choice", "agreement", "ser_estar", "por_para", "other",
+    "word_choice", "agreement", "ser_estar", "por_para",
+    "subjunctive_avoidance", "preterite_imperfect", "false_cognate", "object_pronoun_order",
+    "other",
   ],
-  morphologyCategories: ["verb_conjugation", "agreement", "ser_estar", "gender"],
+  morphologyCategories: [
+    "verb_conjugation", "agreement", "ser_estar", "gender",
+    "subjunctive_avoidance", "preterite_imperfect",
+  ],
+  errorExplanations: {
+    gender: "El género del sustantivo no concuerda con el artículo o el adjetivo.",
+    verb_conjugation: "La forma verbal no corresponde a la persona, el número o el tiempo correctos.",
+    preposition: "La preposición usada no es la que pide este verbo o expresión en español.",
+    spelling: "Error ortográfico: acentuación, letras o tildes.",
+    word_choice: "La palabra elegida no es la más natural o precisa en este contexto.",
+    agreement: "Falta concordancia de género o número entre las palabras de la frase.",
+    ser_estar: "El inglés solo tiene \"to be\", así que cuesta elegir entre ser (identidad, origen, rasgos permanentes) y estar (estado temporal, ubicación, resultado de un cambio).",
+    por_para: "El inglés usa \"for\" para ambos casos: por (causa, duración, intercambio) y para (propósito, destino, plazo) se confunden con facilidad.",
+    subjunctive_avoidance: "El inglés casi no marca el subjuntivo, así que es común usar el indicativo después de disparadores como \"quiero que\", \"es importante que\" o \"cuando\" + futuro.",
+    preterite_imperfect: "El inglés no distingue acción terminada de acción habitual o en curso en el pasado, así que se sobreusa un solo tiempo pasado.",
+    false_cognate: "Palabra que se parece a una palabra inglesa pero significa algo distinto (falso amigo).",
+    object_pronoun_order: "El inglés coloca el pronombre de objeto después del verbo; el español lo antepone al verbo conjugado y ordena indirecto antes que directo.",
+    other: "Error puntual sin patrón recurrente identificado todavía.",
+  },
   calibrationThresholds: {
     morphology: 0.75,
     idiomaticity: 0.70,
@@ -59,7 +79,10 @@ export const spanishBaseConfig: Omit<LanguageConfig, "frequency" | "soulPath"> =
       if (weakAreas.length > 0) lines.push(`**Áreas débiles**: ${weakAreas.join(", ")}`);
       if (rec.length > 0) lines.push(`**Vocabulario receptivo**: Contexto opcional, no agenda de conversación. Integra como máximo una expresión de forma natural solo si encaja con la última respuesta; no vuelvas al mismo tema solo por esta lista: ${rec.join(", ")}`);
       if (prod.length > 0) lines.push(`**Vocabulario productivo**: Contexto opcional, no agenda de conversación. Si encaja con el flujo actual, crea una necesidad comunicativa breve para que el aprendiz pueda producir UNA expresión; no fuerces siempre la misma palabra ni el mismo tema, y no digas "usa esta palabra" salvo como último recurso. Prefiere pregunta personal, roleplay, reformulación o cloze con pistas graduadas: ${prod.join(", ")}`);
-      if (errorInfo) lines.push(`**Error que reforzar**: "${errorInfo.user_text}" → "${errorInfo.correct}" (${errorInfo.category})`);
+      if (errorInfo) {
+        const explanationSuffix = errorInfo.explanation ? ` — ${errorInfo.explanation}` : "";
+        lines.push(`**Error que reforzar**: "${errorInfo.user_text}" → "${errorInfo.correct}" (${errorInfo.category})${explanationSuffix}`);
+      }
       return lines.join("\n");
     },
     dreamMemory: (content) => `\n\n## Memoria de sueño\n${content}\n\nUse this memory as optional background, not an agenda. The latest user message leads; do not steer generic rest, greeting, or status messages back to training/gym/sports unless the user explicitly mentions that topic in the current turn.`,

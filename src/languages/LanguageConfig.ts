@@ -2,6 +2,8 @@ export interface LanguageConfig {
   id: string;
   name: string;
   errorCategories: readonly string[];
+  /** Canned, reviewed explanation per error category — reused every time that category recurs. */
+  errorExplanations: Record<string, string>;
   morphologyCategories: readonly string[];
   calibrationThresholds: {
     morphology: number;
@@ -33,7 +35,7 @@ export interface LanguageConfig {
       words?: string[];
       receptiveWords?: string[];
       productiveWords?: string[];
-      errorInfo: { user_text: string; correct: string; category: string } | null;
+      errorInfo: { user_text: string; correct: string; category: string; explanation?: string } | null;
       weakAreas: string[];
     }) => string;
     dreamMemory: (content: string) => string;
