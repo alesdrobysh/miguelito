@@ -267,6 +267,61 @@ describe("runtime manager", () => {
     manager.close();
   });
 
+  it("resumes an active drill instead of creating duplicate attempts", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+    const db = manager.runtime("spanish").db;
+    await db.addLearningItem({ type: "phrase", title: "ola de calor", explanation_l1: "heat wave", source_type: "imported", priority: 0.95 });
+    await db.addLearningItem({ type: "phrase", title: "hacer pesas", explanation_l1: "lift weights", source_type: "imported", priority: 0.95 });
+    await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
+
+    const resumed = await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
+
+    expect(resumed).toContain("Drill en curso");
+    expect(resumed).toContain("1. ¿Cómo dirías “heat wave” en español?");
+    expect(resumed).toContain("2. ¿Cómo dirías “lift weights” en español?");
+    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(2);
+    expect(provider.chatCalls).toHaveLength(0);
+    manager.close();
+  });
+
+  it("only accepts the current drill prompt before later queue items", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+    const db = manager.runtime("spanish").db;
+    await db.addLearningItem({ type: "phrase", title: "ola de calor", explanation_l1: "heat wave", source_type: "imported", priority: 0.95 });
+    await db.addLearningItem({ type: "phrase", title: "hacer pesas", explanation_l1: "lift weights", source_type: "imported", priority: 0.95 });
+    await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
+
+    const reply = await manager.handleMessage("spanish", 777, "telegram-user", "Hacer pesas me ayuda mucho");
+
+    expect(reply).toContain("Casi");
+    expect(reply).toContain("1. ¿Cómo dirías “heat wave” en español?");
+    const attempts = await db.listActiveLearningPracticeAttempts(10);
+    expect(attempts).toHaveLength(2);
+    expect(attempts.every((attempt) => attempt.user_response == null)).toBe(true);
+    expect(provider.chatCalls).toHaveLength(0);
+    manager.close();
+  });
+
+  it("stops an active drill on /drill stop", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+    const db = manager.runtime("spanish").db;
+    await db.addLearningItem({ type: "phrase", title: "ola de calor", explanation_l1: "heat wave", source_type: "imported", priority: 0.95 });
+    await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
+
+    const stopped = await manager.handleMessage("spanish", 777, "telegram-user", "/drill stop");
+
+    expect(stopped).toBe("Drill detenido. Seguimos conversando normalmente.");
+    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(0);
+    expect(provider.chatCalls).toHaveLength(0);
+    manager.close();
+  });
+
   it("scores drill answers with feedback instead of dropping into generic chat", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const provider = new FakeProvider();
@@ -342,14 +397,13 @@ describe("runtime manager", () => {
     const itemId = await db.addLearningItem({ type: "correction", title: "yo es → yo soy", priority: 0.95 });
     expect(itemId).not.toBeNull();
     await db.startLearningPracticeAttempt({ learning_item_id: itemId!, prompt_text: "Corrige: yo es estudiante" });
+    await db.abandonActiveLearningPracticeAttempts("historical cleanup");
 
     const normal = await manager.handleMessage("spanish", 777, "telegram-user", "hola normal");
 
     expect(normal).toBe("echo:hola normal");
     expect(provider.chatCalls).toHaveLength(1);
-    const attempts = await db.listActiveLearningPracticeAttempts(10);
-    expect(attempts).toHaveLength(1);
-    expect(attempts[0].user_response).toBeNull();
+    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(0);
     manager.close();
   });
 

@@ -127,6 +127,13 @@ function answerUsesItem(answer: string, item: { title: string; type?: string | n
   return normalizedTitle.length > 0 && normalizedAnswer.includes(` ${normalizedTitle} `);
 }
 
+function formatAttemptQueue(title: string, attempts: Array<{ prompt_text?: string | null }>): string {
+  return [
+    title,
+    ...attempts.map((attempt, idx) => (attempt.prompt_text || `${idx + 1}. Sigue con otra frase corta.`).replace(/^\d+\./, `${idx + 1}.`)),
+  ].join("\n");
+}
+
 export class RuntimeManager {
   private runtimes = new Map<string, LanguageRuntime>();
 
@@ -231,7 +238,7 @@ export class RuntimeManager {
     const commandToken = text.split(/\s+/, 1)[0]?.replace(/@[^\s]+$/, "");
     if (commandToken === "/start") return formatStart(lang);
     if (commandToken === "/import") return this.handleImportCommand(db, text);
-    if (commandToken === "/drill") return this.handleDrillCommand(db);
+    if (commandToken === "/drill") return this.handleDrillCommand(db, text);
     if (text.startsWith("/")) return formatCommandRedirect(lang);
     return undefined;
   }
@@ -266,7 +273,14 @@ export class RuntimeManager {
     return `Perfecto. Tengo ${imported} frases para entrenar. Las voy a mezclar en nuestras conversaciones. Usa /drill cuando quieras un mini entrenamiento enfocado.`;
   }
 
-  private async handleDrillCommand(db: BuddyDb): Promise<string> {
+  private async handleDrillCommand(db: BuddyDb, text: string): Promise<string> {
+    if (/^\/drill(?:@[^\s]+)?\s+(?:stop|reset|cancelar|parar)\b/i.test(text.trim())) {
+      await db.abandonActiveLearningPracticeAttempts("drill stopped by user");
+      return "Drill detenido. Seguimos conversando normalmente.";
+    }
+    const active = await db.listActiveLearningPracticeAttempts(10);
+    if (active.length > 0) return formatAttemptQueue("Drill en curso — responde el primer punto o usa /drill stop:", active);
+
     const all = await db.listLearningItems("all", 100);
     const items = all
       .filter((item) => ["active", "cooling_down", "candidate"].includes(item.status))
@@ -287,38 +301,30 @@ export class RuntimeManager {
     if (attempts.length === 0) return null;
     const drillItems = new Map((await db.listLearningItems("all", 200))
       .map((item) => [item.id, item]));
-    let completed = 0;
-    for (const attempt of attempts) {
-      const item = drillItems.get(attempt.learning_item_id);
-      if (!item) continue;
-      const success = answerUsesItem(text, item);
-      if (!success) continue;
-      completed++;
-      await db.finishLearningPracticeAttempt({
-        attempt_id: attempt.id,
-        user_response: text,
-        grade: 4,
-        note: "drill matched target",
-      });
-      await db.recordLearningItemEvidence({
-        learning_item_id: item.id,
-        skill: "active",
-        event: "produced_after_prompt",
-        independence: "elicited",
-        score_delta: 0.2,
-        confidence: 0.8,
-        evidence_snippet: text,
-        source_type: "drill",
-      });
-    }
-    if (completed === 0) return null;
+    const attempt = attempts[0];
+    const item = drillItems.get(attempt.learning_item_id);
+    if (!item) return null;
+    const success = answerUsesItem(text, item);
+    if (!success) return formatAttemptQueue("Casi. Prueba con el punto actual:", [attempt]);
+    await db.finishLearningPracticeAttempt({
+      attempt_id: attempt.id,
+      user_response: text,
+      grade: 4,
+      note: "drill matched target",
+    });
+    await db.recordLearningItemEvidence({
+      learning_item_id: item.id,
+      skill: "active",
+      event: "produced_after_prompt",
+      independence: "elicited",
+      score_delta: 0.2,
+      confidence: 0.8,
+      evidence_snippet: text,
+      source_type: "drill",
+    });
     const remaining = await db.listActiveLearningPracticeAttempts(5);
-    if (remaining.length === 0) return `¡Bien! He marcado ${completed} ${completed === 1 ? "respuesta" : "respuestas"}. Drill completado.`;
-    return [
-      `¡Bien! He marcado ${completed} ${completed === 1 ? "respuesta" : "respuestas"}.`,
-      "Siguiente:",
-      ...remaining.map((attempt, idx) => (attempt.prompt_text || `${idx + 1}. Sigue con otra frase corta.`).replace(/^\d+\./, `${idx + 1}.`)),
-    ].join("\n");
+    if (remaining.length === 0) return "¡Bien! He marcado 1 respuesta. Drill completado.";
+    return formatAttemptQueue("¡Bien! He marcado 1 respuesta.\nSiguiente:", remaining);
   }
 
   getChatHistory(language: string, chatId: number, limit?: number): Promise<{ role: string; content: string }[]> {
