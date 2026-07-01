@@ -131,6 +131,20 @@ describe("autonomous opener policy", () => {
     expect(prompt).toContain("Me ha dicho que...");
   });
 
+  it("injects due imported practice items into normal chat even when the latest topic is different", async () => {
+    const due = [
+      { id: 301, title: "bochorno", type: "phrase", source_type: "imported", passive_score: 0, active_score: 0, reactivation_pressure: "high" },
+      { id: 17, title: "entrenar con pesos", type: "phrase", source_type: "conversation", passive_score: 0.2, active_score: 0, reactivation_pressure: "high" },
+    ];
+    const builder = new PromptBuilder(repos([], due), SpanishLanguage);
+
+    const prompt = await builder.build("Hoy quiero hablar de libros", undefined, { sourceType: "user_chat" });
+
+    expect(prompt).toContain("Imported practice items due");
+    expect(prompt).toContain("bochorno");
+    expect(prompt).not.toContain("entrenar con pesos");
+  });
+
   it("does not treat ordinary sports training talk as generic learning practice intent", async () => {
     const due = [
       { id: 252, title: "Me parece impactante / efectivo / sugerente", type: "phrase", passive_score: 0, active_score: 0, reactivation_pressure: "medium" },

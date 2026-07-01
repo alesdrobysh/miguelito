@@ -65,18 +65,57 @@ const MODEL_HISTORY_LIMIT = 50;
 function formatStart(_lang: LanguageConfig): string {
   return [
     "Hola — soy Miguelito, tu tutor de español.",
-    "Para empezar, cuéntame en español, aunque sea con frases simples:",
+    "Para empezar, cuéntame en español, aunque sea con frases simples, o importa frases con /import:",
     "1. ¿Cómo te llamas?",
     "2. ¿Por qué quieres practicar español?",
     "3. ¿Qué temas te interesan?",
     "4. ¿Cómo prefieres que te corrija: suave, normal o directo?",
     "",
-    "Con eso adaptaré la conversación y recordaré lo útil para traerlo de vuelta suavemente.",
+    "También puedes pegar vocabulario con /import y pedir un mini entrenamiento con /drill.",
   ].join("\n");
 }
 
 function formatCommandRedirect(_lang: LanguageConfig): string {
   return "Escríbeme normalmente; yo recordaré lo útil y lo traeré de vuelta en la conversación.";
+}
+
+interface ImportedPracticeItem {
+  title: string;
+  translation?: string;
+}
+
+function parseImportedPracticeItems(text: string): ImportedPracticeItem[] {
+  const body = text.replace(/^\/import(?:@[^\s]+)?\s*/i, "");
+  const seen = new Set<string>();
+  const items: ImportedPracticeItem[] = [];
+  for (const rawLine of body.split(/\r?\n/)) {
+    const line = rawLine.replace(/^[-*•]\s*/, "").trim();
+    if (!line) continue;
+    const parts = line.split(/\s*(?:=|—|–)\s*/).map((p) => p.trim()).filter(Boolean);
+    const title = (parts[0] ?? "").trim();
+    if (!title) continue;
+    const key = title.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    items.push({ title, translation: parts.slice(1).join(" — ") || undefined });
+  }
+  return items.slice(0, 100);
+}
+
+function drillLine(item: { title: string; explanation_l1?: string | null }, n: number): string {
+  const translation = item.explanation_l1?.trim();
+  if (translation) return `${n}. ¿Cómo dirías “${translation}” en español? → ${item.title}`;
+  return `${n}. Usa “${item.title}” en una frase corta.`;
+}
+
+function normalizePracticeText(text: string): string {
+  return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+
+function answerUsesItem(answer: string, title: string): boolean {
+  const normalizedAnswer = ` ${normalizePracticeText(answer)} `;
+  const normalizedTitle = normalizePracticeText(title.split(/→|->/).pop() ?? title);
+  return normalizedTitle.length > 0 && normalizedAnswer.includes(` ${normalizedTitle} `);
 }
 
 export class RuntimeManager {
@@ -167,6 +206,7 @@ export class RuntimeManager {
       return commandReply || null;
     }
 
+    await this.processImportedDrillAnswers(db, text);
 
     const result = await agentRunner.run(text, history);
     if (result.text) await db.addChatMessage(chatId, "assistant", result.text, convState.session_id);
@@ -174,11 +214,89 @@ export class RuntimeManager {
   }
 
   private async handleCommand(rt: LanguageRuntime, text: string): Promise<string | undefined> {
-    const { lang } = rt;
+    const { lang, db } = rt;
     const commandToken = text.split(/\s+/, 1)[0]?.replace(/@[^\s]+$/, "");
     if (commandToken === "/start") return formatStart(lang);
+    if (commandToken === "/import") return this.handleImportCommand(db, text);
+    if (commandToken === "/drill") return this.handleDrillCommand(db);
     if (text.startsWith("/")) return formatCommandRedirect(lang);
     return undefined;
+  }
+
+  private async handleImportCommand(db: BuddyDb, text: string): Promise<string> {
+    const items = parseImportedPracticeItems(text);
+    if (items.length === 0) {
+      return [
+        "Pega las frases después de /import, una por línea.",
+        "Ejemplo:",
+        "/import",
+        "bochorno = muggy heat",
+        "ola de calor = heat wave",
+      ].join("\n");
+    }
+    let imported = 0;
+    for (const item of items) {
+      const id = await db.addLearningItem({
+        type: item.title.includes("→") || item.title.includes("->") ? "correction" : "phrase",
+        title: item.title,
+        prompt_l2: item.title,
+        explanation_l1: item.translation,
+        source_type: "imported",
+        evidence_snippet: item.translation ? `${item.title} = ${item.translation}` : item.title,
+        priority: 0.95,
+        status: "active",
+        practice_modes: ["recall", "use_in_sentence"],
+        tags: ["imported"],
+      });
+      if (id != null) imported++;
+    }
+    return `Perfecto. Tengo ${imported} frases para entrenar. Las voy a mezclar en nuestras conversaciones. Usa /drill cuando quieras un mini entrenamiento enfocado.`;
+  }
+
+  private async handleDrillCommand(db: BuddyDb): Promise<string> {
+    const all = await db.listLearningItems("all", 100);
+    const items = all
+      .filter((item) => item.source_type === "imported" && ["active", "cooling_down", "candidate"].includes(item.status))
+      .sort((a, b) => (a.evidence_count - b.evidence_count) || (b.priority - a.priority) || (a.id - b.id))
+      .slice(0, 5);
+    if (items.length === 0) return "No tengo frases importadas todavía. Pégalas con /import y las entrenamos.";
+    for (const item of items) {
+      await db.startLearningPracticeAttempt({ learning_item_id: item.id, prompt_text: drillLine(item, 1) });
+    }
+    return [
+      "Mini drill — responde con frases cortas y luego seguimos conversando:",
+      ...items.map((item, idx) => drillLine(item, idx + 1)),
+    ].join("\n");
+  }
+
+  private async processImportedDrillAnswers(db: BuddyDb, text: string): Promise<void> {
+    const attempts = await db.listActiveLearningPracticeAttempts(10);
+    if (attempts.length === 0) return;
+    const imported = new Map((await db.listLearningItems("all", 200))
+      .filter((item) => item.source_type === "imported")
+      .map((item) => [item.id, item]));
+    for (const attempt of attempts) {
+      const item = imported.get(attempt.learning_item_id);
+      if (!item) continue;
+      const success = answerUsesItem(text, item.title);
+      if (!success) continue;
+      await db.finishLearningPracticeAttempt({
+        attempt_id: attempt.id,
+        user_response: text,
+        grade: 4,
+        note: "imported drill matched target",
+      });
+      await db.recordLearningItemEvidence({
+        learning_item_id: item.id,
+        skill: "active",
+        event: "produced_after_prompt",
+        independence: "elicited",
+        score_delta: 0.2,
+        confidence: 0.8,
+        evidence_snippet: text,
+        source_type: "drill",
+      });
+    }
   }
 
   getChatHistory(language: string, chatId: number, limit?: number): Promise<{ role: string; content: string }[]> {

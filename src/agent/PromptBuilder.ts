@@ -109,7 +109,7 @@ export class PromptBuilder {
     const rawDueLearningItems = await this._getDueLearningItems(5);
     const dueLearningItems = isAutonomousOpener || wantsPractice
       ? rawDueLearningItems
-      : this.filterDueLearningItemsForUserTurn(rawDueLearningItems, userMessage).slice(0, 5);
+      : this.selectDueLearningItemsForNormalTurn(rawDueLearningItems, userMessage).slice(0, 5);
     const hasLearnerData = errorInfo != null || weakAreas.length > 0 || dueLearningItems.length > 0;
     const learnerProfileBase = hasLearnerData
       ? this.lang.promptText.currentLearnerProfile({ receptiveWords: [], productiveWords: [], errorInfo, weakAreas })
@@ -119,7 +119,9 @@ export class PromptBuilder {
         ? `${learnerProfileBase ?? ""}\n\n## Optional learning hooks due\n${this.renderDueLearningItems(dueLearningItems)}\nThese items are optional hooks for an autonomous opener, not the agenda. Do not let due items override opener variety; choose a due item only if it makes a fresh, natural start. If the due items cluster around the same recent topic, prefer a different interest, stable memory, or neutral opener instead.`
         : wantsPractice
           ? `${learnerProfileBase ?? ""}\n\n## Explicit practice request: due learning items\n${this.renderDueLearningItems(dueLearningItems)}\nThe learner explicitly asked to practice saved/pending material. Pick exactly one item from this list and make a tiny conversational production task from that item itself. Do not steer to unrelated memories, hobbies, or recent topics unless the learner named that topic in the latest message. Respect exclusions like "sin gimnasio". No quiz list and no /practice mode.`
-          : `${learnerProfileBase ?? ""}\n\n## Conversation-native learning items due\n${this.renderDueLearningItems(dueLearningItems)}\nThese are priority learning targets. Weave exactly one into this turn when at all plausible; for high-pressure items, prefer an active-production opportunity (a natural cue, micro-cloze, or short follow-up) over mere exposure. Keep it conversational, do not dump a quiz list, and do not create a /practice mode.`
+          : dueLearningItems.some((item: any) => item.source_type === "imported")
+            ? `${learnerProfileBase ?? ""}\n\n## Imported practice items due\n${this.renderDueLearningItems(dueLearningItems)}\nThese are learner-imported practice items: the learner brought the material, Miguelito makes them use it. Weave at most one tiny drill into this turn (translation cue, cloze, or “úsalo en una frase”) and then return to the conversation. Do not dump a quiz list.`
+            : `${learnerProfileBase ?? ""}\n\n## Conversation-native learning items due\n${this.renderDueLearningItems(dueLearningItems)}\nThese are priority learning targets. Weave exactly one into this turn when at all plausible; for high-pressure items, prefer an active-production opportunity (a natural cue, micro-cloze, or short follow-up) over mere exposure. Keep it conversational, do not dump a quiz list, and do not create a /practice mode.`
       : learnerProfileBase;
 
     // Dynamic Interest Injection
@@ -200,6 +202,14 @@ export class PromptBuilder {
       }
       return this.matchTokens(item.title).some((token) => messageTokens.has(token));
     });
+  }
+
+  private selectDueLearningItemsForNormalTurn<T extends { title: string; type: string; source_type?: string }>(items: T[], userMessage?: string): T[] {
+    const imported = items.filter((item) => item.source_type === "imported").slice(0, 1);
+    const contextual = this.filterDueLearningItemsForUserTurn(items.filter((item) => item.source_type !== "imported"), userMessage);
+    const selected = new Map<string, T>();
+    for (const item of [...imported, ...contextual]) selected.set(`${item.type}:${item.title.toLowerCase()}`, item);
+    return Array.from(selected.values());
   }
 
   private normalizeForMatching(text: string): string {
