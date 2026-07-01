@@ -204,6 +204,23 @@ describe("runtime manager", () => {
     manager.close();
   });
 
+  it("runs /drill from conversation learning items, not only imported items", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+    const db = manager.runtime("spanish").db;
+    await db.addLearningItem({ type: "phrase", title: "me da igual", explanation_l1: "I don't mind", source_type: "conversation", priority: 0.95 });
+
+    const drill = await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
+
+    expect(drill).toContain("Mini drill");
+    expect(drill).toContain("I don't mind");
+    expect(drill).toContain("me da igual");
+    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(1);
+    expect(provider.chatCalls).toHaveLength(0);
+    manager.close();
+  });
+
   it("scores imported drill answers as evidence before continuing the conversation", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const provider = new FakeProvider();

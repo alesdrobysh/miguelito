@@ -206,7 +206,7 @@ export class RuntimeManager {
       return commandReply || null;
     }
 
-    await this.processImportedDrillAnswers(db, text);
+    await this.processDrillAnswers(db, text);
 
     const result = await agentRunner.run(text, history);
     if (result.text) await db.addChatMessage(chatId, "assistant", result.text, convState.session_id);
@@ -256,10 +256,10 @@ export class RuntimeManager {
   private async handleDrillCommand(db: BuddyDb): Promise<string> {
     const all = await db.listLearningItems("all", 100);
     const items = all
-      .filter((item) => item.source_type === "imported" && ["active", "cooling_down", "candidate"].includes(item.status))
+      .filter((item) => ["active", "cooling_down", "candidate"].includes(item.status))
       .sort((a, b) => (a.evidence_count - b.evidence_count) || (b.priority - a.priority) || (a.id - b.id))
       .slice(0, 5);
-    if (items.length === 0) return "No tengo frases importadas todavía. Pégalas con /import y las entrenamos.";
+    if (items.length === 0) return "Todavía no tengo material para entrenar. Escribe normalmente o pega frases con /import y las practicamos.";
     for (const item of items) {
       await db.startLearningPracticeAttempt({ learning_item_id: item.id, prompt_text: drillLine(item, 1) });
     }
@@ -269,14 +269,13 @@ export class RuntimeManager {
     ].join("\n");
   }
 
-  private async processImportedDrillAnswers(db: BuddyDb, text: string): Promise<void> {
+  private async processDrillAnswers(db: BuddyDb, text: string): Promise<void> {
     const attempts = await db.listActiveLearningPracticeAttempts(10);
     if (attempts.length === 0) return;
-    const imported = new Map((await db.listLearningItems("all", 200))
-      .filter((item) => item.source_type === "imported")
+    const drillItems = new Map((await db.listLearningItems("all", 200))
       .map((item) => [item.id, item]));
     for (const attempt of attempts) {
-      const item = imported.get(attempt.learning_item_id);
+      const item = drillItems.get(attempt.learning_item_id);
       if (!item) continue;
       const success = answerUsesItem(text, item.title);
       if (!success) continue;
