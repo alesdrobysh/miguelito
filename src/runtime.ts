@@ -102,9 +102,11 @@ function parseImportedPracticeItems(text: string): ImportedPracticeItem[] {
   return items.slice(0, 100);
 }
 
-function drillLine(item: { title: string; explanation_l1?: string | null }, n: number): string {
-  const translation = item.explanation_l1?.trim();
-  if (translation) return `${n}. ¿Cómo dirías “${translation}” en español? → ${item.title}`;
+function drillLine(item: { title: string; explanation_l1?: string | null; source_type?: string | null; type?: string | null }, n: number): string {
+  const translation = item.source_type === "imported" ? item.explanation_l1?.trim() : "";
+  if (translation) return `${n}. ¿Cómo dirías “${translation}” en español?`;
+  const correction = item.title.split(/→|->/).map((part) => part.trim()).filter(Boolean);
+  if (item.type === "correction" && correction.length >= 2) return `${n}. Corrige: “${correction[0]}”.`;
   return `${n}. Usa “${item.title}” en una frase corta.`;
 }
 

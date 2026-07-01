@@ -197,8 +197,9 @@ describe("runtime manager", () => {
 
     expect(drill).toContain("Mini drill");
     expect(drill).toContain("heat wave");
-    expect(drill).toContain("ola de calor");
-    expect(drill).toContain("hacer pesas");
+    expect(drill).toContain("lift weights");
+    expect(drill).not.toContain("→ ola de calor");
+    expect(drill).not.toContain("→ hacer pesas");
     expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(2);
     expect(provider.chatCalls).toHaveLength(0);
     manager.close();
@@ -214,10 +215,28 @@ describe("runtime manager", () => {
     const drill = await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
 
     expect(drill).toContain("Mini drill");
-    expect(drill).toContain("I don't mind");
+    expect(drill).not.toContain("I don't mind");
     expect(drill).toContain("me da igual");
     expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(1);
     expect(provider.chatCalls).toHaveLength(0);
+    manager.close();
+  });
+
+  it("keeps internal learning explanations out of /drill prompts", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+    const db = manager.runtime("spanish").db;
+    await db.addLearningItem({ type: "phrase", title: "una lista adecuada", explanation_l1: "Learner expressed need to remember 'adecuada'", source_type: "conversation", priority: 0.95 });
+    await db.addLearningItem({ type: "correction", title: "opcioces → opciones", explanation_l1: "missing 'n' and extra 'c'", source_type: "correction", priority: 0.95 });
+
+    const drill = await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
+
+    expect(drill).toContain("Usa “una lista adecuada” en una frase corta.");
+    expect(drill).toContain("Corrige: “opcioces”.");
+    expect(drill).not.toContain("Learner expressed");
+    expect(drill).not.toContain("missing 'n'");
+    expect(drill).not.toContain("→ opciones");
     manager.close();
   });
 
