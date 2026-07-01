@@ -107,7 +107,8 @@ function drillLine(item: { title: string; explanation_l1?: string | null; source
   if (translation) return `${n}. ¿Cómo dirías “${translation}” en español?`;
   const correction = item.title.split(/→|->/).map((part) => part.trim()).filter(Boolean);
   if (item.type === "correction" && correction.length >= 2) return `${n}. Corrige: “${correction[0]}”.`;
-  return `${n}. Usa “${item.title}” en una frase corta.`;
+  const displayTitle = item.title.replace(/^spelling of\s+/i, "").replace(/\s*\([^)]*\)\s*$/, "").trim() || item.title;
+  return `${n}. Usa “${displayTitle}” en una frase corta.`;
 }
 
 function normalizePracticeText(text: string): string {

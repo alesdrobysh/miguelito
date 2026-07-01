@@ -229,13 +229,21 @@ describe("runtime manager", () => {
     const db = manager.runtime("spanish").db;
     await db.addLearningItem({ type: "phrase", title: "una lista adecuada", explanation_l1: "Learner expressed need to remember 'adecuada'", source_type: "conversation", priority: 0.95 });
     await db.addLearningItem({ type: "correction", title: "opcioces → opciones", explanation_l1: "missing 'n' and extra 'c'", source_type: "correction", priority: 0.95 });
+    await db.addLearningItem({ type: "correction", title: "spelling of opciones", explanation_l1: "The word opciones is spelled with n", source_type: "correction", priority: 0.95 });
+    await db.addLearningItem({ type: "correction", title: "aplicaciones (plural sin tilde)", explanation_l1: "internal grammar note", source_type: "correction", priority: 0.95 });
 
     const drill = await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
 
     expect(drill).toContain("Usa “una lista adecuada” en una frase corta.");
     expect(drill).toContain("Corrige: “opcioces”.");
+    expect(drill).toContain("Usa “opciones” en una frase corta.");
+    expect(drill).toContain("Usa “aplicaciones” en una frase corta.");
     expect(drill).not.toContain("Learner expressed");
     expect(drill).not.toContain("missing 'n'");
+    expect(drill).not.toContain("The word opciones");
+    expect(drill).not.toContain("internal grammar note");
+    expect(drill).not.toContain("spelling of opciones");
+    expect(drill).not.toContain("plural sin tilde");
     expect(drill).not.toContain("→ opciones");
     manager.close();
   });
