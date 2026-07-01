@@ -111,13 +111,19 @@ function drillLine(item: { title: string; explanation_l1?: string | null; source
   return `${n}. Usa “${displayTitle}” en una frase corta.`;
 }
 
+function drillTarget(item: { title: string; type?: string | null }): string {
+  const correction = item.title.split(/→|->/).map((part) => part.trim()).filter(Boolean);
+  if (item.type === "correction" && correction.length >= 2) return correction.at(-1)!;
+  return item.title.replace(/^spelling of\s+/i, "").replace(/\s*\([^)]*\)\s*$/, "").trim() || item.title;
+}
+
 function normalizePracticeText(text: string): string {
   return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 }
 
-function answerUsesItem(answer: string, title: string): boolean {
+function answerUsesItem(answer: string, item: { title: string; type?: string | null }): boolean {
   const normalizedAnswer = ` ${normalizePracticeText(answer)} `;
-  const normalizedTitle = normalizePracticeText(title.split(/→|->/).pop() ?? title);
+  const normalizedTitle = normalizePracticeText(drillTarget(item));
   return normalizedTitle.length > 0 && normalizedAnswer.includes(` ${normalizedTitle} `);
 }
 
@@ -209,7 +215,11 @@ export class RuntimeManager {
       return commandReply || null;
     }
 
-    await this.processDrillAnswers(db, text);
+    const drillReply = await this.processDrillAnswers(db, text);
+    if (drillReply) {
+      await db.addChatMessage(chatId, "assistant", drillReply, convState.session_id);
+      return drillReply;
+    }
 
     const result = await agentRunner.run(text, history);
     if (result.text) await db.addChatMessage(chatId, "assistant", result.text, convState.session_id);
@@ -263,8 +273,8 @@ export class RuntimeManager {
       .sort((a, b) => (a.evidence_count - b.evidence_count) || (b.priority - a.priority) || (a.id - b.id))
       .slice(0, 5);
     if (items.length === 0) return "Todavía no tengo material para entrenar. Escribe normalmente o pega frases con /import y las practicamos.";
-    for (const item of items) {
-      await db.startLearningPracticeAttempt({ learning_item_id: item.id, prompt_text: drillLine(item, 1) });
+    for (const [idx, item] of items.entries()) {
+      await db.startLearningPracticeAttempt({ learning_item_id: item.id, prompt_text: drillLine(item, idx + 1) });
     }
     return [
       "Mini drill — responde con frases cortas y luego seguimos conversando:",
@@ -272,21 +282,23 @@ export class RuntimeManager {
     ].join("\n");
   }
 
-  private async processDrillAnswers(db: BuddyDb, text: string): Promise<void> {
+  private async processDrillAnswers(db: BuddyDb, text: string): Promise<string | null> {
     const attempts = await db.listActiveLearningPracticeAttempts(10);
-    if (attempts.length === 0) return;
+    if (attempts.length === 0) return null;
     const drillItems = new Map((await db.listLearningItems("all", 200))
       .map((item) => [item.id, item]));
+    let completed = 0;
     for (const attempt of attempts) {
       const item = drillItems.get(attempt.learning_item_id);
       if (!item) continue;
-      const success = answerUsesItem(text, item.title);
+      const success = answerUsesItem(text, item);
       if (!success) continue;
+      completed++;
       await db.finishLearningPracticeAttempt({
         attempt_id: attempt.id,
         user_response: text,
         grade: 4,
-        note: "imported drill matched target",
+        note: "drill matched target",
       });
       await db.recordLearningItemEvidence({
         learning_item_id: item.id,
@@ -299,6 +311,14 @@ export class RuntimeManager {
         source_type: "drill",
       });
     }
+    if (completed === 0) return null;
+    const remaining = await db.listActiveLearningPracticeAttempts(5);
+    if (remaining.length === 0) return `¡Bien! He marcado ${completed} ${completed === 1 ? "respuesta" : "respuestas"}. Drill completado.`;
+    return [
+      `¡Bien! He marcado ${completed} ${completed === 1 ? "respuesta" : "respuestas"}.`,
+      "Siguiente:",
+      ...remaining.map((attempt, idx) => (attempt.prompt_text || `${idx + 1}. Sigue con otra frase corta.`).replace(/^\d+\./, `${idx + 1}.`)),
+    ].join("\n");
   }
 
   getChatHistory(language: string, chatId: number, limit?: number): Promise<{ role: string; content: string }[]> {

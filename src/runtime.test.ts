@@ -248,7 +248,26 @@ describe("runtime manager", () => {
     manager.close();
   });
 
-  it("scores imported drill answers as evidence before continuing the conversation", async () => {
+  it("matches cleaned drill targets and shows the next pending prompt", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+    const db = manager.runtime("spanish").db;
+    const aplicacionesId = await db.addLearningItem({ type: "correction", title: "aplicaciones (plural sin tilde)", source_type: "correction", priority: 0.95 });
+    await db.addLearningItem({ type: "correction", title: "opcioces → opciones", source_type: "correction", priority: 0.95 });
+    await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
+
+    const reply = await manager.handleMessage("spanish", 777, "telegram-user", "Tengo muchas aplicaciones en el móvil");
+
+    expect(reply).toContain("¡Bien! He marcado 1 respuesta.");
+    expect(reply).toContain("Siguiente:");
+    expect(reply).toContain("Corrige: “opcioces”.");
+    expect(await db.listLearningItemEvidence(aplicacionesId!, 5)).toHaveLength(1);
+    expect(provider.chatCalls).toHaveLength(0);
+    manager.close();
+  });
+
+  it("scores drill answers with feedback instead of dropping into generic chat", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const provider = new FakeProvider();
     const manager = await createRuntimeManager(config, { provider });
@@ -258,7 +277,7 @@ describe("runtime manager", () => {
 
     const reply = await manager.handleMessage("spanish", 777, "telegram-user", "La ola de calor fue horrible");
 
-    expect(reply).toBe("echo:La ola de calor fue horrible");
+    expect(reply).toBe("¡Bien! He marcado 1 respuesta. Drill completado.");
     expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(0);
     const evidence = await db.listLearningItemEvidence(itemId!, 5);
     expect(evidence[0]).toEqual(expect.objectContaining({
@@ -267,7 +286,7 @@ describe("runtime manager", () => {
       source_type: "drill",
     }));
     expect(evidence[0].score_delta).toBeGreaterThan(0);
-    expect(provider.chatCalls).toHaveLength(1);
+    expect(provider.chatCalls).toHaveLength(0);
     manager.close();
   });
 
