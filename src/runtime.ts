@@ -123,9 +123,16 @@ function normalizePracticeText(text: string): string {
 }
 
 function answerUsesItem(answer: string, item: { title: string; type?: string | null }): boolean {
+  if (item.type === "grammar_point") return normalizePracticeText(answer).length >= 8;
   const normalizedAnswer = ` ${normalizePracticeText(answer)} `;
   const normalizedTitle = normalizePracticeText(drillTarget(item));
   return normalizedTitle.length > 0 && normalizedAnswer.includes(` ${normalizedTitle} `);
+}
+
+function splitNumberedPracticeAnswers(text: string): string[] {
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (lines.length <= 1) return [text];
+  return lines.map((line) => line.replace(/^\s*\d+(?:\s*[,.)]|\.)\s*/, "").trim()).filter(Boolean);
 }
 
 function formatAttemptQueue(title: string, attempts: Array<{ prompt_text?: string | null }>): string {
@@ -317,30 +324,41 @@ export class RuntimeManager {
     if (attempts.length === 0) return null;
     const drillItems = new Map((await db.listLearningItems("all", 200))
       .map((item) => [item.id, item]));
-    const attempt = attempts[0];
-    const item = drillItems.get(attempt.learning_item_id);
-    if (!item) return null;
-    const success = answerUsesItem(text, item);
-    if (!success) return formatAttemptQueue("Casi. Prueba con el punto actual:", [attempt]);
-    await db.finishLearningPracticeAttempt({
-      attempt_id: attempt.id,
-      user_response: text,
-      grade: 4,
-      note: "drill matched target",
-    });
-    await db.recordLearningItemEvidence({
-      learning_item_id: item.id,
-      skill: "active",
-      event: "produced_after_prompt",
-      independence: "elicited",
-      score_delta: 0.2,
-      confidence: 0.8,
-      evidence_snippet: text,
-      source_type: "drill",
-    });
+    const answers = splitNumberedPracticeAnswers(text);
+    let completed = 0;
+    for (let idx = 0; idx < attempts.length; idx++) {
+      const attempt = attempts[idx];
+      const answer = answers.length > 1 ? answers[idx] : text;
+      const item = drillItems.get(attempt.learning_item_id);
+      if (!item || !answer) break;
+      const success = answerUsesItem(answer, item);
+      if (!success) {
+        if (completed === 0) return formatAttemptQueue("Casi. Prueba con el punto actual:", [attempt]);
+        break;
+      }
+      await db.finishLearningPracticeAttempt({
+        attempt_id: attempt.id,
+        user_response: answer,
+        grade: 4,
+        note: "drill matched target",
+      });
+      await db.recordLearningItemEvidence({
+        learning_item_id: item.id,
+        skill: "active",
+        event: "produced_after_prompt",
+        independence: "elicited",
+        score_delta: 0.2,
+        confidence: 0.8,
+        evidence_snippet: answer,
+        source_type: "drill",
+      });
+      completed++;
+      if (answers.length <= 1) break;
+    }
     const remaining = await db.listActiveLearningPracticeAttempts(5);
-    if (remaining.length === 0) return "¡Bien! He marcado 1 respuesta. Drill completado.";
-    return formatAttemptQueue("¡Bien! He marcado 1 respuesta.\nSiguiente:", remaining);
+    const noun = completed === 1 ? "respuesta" : "respuestas";
+    if (remaining.length === 0) return `¡Bien! He marcado ${completed} ${noun}. Drill completado.`;
+    return formatAttemptQueue(`¡Bien! He marcado ${completed} ${noun}.\nSiguiente:`, remaining);
   }
 
   private async listFreshDrillAttempts(db: BuddyDb, limit: number) {
