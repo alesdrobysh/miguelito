@@ -236,15 +236,47 @@ describe("runtime manager", () => {
 
     expect(drill).toContain("Usa “una lista adecuada” en una frase corta.");
     expect(drill).toContain("Corrige: “opcioces”.");
-    expect(drill).toContain("Usa “opciones” en una frase corta.");
     expect(drill).toContain("Usa “aplicaciones” en una frase corta.");
     expect(drill).not.toContain("Learner expressed");
     expect(drill).not.toContain("missing 'n'");
     expect(drill).not.toContain("The word opciones");
     expect(drill).not.toContain("internal grammar note");
     expect(drill).not.toContain("spelling of opciones");
+    expect(drill).not.toContain("Usa “opciones” en una frase corta.");
     expect(drill).not.toContain("plural sin tilde");
     expect(drill).not.toContain("→ opciones");
+    manager.close();
+  });
+
+  it("deduplicates drill items that practice the same cleaned target", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+    const db = manager.runtime("spanish").db;
+    await db.addLearningItem({ type: "correction", title: "opcioces → opciones", source_type: "correction", priority: 0.95 });
+    await db.addLearningItem({ type: "phrase", title: "opciones", source_type: "conversation", priority: 0.95 });
+    await db.addLearningItem({ type: "phrase", title: "aplicaciones", source_type: "conversation", priority: 0.95 });
+
+    const drill = await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
+
+    expect(drill).toContain("Corrige: “opcioces”.");
+    expect(drill).not.toContain("Usa “opciones” en una frase corta.");
+    expect(drill).toContain("Usa “aplicaciones” en una frase corta.");
+    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(2);
+    manager.close();
+  });
+
+  it("formats grammar drill items as grammar practice, not phrase usage", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+    const db = manager.runtime("spanish").db;
+    await db.addLearningItem({ type: "grammar_point", title: "Pretérito indefinido vs imperfecto", source_type: "conversation", priority: 0.95 });
+
+    const drill = await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
+
+    expect(drill).toContain("Practica “Pretérito indefinido vs imperfecto”: escribe una frase corta.");
+    expect(drill).not.toContain("Usa “Pretérito indefinido vs imperfecto” en una frase corta.");
     manager.close();
   });
 
@@ -419,7 +451,6 @@ describe("runtime manager", () => {
       "UPDATE learning_practice_attempts SET created_at = ? WHERE language = 'spanish' AND status = 'active'",
       [new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString()],
     );
-    db.save();
 
     const normal = await manager.handleMessage("spanish", 777, "telegram-user", "Hola. Fui al gimnasio ayer y hoy descanso");
 

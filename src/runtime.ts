@@ -107,6 +107,7 @@ function drillLine(item: { title: string; explanation_l1?: string | null; source
   if (translation) return `${n}. ¿Cómo dirías “${translation}” en español?`;
   const correction = item.title.split(/→|->/).map((part) => part.trim()).filter(Boolean);
   if (item.type === "correction" && correction.length >= 2) return `${n}. Corrige: “${correction[0]}”.`;
+  if (item.type === "grammar_point") return `${n}. Practica “${item.title}”: escribe una frase corta.`;
   const displayTitle = item.title.replace(/^spelling of\s+/i, "").replace(/\s*\([^)]*\)\s*$/, "").trim() || item.title;
   return `${n}. Usa “${displayTitle}” en una frase corta.`;
 }
@@ -290,9 +291,16 @@ export class RuntimeManager {
     if (active.length > 0) return formatAttemptQueue("Drill en curso — responde el primer punto o usa /drill stop:", active);
 
     const all = await db.listLearningItems("all", 100);
+    const seenTargets = new Set<string>();
     const items = all
       .filter((item) => ["active", "cooling_down", "candidate"].includes(item.status))
       .sort((a, b) => (a.evidence_count - b.evidence_count) || (b.priority - a.priority) || (a.id - b.id))
+      .filter((item) => {
+        const key = normalizePracticeText(drillTarget(item));
+        if (!key || seenTargets.has(key)) return false;
+        seenTargets.add(key);
+        return true;
+      })
       .slice(0, 5);
     if (items.length === 0) return "Todavía no tengo material para entrenar. Escribe normalmente o pega frases con /import y las practicamos.";
     for (const [idx, item] of items.entries()) {
