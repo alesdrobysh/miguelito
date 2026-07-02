@@ -113,7 +113,7 @@ function drillLine(item: { title: string; explanation_l1?: string | null; source
 
 function drillTarget(item: { title: string; type?: string | null }): string {
   const correction = item.title.split(/→|->/).map((part) => part.trim()).filter(Boolean);
-  if (item.type === "correction" && correction.length >= 2) return correction.at(-1)!;
+  if (item.type === "correction" && correction.length >= 2) return correction[correction.length - 1]!;
   return item.title.replace(/^spelling of\s+/i, "").replace(/\s*\([^)]*\)\s*$/, "").trim() || item.title;
 }
 
