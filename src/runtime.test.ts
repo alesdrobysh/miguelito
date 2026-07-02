@@ -407,4 +407,26 @@ describe("runtime manager", () => {
     manager.close();
   });
 
+  it("expires stale active drill attempts before normal chat", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+    const db = manager.runtime("spanish").db;
+    const itemId = await db.addLearningItem({ type: "phrase", title: "aplicaciones", priority: 0.95 });
+    expect(itemId).not.toBeNull();
+    await db.startLearningPracticeAttempt({ learning_item_id: itemId!, prompt_text: "Usa aplicaciones" });
+    db.db.run(
+      "UPDATE learning_practice_attempts SET created_at = ? WHERE language = 'spanish' AND status = 'active'",
+      [new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString()],
+    );
+    db.save();
+
+    const normal = await manager.handleMessage("spanish", 777, "telegram-user", "Hola. Fui al gimnasio ayer y hoy descanso");
+
+    expect(normal).toBe("echo:Hola. Fui al gimnasio ayer y hoy descanso");
+    expect(provider.chatCalls).toHaveLength(1);
+    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(0);
+    manager.close();
+  });
+
 });

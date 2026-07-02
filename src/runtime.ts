@@ -60,7 +60,7 @@ export function createEvaluatorProvider(config: Config): LLMProvider {
 }
 
 const MODEL_HISTORY_LIMIT = 50;
-
+const DRILL_ATTEMPT_TTL_MS = 60 * 60 * 1000;
 
 function formatStart(_lang: LanguageConfig): string {
   return [
@@ -132,6 +132,14 @@ function formatAttemptQueue(title: string, attempts: Array<{ prompt_text?: strin
     title,
     ...attempts.map((attempt, idx) => (attempt.prompt_text || `${idx + 1}. Sigue con otra frase corta.`).replace(/^\d+\./, `${idx + 1}.`)),
   ].join("\n");
+}
+
+function hasStaleDrillAttempt(attempts: Array<{ created_at: string }>, now = Date.now()): boolean {
+  return attempts.some((attempt) => {
+    const value = attempt.created_at.includes("T") ? attempt.created_at : `${attempt.created_at.replace(" ", "T")}Z`;
+    const created = Date.parse(value);
+    return Number.isFinite(created) && now - created > DRILL_ATTEMPT_TTL_MS;
+  });
 }
 
 export class RuntimeManager {
@@ -278,7 +286,7 @@ export class RuntimeManager {
       await db.abandonActiveLearningPracticeAttempts("drill stopped by user");
       return "Drill detenido. Seguimos conversando normalmente.";
     }
-    const active = await db.listActiveLearningPracticeAttempts(10);
+    const active = await this.listFreshDrillAttempts(db, 10);
     if (active.length > 0) return formatAttemptQueue("Drill en curso — responde el primer punto o usa /drill stop:", active);
 
     const all = await db.listLearningItems("all", 100);
@@ -297,7 +305,7 @@ export class RuntimeManager {
   }
 
   private async processDrillAnswers(db: BuddyDb, text: string): Promise<string | null> {
-    const attempts = await db.listActiveLearningPracticeAttempts(10);
+    const attempts = await this.listFreshDrillAttempts(db, 10);
     if (attempts.length === 0) return null;
     const drillItems = new Map((await db.listLearningItems("all", 200))
       .map((item) => [item.id, item]));
@@ -325,6 +333,13 @@ export class RuntimeManager {
     const remaining = await db.listActiveLearningPracticeAttempts(5);
     if (remaining.length === 0) return "¡Bien! He marcado 1 respuesta. Drill completado.";
     return formatAttemptQueue("¡Bien! He marcado 1 respuesta.\nSiguiente:", remaining);
+  }
+
+  private async listFreshDrillAttempts(db: BuddyDb, limit: number) {
+    const attempts = await db.listActiveLearningPracticeAttempts(limit);
+    if (!hasStaleDrillAttempt(attempts)) return attempts;
+    await db.abandonActiveLearningPracticeAttempts("stale drill expired");
+    return [];
   }
 
   getChatHistory(language: string, chatId: number, limit?: number): Promise<{ role: string; content: string }[]> {
