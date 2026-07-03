@@ -226,12 +226,12 @@ export class PostTurnProcessor {
     let interestsAdded = 0;
 
     const morphologyTypes = new Set(this.deps.lang.morphologyCategories);
-    const morphologyErrors = (evaluation.errors ?? []).filter((e) => {
-      const cat = this.clean(e.category).toLowerCase();
-      return morphologyTypes.has(cat);
-    }).length;
+    const morphologyErrorCategories = (evaluation.errors ?? [])
+      .map((e) => this.clean(e.category).toLowerCase())
+      .filter((cat) => morphologyTypes.has(cat));
+    const morphologyErrors = morphologyErrorCategories.length;
     const { session } = await this.deps.session.getConversationState();
-    const annotation = this.normalizeAnnotation(evaluation.annotation, _input, morphologyErrors, session.session_id, session.turn_count);
+    const annotation = this.normalizeAnnotation(evaluation.annotation, _input, morphologyErrors, morphologyErrorCategories, session.session_id, session.turn_count);
     await this.deps.competency.insertTurnAnnotation(annotation);
     await this.recordDifficultyWeightedEvidence(annotation, _input);
     annotationInserted = true;
@@ -424,14 +424,15 @@ export class PostTurnProcessor {
       .trim();
   }
 
-  private normalizeAnnotation(raw: Partial<TurnAnnotationInput> | undefined, input: PostTurnProcessInput, morphologyErrors: number, sessionId?: string, turnNumber?: number): TurnAnnotationInput {
+  private normalizeAnnotation(raw: Partial<TurnAnnotationInput> | undefined, input: PostTurnProcessInput, morphologyErrors: number, morphologyErrorCategories: string[], sessionId?: string, turnNumber?: number): TurnAnnotationInput {
     const validCategories = new Set(this.deps.lang.errorCategories);
     const morphologyTypes = new Set(this.deps.lang.morphologyCategories);
-    const obligatory = Array.isArray(raw?.obligatory)
+    const rawObligatory = Array.isArray(raw?.obligatory)
       ? raw!.obligatory
           .map((o) => ({ type: this.clean((o as { type?: string }).type) }))
           .filter((o) => validCategories.has(o.type))
       : [];
+    const obligatory = rawObligatory.concat(morphologyErrorCategories.map((type) => ({ type })));
     const used = Array.isArray(raw?.used) ? raw!.used.map((u) => String(u)).filter(Boolean) : [];
     const naturalnessRaw = Number(raw?.naturalness ?? 1);
     const naturalness = Number.isFinite(naturalnessRaw) ? Math.max(0, Math.min(1, naturalnessRaw)) : 1;

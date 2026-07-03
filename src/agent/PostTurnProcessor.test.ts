@@ -170,6 +170,48 @@ describe("PostTurnProcessor extraction", () => {
     expect(addedLearningItems.map((item) => item.title)).toEqual(["partida → partido"]);
   });
 
+  it("counts morphology error categories as obligatory morphology evidence", async () => {
+    const provider: LLMProvider = {
+      chat: async () => { throw new Error("unused"); },
+      complete: async () => { throw new Error("unused"); },
+      completeJson: async <T,>(): Promise<T> => {
+        const callCount = ((provider as any).callCount = ((provider as any).callCount ?? 0) + 1);
+        if (callCount === 1) {
+          return {
+            annotation: { naturalness: 1, comprehension: "smooth", tunit_length: 3, obligatory: [], used: ["Bueno días"] },
+            mode: "REACT",
+            errors: [{ user_text: "Bueno días", correct: "Buenos días", category: "gender", note: "agreement" }],
+            interests: [],
+          } as T;
+        }
+        return { learning_items: [], item_evidence: [] } as T;
+      },
+    };
+    const annotations: TurnAnnotationInput[] = [];
+    const processor = new PostTurnProcessor({
+      provider,
+      lang: { ...lang, errorCategories: ["gender", "spelling", "other"], morphologyCategories: ["gender"] },
+      errors: { logError: async () => 1 } as unknown as ErrorRepository,
+      competency: { insertTurnAnnotation: async (ann: TurnAnnotationInput) => { annotations.push(ann); }, insertProficiencyEvidence: async () => 1 } as unknown as CompetencyRepository,
+      session: {
+        getConversationState: async () => ({ session: { session_id: "s1", turn_count: 0, mode: "REACT" }, lastModes: [], moodHint: "", topicsTouched: "" }),
+        updateConversationState: async () => ({ ok: true, changed: true }),
+      } as unknown as SessionRepository,
+      learning: {
+        getLearningHygieneSnapshot: async () => ({ backlog_status: "healthy", active_without_evidence: 0 }),
+        selectLearningItemsForEvaluation: async () => [],
+        listLearningItems: async () => [],
+        addLearningItem: async () => null,
+        recordLearningItemEvidence: async () => 1,
+      } as unknown as LearningRepository,
+    });
+
+    await processor.process({ userMessage: "Bueno días", assistantText: "Buenos días.", chatHistory: [] });
+
+    expect(annotations[0].obligatory).toEqual([{ type: "gender" }]);
+    expect(annotations[0].morphology_errors).toBe(1);
+  });
+
   it("adds severity metadata to errors and correction priorities", async () => {
     const provider: LLMProvider = {
       chat: async () => { throw new Error("unused"); },
