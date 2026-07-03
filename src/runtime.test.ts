@@ -343,6 +343,23 @@ describe("runtime manager", () => {
     manager.close();
   });
 
+  it("skips extractor artifact corrections in /drill when a phrase correction covers them", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+    const db = manager.runtime("spanish").db;
+    await db.addLearningItem({ type: "correction", title: "La hola de calor → La ola de calor", source_type: "correction", priority: 0.8 });
+    await db.addLearningItem({ type: "correction", title: "hola → ola", source_type: "correction", priority: 0.95 });
+    await db.addLearningItem({ type: "phrase", title: "hacer pesas", source_type: "conversation", priority: 0.9 });
+
+    const drill = await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
+
+    expect(drill).not.toContain("Reescribe correctamente: “hola”.");
+    expect(drill).toMatch(/La hola de calor|hacer pesas/);
+    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(1);
+    manager.close();
+  });
+
   it("formats grammar drill items as grammar practice, not phrase usage", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const provider = new FakeProvider();

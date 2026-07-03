@@ -54,4 +54,37 @@ describe("LearningHygieneService", () => {
     expect(items.find((item) => item.id === candidate)?.status).toBe("active");
     expect(items.find((item) => item.id === stable)?.status).toBe("mastered");
   });
+
+  it("ignores no-op corrections and token artifacts already covered by a phrase correction", async () => {
+    const db = handle.db;
+    const noopId = await db.addLearningItem({ type: "correction", title: "Todo va bien → Todo va bien", source_type: "correction", priority: 0.95 });
+    const phraseId = await db.addLearningItem({ type: "correction", title: "La hola de calor → La ola de calor", source_type: "correction", priority: 0.95 });
+    const tokenId = await db.addLearningItem({ type: "correction", title: "hola → ola", source_type: "correction", priority: 0.95 });
+
+    await new LearningHygieneService(db).run();
+
+    const items = await db.listLearningItems("all", 20);
+    expect(items.find((item) => item.id === noopId)?.status).toBe("ignored");
+    expect(items.find((item) => item.id === phraseId)?.status).toBe("active");
+    expect(items.find((item) => item.id === tokenId)?.status).toBe("ignored");
+  });
+
+  it("blocks ordinary lexical captures when the active no-evidence backlog is crowded", async () => {
+    const db = handle.db;
+    for (let i = 0; i < 22; i++) {
+      db.db.run(
+        `INSERT INTO learning_items (language, type, title, priority, status, stability, evidence_count, created_at, updated_at)
+         VALUES ('spanish', 'phrase', ?, 0.5, 'active', 'new', 0, datetime('now'), datetime('now'))`,
+        [`backlog ${i}`],
+      );
+    }
+
+    const ordinary = await db.addLearningItem({ type: "phrase", title: "otro tema suelto", source_type: "conversation", priority: 0.6 });
+    const imported = await db.addLearningItem({ type: "phrase", title: "frase importada", source_type: "imported", priority: 0.95 });
+    const correction = await db.addLearningItem({ type: "correction", title: "Bueno días → Buenos días", source_type: "correction", priority: 0.95 });
+
+    expect(ordinary).toBeNull();
+    expect(imported).not.toBeNull();
+    expect(correction).not.toBeNull();
+  });
 });

@@ -1,6 +1,20 @@
 import type { BuddyDb } from "../infrastructure/db.js";
 import type { LearningHygieneRunResult } from "../domain/types.js";
 
+function correctionSides(title: string): { left: string; right: string } | null {
+  const parts = title.split(/→|->/).map((p) => p.trim()).filter(Boolean);
+  return parts.length === 2 ? { left: parts[0], right: parts[1] } : null;
+}
+
+function normalizedSide(text: string): string {
+  return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+
+function isTinyCorrection(sides: { left: string; right: string }): boolean {
+  return (sides.left.match(/[\p{L}\p{N}]+/gu) ?? []).length === 1
+    && (sides.right.match(/[\p{L}\p{N}]+/gu) ?? []).length === 1;
+}
+
 export class LearningHygieneService {
   constructor(private learning: BuddyDb) {}
 
@@ -69,11 +83,43 @@ export class LearningHygieneService {
     );
     ignored += this.learning.db.getRowsModified();
 
+    ignored += this.ignoreBadCorrections(now, lang);
+
     if (archived + cooledDown + promoted + mastered + ignored > 0) {
       // BuddyDb has no public save method; a no-op meta write is the smallest existing flush path.
       await this.learning.setMetaValue("last_learning_hygiene_run", now);
     }
 
     return { archived, cooledDown, promoted, mastered, ignored };
+  }
+
+  private ignoreBadCorrections(now: string, lang: string): number {
+    const rows = this.learning.db.exec(
+      `SELECT id, title FROM learning_items
+       WHERE language = ? AND status NOT IN ('ignored', 'archived', 'mastered') AND type = 'correction'`,
+      [lang],
+    )[0]?.values ?? [];
+    const corrections = rows.map(([id, title]) => ({ id: Number(id), title: String(title ?? "") }));
+    let changed = 0;
+    for (const item of corrections) {
+      const sides = correctionSides(item.title);
+      if (!sides) continue;
+      const left = normalizedSide(sides.left);
+      const right = normalizedSide(sides.right);
+      const noOp = left === right;
+      const coveredTiny = isTinyCorrection(sides) && left !== right && corrections.some((other) => {
+        if (other.id === item.id) return false;
+        const otherSides = correctionSides(other.title);
+        if (!otherSides || isTinyCorrection(otherSides)) return false;
+        return normalizedSide(otherSides.left).includes(left) && normalizedSide(otherSides.right).includes(right);
+      });
+      if (!noOp && !coveredTiny) continue;
+      this.learning.db.run(
+        `UPDATE learning_items SET status = 'ignored', updated_at = ? WHERE language = ? AND id = ? AND status NOT IN ('ignored', 'archived', 'mastered')`,
+        [now, lang, item.id],
+      );
+      changed += this.learning.db.getRowsModified();
+    }
+    return changed;
   }
 }

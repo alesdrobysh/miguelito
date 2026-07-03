@@ -63,6 +63,20 @@ function looksLikeSuspiciousCorrection(type: string, title: string, prompt?: str
     && /^[A-ZÁÉÍÓÚÑ][\p{L}]{4,}$/u.test(rightTokens[0]);
 }
 
+function normalizedCorrectionSide(text: string): string {
+  return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+
+function isTinyCorrection(sides: { left: string; right: string }): boolean {
+  return (sides.left.match(/[\p{L}\p{N}]+/gu) ?? []).length === 1
+    && (sides.right.match(/[\p{L}\p{N}]+/gu) ?? []).length === 1;
+}
+
+function isOrdinaryLexicalCapture(type: string, sourceType?: string | null): boolean {
+  if (["imported", "textbook", "correction"].includes(String(sourceType ?? "conversation"))) return false;
+  return new Set(["word", "phrase", "collocation", "idiom", "register_note"]).has(type);
+}
+
 function statusForNewLearningItem(type: LearningItemType, title: string, priority: number, requested: LearningItemStatus, snapshot: LearningHygieneSnapshot, prompt?: string | null): LearningItemStatus {
   if (requested === "ignored" || requested === "archived" || requested === "mastered") return requested;
   if (looksLikeSuspiciousCorrection(type, title, prompt)) return "ignored";
@@ -185,7 +199,6 @@ export class SqlLearningRepository extends SqlRepository {
     const now = nowIso();
     const priority = Math.max(0, Math.min(1, Number(input.priority ?? 0.5) || 0.5));
     const snapshot = await this.getLearningHygieneSnapshot();
-    const status = statusForNewLearningItem(type, title, priority, requestedStatus, snapshot, input.prompt_l2);
     const existing = this.findDuplicateLearningItem(type, title);
     if (existing) {
       const next = initialReactivationDate(priority);
@@ -208,6 +221,10 @@ export class SqlLearningRepository extends SqlRepository {
       if (this.db.getRowsModified() > 0) this.save();
       return existing.id;
     }
+    if (snapshot.backlog_status !== "healthy" && isOrdinaryLexicalCapture(type, input.source_type)) return null;
+    const status = this.isCoveredTinyCorrection(title)
+      ? "ignored"
+      : statusForNewLearningItem(type, title, priority, requestedStatus, snapshot, input.prompt_l2);
     this.db.run(
       `INSERT OR IGNORE INTO learning_items
        (language, type, title, prompt_l2, explanation_l1, source_type, source_message_id, evidence_snippet,
@@ -249,6 +266,25 @@ export class SqlLearningRepository extends SqlRepository {
       [this.languageId],
     );
     return candidates.find((item) => canonicalLearningItemKey(String(item.type), item.title) === key) ?? null;
+  }
+
+  private isCoveredTinyCorrection(title: string): boolean {
+    const sides = correctionSides(title);
+    if (!sides || !isTinyCorrection(sides)) return false;
+    const left = normalizedCorrectionSide(sides.left);
+    const right = normalizedCorrectionSide(sides.right);
+    if (!left || !right || left === right) return false;
+    return this.queryAll<LearningItem>(
+      `SELECT * FROM learning_items
+       WHERE language = ? AND type = 'correction' AND status NOT IN ('ignored', 'archived', 'mastered')
+       ORDER BY datetime(created_at) DESC, id DESC
+       LIMIT 1000`,
+      [this.languageId],
+    ).some((item) => {
+      const existing = correctionSides(item.title);
+      if (!existing || isTinyCorrection(existing)) return false;
+      return normalizedCorrectionSide(existing.left).includes(left) && normalizedCorrectionSide(existing.right).includes(right);
+    });
   }
 
   async deduplicateLearningItems(limit = 500): Promise<number> {

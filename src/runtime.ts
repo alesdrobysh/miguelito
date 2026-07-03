@@ -136,6 +136,33 @@ function drillTargetCandidates(item: { title: string; type?: string | null }): s
   return target.split("/").map((part) => part.trim()).filter(Boolean);
 }
 
+function correctionSides(title: string): { left: string; right: string } | null {
+  const parts = title.split(/→|->/).map((part) => part.trim()).filter(Boolean);
+  return parts.length === 2 ? { left: parts[0], right: parts[1] } : null;
+}
+
+function isTinyCorrectionTitle(title: string): boolean {
+  const sides = correctionSides(title);
+  return !!sides
+    && (sides.left.match(/[\p{L}\p{N}]+/gu) ?? []).length === 1
+    && (sides.right.match(/[\p{L}\p{N}]+/gu) ?? []).length === 1;
+}
+
+function isCoveredTinyCorrection(item: { id: number; title: string; type?: string | null }, all: Array<{ id: number; title: string; type?: string | null }>): boolean {
+  if (item.type !== "correction" || !isTinyCorrectionTitle(item.title)) return false;
+  const sides = correctionSides(item.title);
+  if (!sides) return false;
+  const left = normalizePracticeText(sides.left);
+  const right = normalizePracticeText(sides.right);
+  if (!left || !right || left === right) return true;
+  return all.some((other) => {
+    if (other.id === item.id || other.type !== "correction") return false;
+    const otherSides = correctionSides(other.title);
+    if (!otherSides || isTinyCorrectionTitle(other.title)) return false;
+    return normalizePracticeText(otherSides.left).includes(left) && normalizePracticeText(otherSides.right).includes(right);
+  });
+}
+
 function answerUsesItem(answer: string, item: { title: string; type?: string | null }): boolean {
   if (item.type === "grammar_point") return normalizePracticeText(answer).length >= 8;
   const normalizedAnswer = ` ${normalizePracticeText(answer)} `;
@@ -483,7 +510,7 @@ export class RuntimeManager {
     const all = await db.listLearningItems("all", 100);
     const seenTargets = new Set<string>();
     const item = all
-      .filter((candidate) => isDrillSelectable(candidate, dueIds))
+      .filter((candidate) => isDrillSelectable(candidate, dueIds) && !isCoveredTinyCorrection(candidate, all))
       .sort((a, b) => (Number(dueIds.has(b.id)) - Number(dueIds.has(a.id)))
         || ((pressureRank[String(b.reactivation_pressure)] ?? 0) - (pressureRank[String(a.reactivation_pressure)] ?? 0))
         || (a.evidence_count - b.evidence_count)

@@ -19,7 +19,7 @@ afterEach(() => {
 });
 
 describe("learning item deduplication and scheduling", () => {
-  it("quarantines low-priority lexical items when the active backlog is crowded", async () => {
+  it("blocks low-priority lexical items when the active backlog is blocked", async () => {
     for (let i = 0; i < 51; i++) {
       db.db.run(
         `INSERT INTO learning_items (language, type, title, priority, status, stability, evidence_count, created_at, updated_at)
@@ -30,9 +30,8 @@ describe("learning item deduplication and scheduling", () => {
 
     const id = await db.addLearningItem({ type: "phrase", title: "farmer's walk", priority: 0.6, source_type: "conversation" });
 
-    expect(id).not.toBeNull();
-    const item = (await db.listLearningItems("all", 100)).find((row) => row.id === id)!;
-    expect(item.status).toBe("candidate");
+    expect(id).toBeNull();
+    expect((await db.listLearningItems("all", 100)).some((row) => row.title === "farmer's walk")).toBe(false);
     const snapshot = await db.getLearningHygieneSnapshot();
     expect(snapshot.backlog_status).toBe("blocked");
     expect(snapshot.active_without_evidence).toBe(51);
