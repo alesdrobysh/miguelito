@@ -405,6 +405,27 @@ describe("runtime manager", () => {
     manager.close();
   });
 
+  it("shows final feedback when stopping after completed drill answers", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+    const db = manager.runtime("spanish").db;
+    await db.addLearningItem({ type: "phrase", title: "ola de calor", explanation_l1: "heat wave", source_type: "imported", priority: 0.95 });
+    await db.addLearningItem({ type: "phrase", title: "hacer pesas", explanation_l1: "lift weights", source_type: "imported", priority: 0.95 });
+    await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
+    await manager.handleMessage("spanish", 777, "telegram-user", "La ola de calor fue horrible");
+
+    const stopped = await manager.handleMessage("spanish", 777, "telegram-user", "дрил стоп");
+
+    expect(stopped).toContain("Drill detenido");
+    expect(stopped).toContain("Feedback final:");
+    expect(stopped).toContain("Correctas: 1");
+    expect(stopped).toContain("ola de calor");
+    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(0);
+    expect(provider.chatCalls).toHaveLength(0);
+    manager.close();
+  });
+
   it("stops an active drill on Russian plain-text drill stop", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const provider = new FakeProvider();
@@ -431,7 +452,10 @@ describe("runtime manager", () => {
 
     const reply = await manager.handleMessage("spanish", 777, "telegram-user", "La ola de calor fue horrible");
 
-    expect(reply).toBe("¡Bien! He marcado 1 respuesta. Drill completado.\nPracticaste: ola de calor.");
+    expect(reply).toContain("¡Bien! He marcado 1 respuesta. Drill completado.");
+    expect(reply).toContain("Feedback final:");
+    expect(reply).toContain("Correctas: 1");
+    expect(reply).toContain("ola de calor");
     expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(0);
     const evidence = await db.listLearningItemEvidence(itemId!, 5);
     expect(evidence[0]).toEqual(expect.objectContaining({
@@ -498,7 +522,10 @@ describe("runtime manager", () => {
 
     const reply = await manager.handleMessage("spanish", 777, "telegram-user", "Soy un poco despistado por la mañana");
 
-    expect(reply).toBe("¡Bien! He marcado 1 respuesta. Drill completado.\nPracticaste: despistado / ser despistado.");
+    expect(reply).toContain("¡Bien! He marcado 1 respuesta. Drill completado.");
+    expect(reply).toContain("Feedback final:");
+    expect(reply).toContain("Correctas: 1");
+    expect(reply).toContain("despistado / ser despistado");
     expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(0);
     expect(provider.chatCalls).toHaveLength(0);
     manager.close();
@@ -587,19 +614,24 @@ describe("runtime manager", () => {
     manager.close();
   });
 
-  it("ends a drill session after ten minutes even if the current attempt is fresh", async () => {
+  it("ends a drill session after ten minutes with final feedback", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const provider = new FakeProvider();
     const manager = await createRuntimeManager(config, { provider });
     const db = manager.runtime("spanish").db;
     await db.addLearningItem({ type: "phrase", title: "ola de calor", explanation_l1: "heat wave", source_type: "imported", priority: 0.95 });
+    await db.addLearningItem({ type: "phrase", title: "hacer pesas", explanation_l1: "lift weights", source_type: "imported", priority: 0.95 });
     await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
+    await manager.handleMessage("spanish", 777, "telegram-user", "La ola de calor fue horrible");
     await db.setMetaValue("drill_started_at", new Date(Date.now() - 11 * 60 * 1000).toISOString());
 
-    const normal = await manager.handleMessage("spanish", 777, "telegram-user", "La ola de calor fue horrible");
+    const ended = await manager.handleMessage("spanish", 777, "telegram-user", "Hacer pesas me ayuda mucho");
 
-    expect(normal).toBe("echo:La ola de calor fue horrible");
-    expect(provider.chatCalls).toHaveLength(1);
+    expect(ended).toContain("Drill terminado por tiempo.");
+    expect(ended).toContain("Feedback final:");
+    expect(ended).toContain("Correctas: 1");
+    expect(ended).toContain("ola de calor");
+    expect(provider.chatCalls).toHaveLength(0);
     expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(0);
     manager.close();
   });

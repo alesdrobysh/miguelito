@@ -362,6 +362,14 @@ export class RuntimeManager {
 
   private async processDrillAnswers(db: BuddyDb, text: string): Promise<string | null> {
     if (isDrillStopText(text)) return this.stopDrill(db);
+    const startedAt = await db.getMetaValue(DRILL_SESSION_META_KEY);
+    const rawAttempts = await db.listActiveLearningPracticeAttempts(10);
+    if (rawAttempts.length > 0 && parseDrillTimestamp(startedAt) != null && hasExpiredDrillSession(startedAt)) {
+      const feedback = await this.formatDrillFeedback(db);
+      await db.abandonActiveLearningPracticeAttempts("stale drill expired");
+      await db.setMetaValue(DRILL_SESSION_META_KEY, "");
+      return ["Drill terminado por tiempo.", feedback].filter(Boolean).join("\n");
+    }
     const attempts = await this.listFreshDrillAttempts(db, 10);
     if (attempts.length === 0) return null;
     const drillItems = new Map((await db.listLearningItems("all", 200))
@@ -408,10 +416,11 @@ export class RuntimeManager {
       if (next.length > 0) return formatAttemptQueue(`¡Bien! He marcado ${completed} ${noun}.\nSiguiente:`, next);
     }
 
+    const feedback = await this.formatDrillFeedback(db);
     await db.setMetaValue(DRILL_SESSION_META_KEY, "");
     return [
       `¡Bien! He marcado ${completed} ${noun}. Drill completado.`,
-      completedTitles.length ? `Practicaste: ${completedTitles.slice(0, 3).join(", ")}.` : "",
+      feedback,
     ].filter(Boolean).join("\n");
   }
 
@@ -440,9 +449,41 @@ export class RuntimeManager {
   }
 
   private async stopDrill(db: BuddyDb): Promise<string> {
+    const feedback = await this.formatDrillFeedback(db);
     await db.abandonActiveLearningPracticeAttempts("drill stopped by user");
     await db.setMetaValue(DRILL_SESSION_META_KEY, "");
-    return "Drill detenido. Seguimos conversando normalmente.";
+    return ["Drill detenido. Seguimos conversando normalmente.", feedback].filter(Boolean).join("\n");
+  }
+
+  private async formatDrillFeedback(db: BuddyDb): Promise<string> {
+    const startedAt = await db.getMetaValue(DRILL_SESSION_META_KEY);
+    const started = parseDrillTimestamp(startedAt);
+    if (started == null) return "";
+    const result = db.db.exec(
+      `SELECT li.title, li.type, lpa.completed_at
+       FROM learning_practice_attempts lpa
+       JOIN learning_items li ON li.id = lpa.learning_item_id AND li.language = lpa.language
+       WHERE lpa.language = ?
+         AND lpa.status = 'completed'
+         AND lpa.note = 'drill matched target'
+       ORDER BY lpa.completed_at ASC, lpa.id ASC`,
+      [db.languageId],
+    );
+    const rows = (result[0]?.values ?? []).filter((row) => {
+      const completed = parseDrillTimestamp(String(row[2] ?? ""));
+      // ponytail: SQL timestamps are second-precision while session meta has ms; allow same-second completions.
+      return completed != null && completed + 1000 >= started;
+    });
+    if (rows.length === 0) return "";
+    const practiced = rows
+      .map(([title, type]) => drillTarget({ title: String(title), type: type == null ? null : String(type) }))
+      .filter(Boolean)
+      .slice(0, 5);
+    return [
+      "Feedback final:",
+      `Correctas: ${rows.length}.`,
+      practiced.length ? `Practicado: ${practiced.join(", ")}.` : "",
+    ].filter(Boolean).join("\n");
   }
 
   private async listFreshDrillAttempts(db: BuddyDb, limit: number) {
