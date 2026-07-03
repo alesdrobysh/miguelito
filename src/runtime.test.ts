@@ -5,7 +5,7 @@ import path from "path";
 import { loadConfig } from "./infrastructure/config.js";
 import { listAvailableLanguages } from "./languages/index.js";
 import { createRuntimeManager } from "./runtime.js";
-import { TELEGRAM_ALLOWED_UPDATES, TELEGRAM_COMMANDS, telegramReplyMarkupForText } from "./transport/TelegramTransport.js";
+import { TELEGRAM_ALLOWED_UPDATES, TELEGRAM_COMMANDS, telegramDisplayTextForText, telegramReplyMarkupForText } from "./transport/TelegramTransport.js";
 import type { LLMProvider } from "./providers/interfaces.js";
 
 const MIN_ENV = {
@@ -116,7 +116,7 @@ describe("runtime manager", () => {
     }
   });
 
-  it("exposes inline buttons for scenario choices in Telegram", () => {
+  it("exposes inline buttons for scenario choices in Telegram without duplicating command text", () => {
     const reply = [
       "Escenarios cortos disponibles:",
       "/scenario pedir_comida — Pedir comida",
@@ -129,6 +129,8 @@ describe("runtime manager", () => {
         [{ text: "Preguntar por una ruta", callback_data: "/scenario preguntar_ruta" }],
       ],
     });
+    expect(telegramDisplayTextForText(reply)).toBe("Escenarios cortos disponibles:");
+    expect(telegramDisplayTextForText(reply)).not.toContain("/scenario pedir_comida");
     expect(TELEGRAM_ALLOWED_UPDATES).toContain("callback_query");
   });
 

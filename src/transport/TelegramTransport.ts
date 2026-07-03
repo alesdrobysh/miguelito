@@ -23,6 +23,12 @@ export function telegramReplyMarkupForText(text: string): { inline_keyboard: Arr
   return buttons.length ? { inline_keyboard: buttons } : undefined;
 }
 
+export function telegramDisplayTextForText(text: string): string {
+  if (!telegramReplyMarkupForText(text)) return text;
+  const display = text.split(/\r?\n/).filter((line) => !line.match(/^\/scenario\s+[^\s]+\s+—\s+.+$/)).join("\n").trim();
+  return display || "Elige una opción:";
+}
+
 interface TelegramTransportConfig {
   telegramToken: string;
   allowedUsers: Set<string>;
@@ -50,7 +56,8 @@ export class TelegramTransport implements Transport {
   async sendMessage(chatId: string | number, text: string): Promise<void> {
     try {
       const replyMarkup = telegramReplyMarkupForText(text);
-      await this.bot.api.sendMessage(String(chatId), mdToTelegramHtml(text), { parse_mode: "HTML", ...(replyMarkup ? { reply_markup: replyMarkup } : {}) });
+      const displayText = telegramDisplayTextForText(text);
+      await this.bot.api.sendMessage(String(chatId), mdToTelegramHtml(displayText), { parse_mode: "HTML", ...(replyMarkup ? { reply_markup: replyMarkup } : {}) });
     } catch {
       await this.bot.api.sendMessage(String(chatId), text);
     }
@@ -101,7 +108,8 @@ export class TelegramTransport implements Transport {
   private async _send(ctx: Context, text: string): Promise<void> {
     try {
       const replyMarkup = telegramReplyMarkupForText(text);
-      await ctx.reply(mdToTelegramHtml(text), { parse_mode: "HTML", ...(replyMarkup ? { reply_markup: replyMarkup } : {}) });
+      const displayText = telegramDisplayTextForText(text);
+      await ctx.reply(mdToTelegramHtml(displayText), { parse_mode: "HTML", ...(replyMarkup ? { reply_markup: replyMarkup } : {}) });
     } catch {
       await ctx.reply(text);
     }
