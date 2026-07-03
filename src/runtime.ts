@@ -325,7 +325,7 @@ export class RuntimeManager {
       return "Drill detenido. Seguimos conversando normalmente.";
     }
     const active = await this.listFreshDrillAttempts(db, 10);
-    if (active.length > 0) return formatAttemptQueue("Drill en curso — responde el primer punto o usa /drill stop:", active);
+    if (active.length > 0) return formatAttemptQueue("Drill en curso — resuelve este ejercicio o usa /drill stop:", active);
 
     const pressureRank: Record<string, number> = { high: 3, medium: 2, low: 1 };
     const due = await db.listDueLearningItems(100);
@@ -345,13 +345,13 @@ export class RuntimeManager {
         seenTargets.add(key);
         return true;
       })
-      .slice(0, 5);
+      .slice(0, 1);
     if (items.length === 0) return "Todavía no tengo material para entrenar. Escribe normalmente o pega frases con /import y las practicamos.";
     for (const [idx, item] of items.entries()) {
       await db.startLearningPracticeAttempt({ learning_item_id: item.id, prompt_text: drillLine(item, idx + 1) });
     }
     return [
-      "Mini drill — responde con frases cortas y luego seguimos conversando:",
+      "Mini drill — resuelve este ejercicio y luego seguimos conversando:",
       ...items.map((item, idx) => drillLine(item, idx + 1)),
     ].join("\n");
   }

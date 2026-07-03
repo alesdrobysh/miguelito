@@ -214,10 +214,10 @@ describe("runtime manager", () => {
 
     expect(drill).toContain("Mini drill");
     expect(drill).toContain("heat wave");
-    expect(drill).toContain("lift weights");
+    expect(drill).not.toContain("lift weights");
     expect(drill).not.toContain("→ ola de calor");
     expect(drill).not.toContain("→ hacer pesas");
-    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(2);
+    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(1);
     expect(provider.chatCalls).toHaveLength(0);
     manager.close();
   });
@@ -252,8 +252,6 @@ describe("runtime manager", () => {
     const drill = await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
 
     expect(drill).toContain("Usa “una lista adecuada” en una frase corta.");
-    expect(drill).toContain("Corrige: “opcioces”.");
-    expect(drill).toContain("Usa “aplicaciones” en una frase corta.");
     expect(drill).not.toContain("Learner expressed");
     expect(drill).not.toContain("missing 'n'");
     expect(drill).not.toContain("The word opciones");
@@ -278,8 +276,8 @@ describe("runtime manager", () => {
 
     expect(drill).toContain("Corrige: “opcioces”.");
     expect(drill).not.toContain("Usa “opciones” en una frase corta.");
-    expect(drill).toContain("Usa “aplicaciones” en una frase corta.");
-    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(2);
+    expect(drill).not.toContain("Usa “aplicaciones” en una frase corta.");
+    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(1);
     manager.close();
   });
 
@@ -308,10 +306,25 @@ describe("runtime manager", () => {
 
     const reply = await manager.handleMessage("spanish", 777, "telegram-user", "Tengo muchas aplicaciones en el móvil");
 
-    expect(reply).toContain("¡Bien! He marcado 1 respuesta.");
-    expect(reply).toContain("Siguiente:");
-    expect(reply).toContain("Corrige: “opcioces”.");
+    expect(reply).toBe("¡Bien! He marcado 1 respuesta. Drill completado.\nPracticaste: aplicaciones.");
     expect(await db.listLearningItemEvidence(aplicacionesId!, 5)).toHaveLength(1);
+    expect(provider.chatCalls).toHaveLength(0);
+    manager.close();
+  });
+
+  it("starts one mini exercise per drill instead of a queue", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+    const db = manager.runtime("spanish").db;
+    await db.addLearningItem({ type: "phrase", title: "ola de calor", explanation_l1: "heat wave", source_type: "imported", priority: 0.95 });
+    await db.addLearningItem({ type: "phrase", title: "hacer pesas", explanation_l1: "lift weights", source_type: "imported", priority: 0.95 });
+
+    const reply = await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
+
+    expect(reply).toBe("Mini drill — resuelve este ejercicio y luego seguimos conversando:\n1. ¿Cómo dirías “heat wave” en español?");
+    expect(reply).not.toContain("2.");
+    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(1);
     expect(provider.chatCalls).toHaveLength(0);
     manager.close();
   });
@@ -329,13 +342,13 @@ describe("runtime manager", () => {
 
     expect(resumed).toContain("Drill en curso");
     expect(resumed).toContain("1. ¿Cómo dirías “heat wave” en español?");
-    expect(resumed).toContain("2. ¿Cómo dirías “lift weights” en español?");
-    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(2);
+    expect(resumed).not.toContain("2. ¿Cómo dirías “lift weights” en español?");
+    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(1);
     expect(provider.chatCalls).toHaveLength(0);
     manager.close();
   });
 
-  it("only accepts the current drill prompt before later queue items", async () => {
+  it("rejects answers for a different item while a mini exercise is active", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const provider = new FakeProvider();
     const manager = await createRuntimeManager(config, { provider });
@@ -349,7 +362,7 @@ describe("runtime manager", () => {
     expect(reply).toContain("Casi");
     expect(reply).toContain("1. ¿Cómo dirías “heat wave” en español?");
     const attempts = await db.listActiveLearningPracticeAttempts(10);
-    expect(attempts).toHaveLength(2);
+    expect(attempts).toHaveLength(1);
     expect(attempts.every((attempt) => attempt.user_response == null)).toBe(true);
     expect(provider.chatCalls).toHaveLength(0);
     manager.close();
@@ -394,7 +407,7 @@ describe("runtime manager", () => {
     manager.close();
   });
 
-  it("accepts a numbered batch of drill answers in order", async () => {
+  it("uses only the current exercise from a numbered batch answer", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const provider = new FakeProvider();
     const manager = await createRuntimeManager(config, { provider });
@@ -410,13 +423,13 @@ describe("runtime manager", () => {
       "3. Llovía.",
     ].join("\n"));
 
-    expect(reply).toBe("¡Bien! He marcado 3 respuestas. Drill completado.\nPracticaste: aplicaciones, Pretérito indefinido vs imperfecto, llovía.");
+    expect(reply).toBe("¡Bien! He marcado 1 respuesta. Drill completado.\nPracticaste: aplicaciones.");
     expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(0);
     expect(provider.chatCalls).toHaveLength(0);
     manager.close();
   });
 
-  it("accepts a single-line numbered batch of drill answers", async () => {
+  it("uses only the current exercise from a single-line numbered answer", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const provider = new FakeProvider();
     const manager = await createRuntimeManager(config, { provider });
@@ -428,7 +441,7 @@ describe("runtime manager", () => {
 
     const reply = await manager.handleMessage("spanish", 777, "telegram-user", "1. Tengo muchas aplicaciones en mi teléfono. 2. Ayer fui al gimnasio. 3. Llovía.");
 
-    expect(reply).toBe("¡Bien! He marcado 3 respuestas. Drill completado.\nPracticaste: aplicaciones, Pretérito indefinido vs imperfecto, llovía.");
+    expect(reply).toBe("¡Bien! He marcado 1 respuesta. Drill completado.\nPracticaste: aplicaciones.");
     expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(0);
     expect(provider.chatCalls).toHaveLength(0);
     manager.close();
