@@ -416,6 +416,40 @@ describe("runtime manager", () => {
     manager.close();
   });
 
+  it("accepts a single-line numbered batch of drill answers", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+    const db = manager.runtime("spanish").db;
+    await db.addLearningItem({ type: "phrase", title: "aplicaciones", source_type: "conversation", priority: 0.95 });
+    await db.addLearningItem({ type: "grammar_point", title: "Pretérito indefinido vs imperfecto", source_type: "conversation", priority: 0.95 });
+    await db.addLearningItem({ type: "correction", title: "llovia → llovía", source_type: "correction", priority: 0.95 });
+    await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
+
+    const reply = await manager.handleMessage("spanish", 777, "telegram-user", "1. Tengo muchas aplicaciones en mi teléfono. 2. Ayer fui al gimnasio. 3. Llovía.");
+
+    expect(reply).toBe("¡Bien! He marcado 3 respuestas. Drill completado.\nPracticaste: aplicaciones, Pretérito indefinido vs imperfecto, llovía.");
+    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(0);
+    expect(provider.chatCalls).toHaveLength(0);
+    manager.close();
+  });
+
+  it("accepts slash-separated drill target variants", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+    const db = manager.runtime("spanish").db;
+    await db.addLearningItem({ type: "phrase", title: "despistado / ser despistado", source_type: "conversation", priority: 0.95 });
+    await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
+
+    const reply = await manager.handleMessage("spanish", 777, "telegram-user", "Soy un poco despistado por la mañana");
+
+    expect(reply).toBe("¡Bien! He marcado 1 respuesta. Drill completado.\nPracticaste: despistado / ser despistado.");
+    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(0);
+    expect(provider.chatCalls).toHaveLength(0);
+    manager.close();
+  });
+
   it("loads active languages for unified transport so Telegram bots share one DB instance", async () => {
     const config = loadConfig(env({
       TRANSPORT: "unified",

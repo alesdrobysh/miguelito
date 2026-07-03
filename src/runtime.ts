@@ -123,17 +123,31 @@ function normalizePracticeText(text: string): string {
   return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 }
 
+function drillTargetCandidates(item: { title: string; type?: string | null }): string[] {
+  const target = drillTarget(item);
+  // ponytail: slash variants only; upgrade to synonym/evaluator grading if drills need semantic answers.
+  return target.split("/").map((part) => part.trim()).filter(Boolean);
+}
+
 function answerUsesItem(answer: string, item: { title: string; type?: string | null }): boolean {
   if (item.type === "grammar_point") return normalizePracticeText(answer).length >= 8;
   const normalizedAnswer = ` ${normalizePracticeText(answer)} `;
-  const normalizedTitle = normalizePracticeText(drillTarget(item));
-  return normalizedTitle.length > 0 && normalizedAnswer.includes(` ${normalizedTitle} `);
+  return drillTargetCandidates(item).some((target) => {
+    const normalizedTitle = normalizePracticeText(target);
+    return normalizedTitle.length > 0 && normalizedAnswer.includes(` ${normalizedTitle} `);
+  });
 }
 
 function splitNumberedPracticeAnswers(text: string): string[] {
-  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  if (lines.length <= 1) return [text];
-  return lines.map((line) => line.replace(/^\s*\d+(?:\s*[,.)]|\.)\s*/, "").trim()).filter(Boolean);
+  const trimmed = text.trim();
+  const marker = /\b\d+(?:\s*,\s*\d+)*\s*[.)]\s*/g;
+  const matches = [...trimmed.matchAll(marker)];
+  if (matches.length <= 1 || matches[0]?.index !== 0) return [text];
+  return matches.map((match, idx) => {
+    const start = (match.index ?? 0) + match[0].length;
+    const end = matches[idx + 1]?.index ?? trimmed.length;
+    return trimmed.slice(start, end).trim();
+  }).filter(Boolean);
 }
 
 function formatAttemptQueue(title: string, attempts: Array<{ prompt_text?: string | null }>): string {
