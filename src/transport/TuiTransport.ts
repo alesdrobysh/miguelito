@@ -8,12 +8,60 @@ const RED = "\x1b[31m";
 const RESET = "\x1b[0m";
 const BOLD = "\x1b[1m";
 
+export class TuiImportSession {
+  private lines: string[] | null = null;
+
+  constructor(
+    private readonly handler: MessageHandler,
+    private readonly printReply: (text: string) => void,
+  ) {}
+
+  async handleLine(text: string): Promise<boolean> {
+    if (text === "/import") {
+      this.lines = [];
+      this.printReply([
+        "Pega las frases, una por línea.",
+        "Termina con una línea vacía o /done.",
+        "Ejemplo:",
+        "bochorno = muggy heat",
+        "ola de calor = heat wave",
+      ].join("\n"));
+      return true;
+    }
+
+    if (!this.lines) return false;
+
+    if (text === "/cancel") {
+      this.lines = null;
+      this.printReply("Import cancelado.");
+      return true;
+    }
+
+    if (text === "/done" || text === "") {
+      const lines = this.lines;
+      this.lines = null;
+      if (!lines.length) {
+        this.printReply("No importé nada. Usa /import texto = traducción o pega líneas después de /import.");
+        return true;
+      }
+      const reply = await this.handler(0, "tui-user", `/import\n${lines.join("\n")}`);
+      if (reply) this.printReply(reply);
+      return true;
+    }
+
+    this.lines.push(text);
+    return true;
+  }
+}
+
 export class TuiTransport implements Transport {
   private handler: MessageHandler | null = null;
   private rl: readline.Interface | null = null;
+  private importSession: TuiImportSession | null = null;
 
   onMessage(handler: MessageHandler): void {
     this.handler = handler;
+    this.importSession = new TuiImportSession(handler, (text) => console.log(`${GREEN}${text}${RESET}`));
   }
 
   async sendMessage(_chatId: string | number, text: string): Promise<void> {
@@ -36,10 +84,6 @@ export class TuiTransport implements Transport {
 
     this.rl.on("line", async (line) => {
       const text = line.trim();
-      if (!text) {
-        this.rl?.prompt();
-        return;
-      }
 
       if (text === "/quit") {
         console.log(`${YELLOW}Adiós!${RESET}`);
@@ -53,6 +97,16 @@ export class TuiTransport implements Transport {
       }
 
       try {
+        if (this.importSession && await this.importSession.handleLine(text)) {
+          this.rl?.prompt();
+          return;
+        }
+
+        if (!text) {
+          this.rl?.prompt();
+          return;
+        }
+
         const reply = await this.handler(0, "tui-user", text);
         if (reply) {
           console.log(`${GREEN}${reply}${RESET}`);
