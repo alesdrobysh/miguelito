@@ -205,6 +205,12 @@ function formatScenarioEnd(scenario: { title: string }): string {
   ].join("\n");
 }
 
+function isScenarioEndText(text: string): boolean {
+  const normalized = normalizePracticeText(text);
+  // ponytail: deterministic closers only; upgrade to evaluator-based roleplay completion if nuanced endings matter.
+  return /^(?:gracias(?: eso es todo| nada mas)?|eso es todo|nada mas|ya esta|listo|terminamos|fin|cancelar|parar)$/.test(normalized);
+}
+
 function isDrillSelectable(item: { id: number; status: string; evidence_count?: number | null; next_reactivation_at?: string | null }, dueIds: Set<number>, now = Date.now()): boolean {
   if (!["active", "cooling_down", "candidate"].includes(item.status)) return false;
   if (dueIds.has(item.id)) return true;
@@ -309,7 +315,7 @@ export class RuntimeManager {
       return drillReply;
     }
 
-    const scenarioReply = await this.processActiveScenario(db);
+    const scenarioReply = await this.processActiveScenario(db, text);
     if (scenarioReply) {
       await db.addChatMessage(chatId, "assistant", scenarioReply, convState.session_id);
       return scenarioReply;
@@ -345,7 +351,7 @@ export class RuntimeManager {
     return [`Escenario: ${scenario.title}`, scenario.setup_l1, scenario.opening_line_l2].join("\n");
   }
 
-  private async processActiveScenario(db: BuddyDb): Promise<string | null> {
+  private async processActiveScenario(db: BuddyDb, text: string): Promise<string | null> {
     const state = parseActiveScenario(await db.getMetaValue(ACTIVE_SCENARIO_META_KEY));
     if (!state) return null;
     const scenario = SpanishScenarios.find((s) => s.id === state.id);
@@ -354,7 +360,7 @@ export class RuntimeManager {
       return null;
     }
     const turns = state.turns + 1;
-    if (turns >= scenario.maxTurns) {
+    if (isScenarioEndText(text) || turns >= scenario.maxTurns) {
       await db.setMetaValue(ACTIVE_SCENARIO_META_KEY, "");
       return formatScenarioEnd(scenario);
     }

@@ -164,13 +164,33 @@ describe("runtime manager", () => {
       expect(reply).toBe(`echo:${text}`);
     }
 
-    const ended = await manager.handleMessage("spanish", 777, "telegram-user", "Gracias, eso es todo");
+    const ended = await manager.handleMessage("spanish", 777, "telegram-user", "Una servilleta, por favor");
     expect(ended).toContain("Escenario terminado");
     expect(await db.getMetaValue("active_scenario")).toBe("");
 
     const normal = await manager.handleMessage("spanish", 777, "telegram-user", "hola normal");
     expect(normal).toBe("echo:hola normal");
     expect(provider.chatCalls).toHaveLength(5);
+    manager.close();
+  });
+
+  it("ends an active scenario early when the learner naturally closes it", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+    const db = manager.runtime("spanish").db;
+
+    await manager.handleMessage("spanish", 777, "telegram-user", "/scenario pedir_comida");
+    expect(await manager.handleMessage("spanish", 777, "telegram-user", "Quiero un café"))
+      .toBe("echo:Quiero un café");
+
+    const ended = await manager.handleMessage("spanish", 777, "telegram-user", "Gracias, eso es todo");
+    expect(ended).toContain("Escenario terminado");
+    expect(await db.getMetaValue("active_scenario")).toBe("");
+
+    const normal = await manager.handleMessage("spanish", 777, "telegram-user", "hola normal");
+    expect(normal).toBe("echo:hola normal");
+    expect(provider.chatCalls).toHaveLength(2);
     manager.close();
   });
 
