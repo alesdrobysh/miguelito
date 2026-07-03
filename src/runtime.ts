@@ -61,7 +61,8 @@ export function createEvaluatorProvider(config: Config): LLMProvider {
 }
 
 const MODEL_HISTORY_LIMIT = 50;
-const DRILL_ATTEMPT_TTL_MS = 60 * 60 * 1000;
+const DRILL_SESSION_TTL_MS = 10 * 60 * 1000;
+const DRILL_SESSION_META_KEY = "drill_started_at";
 
 function formatStart(_lang: LanguageConfig): string {
   return [
@@ -157,11 +158,28 @@ function formatAttemptQueue(title: string, attempts: Array<{ prompt_text?: strin
   ].join("\n");
 }
 
+function parseDrillTimestamp(raw: string | null | undefined): number | null {
+  if (!raw) return null;
+  const value = raw.includes("T") ? raw : `${raw.replace(" ", "T")}Z`;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isDrillStopText(text: string): boolean {
+  const trimmed = text.trim();
+  return /^(?:\/drill(?:@[^\s]+)?\s+)?(?:stop|reset|cancelar|parar)(?:\s|$)/i.test(trimmed)
+    || /^(?:drill|дрил)\s+(?:stop|стоп|cancel|cancelar|parar)(?:\s|$)/i.test(trimmed);
+}
+
+function hasExpiredDrillSession(startedAt: string | null | undefined, now = Date.now()): boolean {
+  const started = parseDrillTimestamp(startedAt);
+  return started != null && now - started > DRILL_SESSION_TTL_MS;
+}
+
 function hasStaleDrillAttempt(attempts: Array<{ created_at: string }>, now = Date.now()): boolean {
   return attempts.some((attempt) => {
-    const value = attempt.created_at.includes("T") ? attempt.created_at : `${attempt.created_at.replace(" ", "T")}Z`;
-    const created = Date.parse(value);
-    return Number.isFinite(created) && now - created > DRILL_ATTEMPT_TTL_MS;
+    const created = parseDrillTimestamp(attempt.created_at);
+    return created != null && now - created > DRILL_SESSION_TTL_MS;
   });
 }
 
@@ -329,43 +347,21 @@ export class RuntimeManager {
   }
 
   private async handleDrillCommand(db: BuddyDb, text: string): Promise<string> {
-    if (/^\/drill(?:@[^\s]+)?\s+(?:stop|reset|cancelar|parar)\b/i.test(text.trim())) {
-      await db.abandonActiveLearningPracticeAttempts("drill stopped by user");
-      return "Drill detenido. Seguimos conversando normalmente.";
-    }
+    if (isDrillStopText(text)) return this.stopDrill(db);
     const active = await this.listFreshDrillAttempts(db, 10);
     if (active.length > 0) return formatAttemptQueue("Drill en curso — resuelve este ejercicio o usa /drill stop:", active);
 
-    const pressureRank: Record<string, number> = { high: 3, medium: 2, low: 1 };
-    const due = await db.listDueLearningItems(100);
-    const dueIds = new Set(due.map((i) => i.id));
-    const all = await db.listLearningItems("all", 100);
-    const seenTargets = new Set<string>();
-    const items = all
-      .filter((item) => isDrillSelectable(item, dueIds))
-      .sort((a, b) => (Number(dueIds.has(b.id)) - Number(dueIds.has(a.id)))
-        || ((pressureRank[String(b.reactivation_pressure)] ?? 0) - (pressureRank[String(a.reactivation_pressure)] ?? 0))
-        || (a.evidence_count - b.evidence_count)
-        || (b.priority - a.priority)
-        || (a.id - b.id))
-      .filter((item) => {
-        const key = normalizePracticeText(drillTarget(item));
-        if (!key || seenTargets.has(key)) return false;
-        seenTargets.add(key);
-        return true;
-      })
-      .slice(0, 1);
-    if (items.length === 0) return "Todavía no tengo material para entrenar. Escribe normalmente o pega frases con /import y las practicamos.";
-    for (const [idx, item] of items.entries()) {
-      await db.startLearningPracticeAttempt({ learning_item_id: item.id, prompt_text: drillLine(item, idx + 1) });
+    await db.setMetaValue(DRILL_SESSION_META_KEY, new Date().toISOString());
+    const next = await this.startNextDrillAttempt(db);
+    if (next.length === 0) {
+      await db.setMetaValue(DRILL_SESSION_META_KEY, "");
+      return "Todavía no tengo material para entrenar. Escribe normalmente o pega frases con /import y las practicamos.";
     }
-    return [
-      "Mini drill — resuelve este ejercicio y luego seguimos conversando:",
-      ...items.map((item, idx) => drillLine(item, idx + 1)),
-    ].join("\n");
+    return formatAttemptQueue("Drill de 10 minutos — responde; seguiré hasta /drill stop o hasta que se acabe el tiempo:", next);
   }
 
   private async processDrillAnswers(db: BuddyDb, text: string): Promise<string | null> {
+    if (isDrillStopText(text)) return this.stopDrill(db);
     const attempts = await this.listFreshDrillAttempts(db, 10);
     if (attempts.length === 0) return null;
     const drillItems = new Map((await db.listLearningItems("all", 200))
@@ -405,17 +401,56 @@ export class RuntimeManager {
     }
     const remaining = await db.listActiveLearningPracticeAttempts(5);
     const noun = completed === 1 ? "respuesta" : "respuestas";
-    if (remaining.length === 0) return [
+    if (remaining.length > 0) return formatAttemptQueue(`¡Bien! He marcado ${completed} ${noun}.\nSiguiente:`, remaining);
+
+    if (!hasExpiredDrillSession(await db.getMetaValue(DRILL_SESSION_META_KEY))) {
+      const next = await this.startNextDrillAttempt(db);
+      if (next.length > 0) return formatAttemptQueue(`¡Bien! He marcado ${completed} ${noun}.\nSiguiente:`, next);
+    }
+
+    await db.setMetaValue(DRILL_SESSION_META_KEY, "");
+    return [
       `¡Bien! He marcado ${completed} ${noun}. Drill completado.`,
       completedTitles.length ? `Practicaste: ${completedTitles.slice(0, 3).join(", ")}.` : "",
     ].filter(Boolean).join("\n");
-    return formatAttemptQueue(`¡Bien! He marcado ${completed} ${noun}.\nSiguiente:`, remaining);
+  }
+
+  private async startNextDrillAttempt(db: BuddyDb) {
+    const pressureRank: Record<string, number> = { high: 3, medium: 2, low: 1 };
+    const due = await db.listDueLearningItems(100);
+    const dueIds = new Set(due.map((i) => i.id));
+    const all = await db.listLearningItems("all", 100);
+    const seenTargets = new Set<string>();
+    const item = all
+      .filter((candidate) => isDrillSelectable(candidate, dueIds))
+      .sort((a, b) => (Number(dueIds.has(b.id)) - Number(dueIds.has(a.id)))
+        || ((pressureRank[String(b.reactivation_pressure)] ?? 0) - (pressureRank[String(a.reactivation_pressure)] ?? 0))
+        || (a.evidence_count - b.evidence_count)
+        || (b.priority - a.priority)
+        || (a.id - b.id))
+      .find((candidate) => {
+        const key = normalizePracticeText(drillTarget(candidate));
+        if (!key || seenTargets.has(key)) return false;
+        seenTargets.add(key);
+        return true;
+      });
+    if (!item) return [];
+    const attempt = await db.startLearningPracticeAttempt({ learning_item_id: item.id, prompt_text: drillLine(item, 1) });
+    return [attempt];
+  }
+
+  private async stopDrill(db: BuddyDb): Promise<string> {
+    await db.abandonActiveLearningPracticeAttempts("drill stopped by user");
+    await db.setMetaValue(DRILL_SESSION_META_KEY, "");
+    return "Drill detenido. Seguimos conversando normalmente.";
   }
 
   private async listFreshDrillAttempts(db: BuddyDb, limit: number) {
     const attempts = await db.listActiveLearningPracticeAttempts(limit);
-    if (!hasStaleDrillAttempt(attempts)) return attempts;
+    const startedAt = await db.getMetaValue(DRILL_SESSION_META_KEY) || attempts[0]?.created_at;
+    if (!hasExpiredDrillSession(startedAt) && !hasStaleDrillAttempt(attempts)) return attempts;
     await db.abandonActiveLearningPracticeAttempts("stale drill expired");
+    await db.setMetaValue(DRILL_SESSION_META_KEY, "");
     return [];
   }
 

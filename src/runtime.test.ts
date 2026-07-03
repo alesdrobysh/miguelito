@@ -212,7 +212,7 @@ describe("runtime manager", () => {
 
     const drill = await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
 
-    expect(drill).toContain("Mini drill");
+    expect(drill).toContain("Drill de 10 minutos");
     expect(drill).toContain("heat wave");
     expect(drill).not.toContain("lift weights");
     expect(drill).not.toContain("→ ola de calor");
@@ -231,7 +231,7 @@ describe("runtime manager", () => {
 
     const drill = await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
 
-    expect(drill).toContain("Mini drill");
+    expect(drill).toContain("Drill de 10 minutos");
     expect(drill).not.toContain("I don't mind");
     expect(drill).toContain("me da igual");
     expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(1);
@@ -295,24 +295,27 @@ describe("runtime manager", () => {
     manager.close();
   });
 
-  it("matches cleaned drill targets and shows the next pending prompt", async () => {
+  it("continues drill with the next exercise after a correct answer", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const provider = new FakeProvider();
     const manager = await createRuntimeManager(config, { provider });
     const db = manager.runtime("spanish").db;
     const aplicacionesId = await db.addLearningItem({ type: "correction", title: "aplicaciones (plural sin tilde)", source_type: "correction", priority: 0.95 });
-    await db.addLearningItem({ type: "correction", title: "opcioces → opciones", source_type: "correction", priority: 0.95 });
+    await db.addLearningItem({ type: "phrase", title: "hacer pesas", explanation_l1: "lift weights", source_type: "imported", priority: 0.95 });
     await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
 
     const reply = await manager.handleMessage("spanish", 777, "telegram-user", "Tengo muchas aplicaciones en el móvil");
 
-    expect(reply).toBe("¡Bien! He marcado 1 respuesta. Drill completado.\nPracticaste: aplicaciones.");
+    expect(reply).toContain("¡Bien!");
+    expect(reply).toContain("Siguiente:");
+    expect(reply).toContain("lift weights");
     expect(await db.listLearningItemEvidence(aplicacionesId!, 5)).toHaveLength(1);
+    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(1);
     expect(provider.chatCalls).toHaveLength(0);
     manager.close();
   });
 
-  it("starts one mini exercise per drill instead of a queue", async () => {
+  it("starts one active exercise at a time within a timed drill", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const provider = new FakeProvider();
     const manager = await createRuntimeManager(config, { provider });
@@ -322,7 +325,7 @@ describe("runtime manager", () => {
 
     const reply = await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
 
-    expect(reply).toBe("Mini drill — resuelve este ejercicio y luego seguimos conversando:\n1. Traduce al español: “heat wave”.");
+    expect(reply).toBe("Drill de 10 minutos — responde; seguiré hasta /drill stop o hasta que se acabe el tiempo:\n1. Traduce al español: “heat wave”.");
     expect(reply).not.toContain("2.");
     expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(1);
     expect(provider.chatCalls).toHaveLength(0);
@@ -402,6 +405,22 @@ describe("runtime manager", () => {
     manager.close();
   });
 
+  it("stops an active drill on Russian plain-text drill stop", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+    const db = manager.runtime("spanish").db;
+    await db.addLearningItem({ type: "phrase", title: "ola de calor", explanation_l1: "heat wave", source_type: "imported", priority: 0.95 });
+    await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
+
+    const stopped = await manager.handleMessage("spanish", 777, "telegram-user", "дрил стоп");
+
+    expect(stopped).toBe("Drill detenido. Seguimos conversando normalmente.");
+    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(0);
+    expect(provider.chatCalls).toHaveLength(0);
+    manager.close();
+  });
+
   it("scores drill answers with feedback instead of dropping into generic chat", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const provider = new FakeProvider();
@@ -441,8 +460,10 @@ describe("runtime manager", () => {
       "3. Llovía.",
     ].join("\n"));
 
-    expect(reply).toBe("¡Bien! He marcado 1 respuesta. Drill completado.\nPracticaste: aplicaciones.");
-    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(0);
+    expect(reply).toContain("¡Bien! He marcado 1 respuesta.");
+    expect(reply).toContain("Siguiente:");
+    expect(reply).toContain("Pretérito indefinido vs imperfecto");
+    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(1);
     expect(provider.chatCalls).toHaveLength(0);
     manager.close();
   });
@@ -459,8 +480,10 @@ describe("runtime manager", () => {
 
     const reply = await manager.handleMessage("spanish", 777, "telegram-user", "1. Tengo muchas aplicaciones en mi teléfono. 2. Ayer fui al gimnasio. 3. Llovía.");
 
-    expect(reply).toBe("¡Bien! He marcado 1 respuesta. Drill completado.\nPracticaste: aplicaciones.");
-    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(0);
+    expect(reply).toContain("¡Bien! He marcado 1 respuesta.");
+    expect(reply).toContain("Siguiente:");
+    expect(reply).toContain("Pretérito indefinido vs imperfecto");
+    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(1);
     expect(provider.chatCalls).toHaveLength(0);
     manager.close();
   });
@@ -559,6 +582,23 @@ describe("runtime manager", () => {
     const normal = await manager.handleMessage("spanish", 777, "telegram-user", "Hola. Fui al gimnasio ayer y hoy descanso");
 
     expect(normal).toBe("echo:Hola. Fui al gimnasio ayer y hoy descanso");
+    expect(provider.chatCalls).toHaveLength(1);
+    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(0);
+    manager.close();
+  });
+
+  it("ends a drill session after ten minutes even if the current attempt is fresh", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+    const db = manager.runtime("spanish").db;
+    await db.addLearningItem({ type: "phrase", title: "ola de calor", explanation_l1: "heat wave", source_type: "imported", priority: 0.95 });
+    await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
+    await db.setMetaValue("drill_started_at", new Date(Date.now() - 11 * 60 * 1000).toISOString());
+
+    const normal = await manager.handleMessage("spanish", 777, "telegram-user", "La ola de calor fue horrible");
+
+    expect(normal).toBe("echo:La ola de calor fue horrible");
     expect(provider.chatCalls).toHaveLength(1);
     expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(0);
     manager.close();
