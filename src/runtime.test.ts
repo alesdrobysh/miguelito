@@ -5,7 +5,7 @@ import path from "path";
 import { loadConfig } from "./infrastructure/config.js";
 import { listAvailableLanguages } from "./languages/index.js";
 import { createRuntimeManager } from "./runtime.js";
-import { TELEGRAM_COMMANDS } from "./transport/TelegramTransport.js";
+import { TELEGRAM_ALLOWED_UPDATES, TELEGRAM_COMMANDS, telegramReplyMarkupForText } from "./transport/TelegramTransport.js";
 import type { LLMProvider } from "./providers/interfaces.js";
 
 const MIN_ENV = {
@@ -114,6 +114,22 @@ describe("runtime manager", () => {
       expect(item.description.length).toBeGreaterThan(0);
       expect(item.description.length).toBeLessThanOrEqual(256);
     }
+  });
+
+  it("exposes inline buttons for scenario choices in Telegram", () => {
+    const reply = [
+      "Escenarios cortos disponibles:",
+      "/scenario pedir_comida — Pedir comida",
+      "/scenario preguntar_ruta — Preguntar por una ruta",
+    ].join("\n");
+
+    expect(telegramReplyMarkupForText(reply)).toEqual({
+      inline_keyboard: [
+        [{ text: "Pedir comida", callback_data: "/scenario pedir_comida" }],
+        [{ text: "Preguntar por una ruta", callback_data: "/scenario preguntar_ruta" }],
+      ],
+    });
+    expect(TELEGRAM_ALLOWED_UPDATES).toContain("callback_query");
   });
 
   it("lists opt-in practice scenarios without entering generic chat", async () => {

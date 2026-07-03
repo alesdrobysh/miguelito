@@ -5,7 +5,7 @@ import type { LanguageRuntime, RuntimeManager } from "../runtime.js";
 import { FuzzyDedupeService } from "../services/FuzzyDedupeService.js";
 import type { MetaRepository } from "../repositories/interfaces.js";
 import { startScheduler } from "../services/Scheduler.js";
-import { TelegramTransport } from "../transport/TelegramTransport.js";
+import { TelegramTransport, TELEGRAM_ALLOWED_UPDATES } from "../transport/TelegramTransport.js";
 import type { Transport } from "../transport/Transport.js";
 
 const log = logger.child({ ctx: "app" });
@@ -112,6 +112,6 @@ export function startTelegramTransport(manager: RuntimeManager, config: Config, 
   transport.onMessage((chatId, userId, text) => manager.handleMessage(language, Number(chatId), userId, text));
   transport.start({
     onStart: (info: { username: string }) => log.info({ username: info.username, language }, "bot started"),
-    allowed_updates: ["message"],
+    allowed_updates: [...TELEGRAM_ALLOWED_UPDATES],
   });
 }

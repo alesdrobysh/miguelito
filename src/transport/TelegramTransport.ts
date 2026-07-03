@@ -13,6 +13,15 @@ export const TELEGRAM_COMMANDS = [
 ] as const;
 
 const MENU_COMMANDS = TELEGRAM_COMMANDS.map((c) => c.command) as string[];
+export const TELEGRAM_ALLOWED_UPDATES = ["message", "callback_query"] as const;
+
+export function telegramReplyMarkupForText(text: string): { inline_keyboard: Array<Array<{ text: string; callback_data: string }>> } | undefined {
+  const buttons = text.split(/\r?\n/).flatMap((line) => {
+    const match = line.match(/^\/scenario\s+([^\s]+)\s+—\s+(.+)$/);
+    return match ? [[{ text: match[2]!.trim(), callback_data: `/scenario ${match[1]!.trim()}` }]] : [];
+  });
+  return buttons.length ? { inline_keyboard: buttons } : undefined;
+}
 
 interface TelegramTransportConfig {
   telegramToken: string;
@@ -40,7 +49,8 @@ export class TelegramTransport implements Transport {
 
   async sendMessage(chatId: string | number, text: string): Promise<void> {
     try {
-      await this.bot.api.sendMessage(String(chatId), mdToTelegramHtml(text), { parse_mode: "HTML" });
+      const replyMarkup = telegramReplyMarkupForText(text);
+      await this.bot.api.sendMessage(String(chatId), mdToTelegramHtml(text), { parse_mode: "HTML", ...(replyMarkup ? { reply_markup: replyMarkup } : {}) });
     } catch {
       await this.bot.api.sendMessage(String(chatId), text);
     }
@@ -90,7 +100,8 @@ export class TelegramTransport implements Transport {
 
   private async _send(ctx: Context, text: string): Promise<void> {
     try {
-      await ctx.reply(mdToTelegramHtml(text), { parse_mode: "HTML" });
+      const replyMarkup = telegramReplyMarkupForText(text);
+      await ctx.reply(mdToTelegramHtml(text), { parse_mode: "HTML", ...(replyMarkup ? { reply_markup: replyMarkup } : {}) });
     } catch {
       await ctx.reply(text);
     }
@@ -114,6 +125,16 @@ export class TelegramTransport implements Transport {
         this._logError(ctx)(e);
         try { await ctx.reply("⚠️ " + (e?.message ?? String(e)).slice(0, 200)); } catch {}
       });
+    });
+
+    this.bot.on("callback_query:data", async (ctx) => {
+      if (!this._isAllowed(ctx)) {
+        log.warn({ ...this.logFields, userId: ctx.from?.id?.toString()?.slice(0, 6) }, 'unauthorized user attempt');
+        return;
+      }
+      const data = ctx.callbackQuery.data;
+      await ctx.answerCallbackQuery().catch(() => undefined);
+      if (data.startsWith("/scenario ")) await this._dispatch(ctx, data).catch(this._logError(ctx));
     });
 
     this.bot.catch((err) => {
