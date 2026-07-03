@@ -105,12 +105,12 @@ function parseImportedPracticeItems(text: string): ImportedPracticeItem[] {
 
 function drillLine(item: { title: string; explanation_l1?: string | null; source_type?: string | null; type?: string | null }, n: number): string {
   const translation = item.source_type === "imported" ? item.explanation_l1?.trim() : "";
-  if (translation) return `${n}. ¿Cómo dirías “${translation}” en español?`;
+  if (translation) return `${n}. Traduce al español: “${translation}”.`;
   const correction = item.title.split(/→|->/).map((part) => part.trim()).filter(Boolean);
-  if (item.type === "correction" && correction.length >= 2) return `${n}. Corrige: “${correction[0]}”.`;
-  if (item.type === "grammar_point") return `${n}. Practica “${item.title}”: escribe una frase corta.`;
+  if (item.type === "correction" && correction.length >= 2) return `${n}. Reescribe correctamente: “${correction[0]}”.`;
+  if (item.type === "grammar_point") return `${n}. Escribe una frase natural que practique: “${item.title}”.`;
   const displayTitle = item.title.replace(/^spelling of\s+/i, "").replace(/\s*\([^)]*\)\s*$/, "").trim() || item.title;
-  return `${n}. Usa “${displayTitle}” en una frase corta.`;
+  return `${n}. Escribe una frase personal y natural con “${displayTitle}”.`;
 }
 
 function drillTarget(item: { title: string; type?: string | null }): string {
@@ -163,6 +163,15 @@ function hasStaleDrillAttempt(attempts: Array<{ created_at: string }>, now = Dat
     const created = Date.parse(value);
     return Number.isFinite(created) && now - created > DRILL_ATTEMPT_TTL_MS;
   });
+}
+
+function isDrillSelectable(item: { id: number; status: string; evidence_count?: number | null; next_reactivation_at?: string | null }, dueIds: Set<number>, now = Date.now()): boolean {
+  if (!["active", "cooling_down", "candidate"].includes(item.status)) return false;
+  if (dueIds.has(item.id)) return true;
+  if ((item.evidence_count ?? 0) === 0) return true;
+  if (!item.next_reactivation_at) return true;
+  const dueAt = Date.parse(item.next_reactivation_at);
+  return Number.isFinite(dueAt) ? dueAt <= now : true;
 }
 
 export class RuntimeManager {
@@ -333,7 +342,7 @@ export class RuntimeManager {
     const all = await db.listLearningItems("all", 100);
     const seenTargets = new Set<string>();
     const items = all
-      .filter((item) => ["active", "cooling_down", "candidate"].includes(item.status))
+      .filter((item) => isDrillSelectable(item, dueIds))
       .sort((a, b) => (Number(dueIds.has(b.id)) - Number(dueIds.has(a.id)))
         || ((pressureRank[String(b.reactivation_pressure)] ?? 0) - (pressureRank[String(a.reactivation_pressure)] ?? 0))
         || (a.evidence_count - b.evidence_count)

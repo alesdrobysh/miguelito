@@ -251,7 +251,7 @@ describe("runtime manager", () => {
 
     const drill = await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
 
-    expect(drill).toContain("Usa “una lista adecuada” en una frase corta.");
+    expect(drill).toContain("Escribe una frase personal y natural con “una lista adecuada”.");
     expect(drill).not.toContain("Learner expressed");
     expect(drill).not.toContain("missing 'n'");
     expect(drill).not.toContain("The word opciones");
@@ -274,9 +274,9 @@ describe("runtime manager", () => {
 
     const drill = await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
 
-    expect(drill).toContain("Corrige: “opcioces”.");
-    expect(drill).not.toContain("Usa “opciones” en una frase corta.");
-    expect(drill).not.toContain("Usa “aplicaciones” en una frase corta.");
+    expect(drill).toContain("Reescribe correctamente: “opcioces”.");
+    expect(drill).not.toContain("Escribe una frase personal y natural con “opciones”.");
+    expect(drill).not.toContain("Escribe una frase personal y natural con “aplicaciones”.");
     expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(1);
     manager.close();
   });
@@ -290,8 +290,8 @@ describe("runtime manager", () => {
 
     const drill = await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
 
-    expect(drill).toContain("Practica “Pretérito indefinido vs imperfecto”: escribe una frase corta.");
-    expect(drill).not.toContain("Usa “Pretérito indefinido vs imperfecto” en una frase corta.");
+    expect(drill).toContain("Escribe una frase natural que practique: “Pretérito indefinido vs imperfecto”.");
+    expect(drill).not.toContain("Escribe una frase personal y natural con “Pretérito indefinido vs imperfecto”.");
     manager.close();
   });
 
@@ -322,10 +322,28 @@ describe("runtime manager", () => {
 
     const reply = await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
 
-    expect(reply).toBe("Mini drill — resuelve este ejercicio y luego seguimos conversando:\n1. ¿Cómo dirías “heat wave” en español?");
+    expect(reply).toBe("Mini drill — resuelve este ejercicio y luego seguimos conversando:\n1. Traduce al español: “heat wave”.");
     expect(reply).not.toContain("2.");
     expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(1);
     expect(provider.chatCalls).toHaveLength(0);
+    manager.close();
+  });
+
+  it("does not repeat a just-completed mini exercise while other items are available", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+    const db = manager.runtime("spanish").db;
+    await db.addLearningItem({ type: "phrase", title: "ola de calor", explanation_l1: "heat wave", source_type: "imported", priority: 0.95 });
+    await db.addLearningItem({ type: "phrase", title: "hacer pesas", explanation_l1: "lift weights", source_type: "imported", priority: 0.95 });
+    await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
+    await manager.handleMessage("spanish", 777, "telegram-user", "La ola de calor fue horrible");
+
+    const next = await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
+
+    expect(next).toContain("lift weights");
+    expect(next).not.toContain("heat wave");
+    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(1);
     manager.close();
   });
 
@@ -341,7 +359,7 @@ describe("runtime manager", () => {
     const resumed = await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
 
     expect(resumed).toContain("Drill en curso");
-    expect(resumed).toContain("1. ¿Cómo dirías “heat wave” en español?");
+    expect(resumed).toContain("1. Traduce al español: “heat wave”.");
     expect(resumed).not.toContain("2. ¿Cómo dirías “lift weights” en español?");
     expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(1);
     expect(provider.chatCalls).toHaveLength(0);
@@ -360,7 +378,7 @@ describe("runtime manager", () => {
     const reply = await manager.handleMessage("spanish", 777, "telegram-user", "Hacer pesas me ayuda mucho");
 
     expect(reply).toContain("Casi");
-    expect(reply).toContain("1. ¿Cómo dirías “heat wave” en español?");
+    expect(reply).toContain("1. Traduce al español: “heat wave”.");
     const attempts = await db.listActiveLearningPracticeAttempts(10);
     expect(attempts).toHaveLength(1);
     expect(attempts.every((attempt) => attempt.user_response == null)).toBe(true);
