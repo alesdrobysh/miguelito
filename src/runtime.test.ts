@@ -150,6 +150,30 @@ describe("runtime manager", () => {
     manager.close();
   });
 
+  it("ends an active scenario after its configured turn limit", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+    const db = manager.runtime("spanish").db;
+
+    const started = await manager.handleMessage("spanish", 777, "telegram-user", "/scenario pedir_comida");
+    expect(started).toContain("Escenario: Pedir comida");
+
+    for (const text of ["Quiero un café", "También una tostada", "Para llevar", "Pago con tarjeta"]) {
+      const reply = await manager.handleMessage("spanish", 777, "telegram-user", text);
+      expect(reply).toBe(`echo:${text}`);
+    }
+
+    const ended = await manager.handleMessage("spanish", 777, "telegram-user", "Gracias, eso es todo");
+    expect(ended).toContain("Escenario terminado");
+    expect(await db.getMetaValue("active_scenario")).toBe("");
+
+    const normal = await manager.handleMessage("spanish", 777, "telegram-user", "hola normal");
+    expect(normal).toBe("echo:hola normal");
+    expect(provider.chatCalls).toHaveLength(5);
+    manager.close();
+  });
+
   it("keeps start chat-first and avoids showing a learning app surface", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const provider = new FakeProvider();

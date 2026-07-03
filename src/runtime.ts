@@ -63,6 +63,12 @@ export function createEvaluatorProvider(config: Config): LLMProvider {
 const MODEL_HISTORY_LIMIT = 50;
 const DRILL_SESSION_TTL_MS = 10 * 60 * 1000;
 const DRILL_SESSION_META_KEY = "drill_started_at";
+const ACTIVE_SCENARIO_META_KEY = "active_scenario";
+
+interface ActiveScenarioState {
+  id: string;
+  turns: number;
+}
 
 function formatStart(_lang: LanguageConfig): string {
   return [
@@ -183,6 +189,22 @@ function hasStaleDrillAttempt(attempts: Array<{ created_at: string }>, now = Dat
   });
 }
 
+function parseActiveScenario(raw: string | null | undefined): ActiveScenarioState | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<ActiveScenarioState>;
+    if (typeof parsed.id === "string" && Number.isFinite(parsed.turns)) return { id: parsed.id, turns: Number(parsed.turns) };
+  } catch {}
+  return null;
+}
+
+function formatScenarioEnd(scenario: { title: string }): string {
+  return [
+    `Escenario terminado: ${scenario.title}.`,
+    "Buen trabajo. Seguimos conversando normalmente, o usa /scenario para elegir otro.",
+  ].join("\n");
+}
+
 function isDrillSelectable(item: { id: number; status: string; evidence_count?: number | null; next_reactivation_at?: string | null }, dueIds: Set<number>, now = Date.now()): boolean {
   if (!["active", "cooling_down", "candidate"].includes(item.status)) return false;
   if (dueIds.has(item.id)) return true;
@@ -287,6 +309,12 @@ export class RuntimeManager {
       return drillReply;
     }
 
+    const scenarioReply = await this.processActiveScenario(db);
+    if (scenarioReply) {
+      await db.addChatMessage(chatId, "assistant", scenarioReply, convState.session_id);
+      return scenarioReply;
+    }
+
     const result = await agentRunner.run(text, history);
     if (result.text) await db.addChatMessage(chatId, "assistant", result.text, convState.session_id);
     return result.text || null;
@@ -298,12 +326,12 @@ export class RuntimeManager {
     if (commandToken === "/start") return formatStart(lang);
     if (commandToken === "/import") return this.handleImportCommand(db, text);
     if (commandToken === "/drill") return this.handleDrillCommand(db, text);
-    if (commandToken === "/scenario") return this.handleScenarioCommand(text);
+    if (commandToken === "/scenario") return this.handleScenarioCommand(db, text);
     if (text.startsWith("/")) return formatCommandRedirect(lang);
     return undefined;
   }
 
-  private handleScenarioCommand(text: string): string {
+  private async handleScenarioCommand(db: BuddyDb, text: string): Promise<string> {
     const id = text.replace(/^\/scenario(?:@[^\s]+)?\s*/i, "").trim();
     if (!id) {
       return [
@@ -313,7 +341,25 @@ export class RuntimeManager {
     }
     const scenario = SpanishScenarios.find((s) => s.id === id);
     if (!scenario) return "No conozco ese escenario. Usa /scenario para ver las opciones.";
+    await db.setMetaValue(ACTIVE_SCENARIO_META_KEY, JSON.stringify({ id: scenario.id, turns: 0 } satisfies ActiveScenarioState));
     return [`Escenario: ${scenario.title}`, scenario.setup_l1, scenario.opening_line_l2].join("\n");
+  }
+
+  private async processActiveScenario(db: BuddyDb): Promise<string | null> {
+    const state = parseActiveScenario(await db.getMetaValue(ACTIVE_SCENARIO_META_KEY));
+    if (!state) return null;
+    const scenario = SpanishScenarios.find((s) => s.id === state.id);
+    if (!scenario) {
+      await db.setMetaValue(ACTIVE_SCENARIO_META_KEY, "");
+      return null;
+    }
+    const turns = state.turns + 1;
+    if (turns >= scenario.maxTurns) {
+      await db.setMetaValue(ACTIVE_SCENARIO_META_KEY, "");
+      return formatScenarioEnd(scenario);
+    }
+    await db.setMetaValue(ACTIVE_SCENARIO_META_KEY, JSON.stringify({ id: scenario.id, turns } satisfies ActiveScenarioState));
+    return null;
   }
 
   private async handleImportCommand(db: BuddyDb, text: string): Promise<string> {
