@@ -20,6 +20,14 @@ describe("loadLanguage", () => {
     expect(() => loadLanguage("klingon")).toThrow('Unknown language: "klingon"');
   });
 
+  it("assigns a severity to every Spanish error category", () => {
+    const lang = loadLanguage("spanish");
+
+    for (const category of lang.errorCategories) {
+      expect(lang.errorSeverity?.[category]).toMatch(/^(cosmetic|notable|critical)$/);
+    }
+  });
+
   it("does not hard-code personal names in core language prompts", () => {
     const forbiddenPersonalNames = /\b(Ales|Alejandro)\b|Алесь|Алес/;
 

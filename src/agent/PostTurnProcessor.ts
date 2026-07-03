@@ -246,7 +246,10 @@ export class PostTurnProcessor {
       const correct = this.clean(item.correct);
       if (!userText || !correct) continue;
       const category = this.validCategory(item.category);
-      await this.deps.errors.logError(userText, correct, category, this.clean(item.note));
+      const severityMap = this.deps.lang.errorSeverity ?? {};
+      const severity = severityMap[category] ?? "notable";
+      const note = [this.clean(item.note), `severity:${severity}`].filter(Boolean).join(" | ");
+      await this.deps.errors.logError(userText, correct, category, note);
       errorsLogged++;
     }
 
@@ -292,14 +295,19 @@ export class PostTurnProcessor {
       const userText = this.clean(item.user_text);
       const correct = this.clean(item.correct);
       if (!userText || !correct) continue;
+      const category = this.validCategory(item.category);
+      const severityMap = this.deps.lang.errorSeverity ?? {};
+      const severity = severityMap[category] ?? "notable";
+      const correctionPriority = severity === "critical" ? 0.95 : severity === "notable" ? 0.8 : 0.55;
+      const note = [this.clean(item.note), `severity:${severity}`].filter(Boolean).join(" | ");
       const learningInput: LearningItemInput = {
         type: "correction",
         title: `${userText} → ${correct}`,
         prompt_l2: userText,
-        explanation_l1: this.clean(item.note) || undefined,
+        explanation_l1: note || undefined,
         source_type: "correction",
         evidence_snippet: _input.userMessage,
-        priority: 0.9,
+        priority: correctionPriority,
         practice_modes: ["rewrite"],
       };
       if (!canAddLearningInput(learningInput)) continue;

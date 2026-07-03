@@ -85,6 +85,13 @@ export function startLanguageScheduler(config: Config, rt: LanguageRuntime, tran
       telegramChatId: config.telegramChatId,
       morningCronPrompt,
       eveningCronPrompt,
+      reactivationShortPrompt: rt.lang.prompts.reactivationShort,
+      reactivationLongPrompt: rt.lang.prompts.reactivationLong,
+      getDaysSinceLastUserMessage: async () => {
+        const raw = await rt.db.getMetaValue(`last_user_message_at:${rt.lang.id}`);
+        const timestamp = raw ? Date.parse(raw) : NaN;
+        return Number.isFinite(timestamp) ? Math.floor((Date.now() - timestamp) / 86_400_000) : null;
+      },
     },
     (prompt, options) => rt.agentRunner.run(prompt, [], options),
     rt.dreamService,

@@ -9,6 +9,7 @@ export const TELEGRAM_COMMANDS = [
   { command: "start", description: "Start Miguelito" },
   { command: "import", description: "Import phrases to train" },
   { command: "drill", description: "Practice imported phrases" },
+  { command: "scenario", description: "Start a short opt-in scenario" },
 ] as const;
 
 const MENU_COMMANDS = TELEGRAM_COMMANDS.map((c) => c.command) as string[];

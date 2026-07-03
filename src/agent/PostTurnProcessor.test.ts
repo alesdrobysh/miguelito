@@ -38,6 +38,7 @@ const lang: LanguageConfig = {
   name: "Spanish",
   errorCategories: ["preposition", "other"],
   errorExplanations: {},
+  errorSeverity: { preposition: "notable" },
   morphologyCategories: [],
   calibrationThresholds: { morphology: 0, idiomaticity: 0 },
   calibrationText: {
@@ -167,5 +168,51 @@ describe("PostTurnProcessor extraction", () => {
     await processor.process({ userMessage: "hola", assistantText: "hola", chatHistory: [] });
 
     expect(addedLearningItems.map((item) => item.title)).toEqual(["partida → partido"]);
+  });
+
+  it("adds severity metadata to errors and correction priorities", async () => {
+    const provider: LLMProvider = {
+      chat: async () => { throw new Error("unused"); },
+      complete: async () => { throw new Error("unused"); },
+      completeJson: async <T,>(): Promise<T> => {
+        const callCount = ((provider as any).callCount = ((provider as any).callCount ?? 0) + 1);
+        if (callCount === 1) {
+          return {
+            annotation: { naturalness: 1, comprehension: "smooth", tunit_length: 1, obligatory: [], used: [] },
+            mode: "REACT",
+            errors: [
+              { user_text: "la problema", correct: "el problema", category: "gender", note: "wrong gender" },
+              { user_text: "ola", correct: "hola", category: "spelling", note: "missing h" },
+            ],
+            interests: [],
+          } as T;
+        }
+        return { learning_items: [], item_evidence: [] } as T;
+      },
+    };
+    const logged: Array<{ category: string; note?: string }> = [];
+    const addedLearningItems: LearningItemInput[] = [];
+    const processor = new PostTurnProcessor({
+      provider,
+      lang: { ...lang, errorCategories: ["gender", "spelling", "other"], errorSeverity: { gender: "critical", spelling: "cosmetic" } },
+      errors: { logError: async (_user: string, _correct: string, category: string, note?: string) => { logged.push({ category, note }); return 1; } } as unknown as ErrorRepository,
+      competency: { insertTurnAnnotation: async () => undefined, insertProficiencyEvidence: async () => 1 } as unknown as CompetencyRepository,
+      session: {
+        getConversationState: async () => ({ session: { session_id: "s1", turn_count: 0, mode: "REACT" }, lastModes: [], moodHint: "", topicsTouched: "" }),
+        updateConversationState: async () => ({ ok: true, changed: true }),
+      } as unknown as SessionRepository,
+      learning: {
+        getLearningHygieneSnapshot: async () => ({ backlog_status: "healthy", active_without_evidence: 0 }),
+        selectLearningItemsForEvaluation: async () => [],
+        listLearningItems: async () => [],
+        addLearningItem: async (input: LearningItemInput) => { addedLearningItems.push(input); return addedLearningItems.length; },
+        recordLearningItemEvidence: async () => 1,
+      } as unknown as LearningRepository,
+    });
+
+    await processor.process({ userMessage: "la problema", assistantText: "el problema", chatHistory: [] });
+
+    expect(logged.map((e) => e.note)).toEqual(["wrong gender | severity:critical", "missing h | severity:cosmetic"]);
+    expect(addedLearningItems.map((item) => item.priority)).toEqual([0.95, 0.55]);
   });
 });

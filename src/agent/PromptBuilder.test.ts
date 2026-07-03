@@ -164,6 +164,17 @@ describe("autonomous opener policy", () => {
     expect(prompt).not.toContain("Canarias, mar");
   });
 
+  it("uses critical severity notes as next-turn prompt context", async () => {
+    const withError = repos([]);
+    withError.errors.listErrors = async () => [{ id: 1, user_text: "la problema", correct_form: "el problema", category: "gender", note: "severity:critical" } as any];
+    const builder = new PromptBuilder(withError, SpanishLanguage);
+
+    const prompt = await builder.build("hola", undefined, { sourceType: "user_chat" });
+
+    expect(prompt).toContain("Prioriza una corrección breve si reaparece este patrón.");
+    expect(prompt).not.toContain("severity:critical");
+  });
+
   it("uses an opener-specific dialogue plan for cron starts", () => {
     const plan = buildConversationPlan({ userMessage: SpanishLanguage.prompts.morning, history: [], sourceType: "cron" });
 

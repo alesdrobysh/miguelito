@@ -1,4 +1,4 @@
-import { getCompetencyVector, selectFocusAxis, formatVectorForDisplay } from "../domain/competency.js";
+import { estimateProficiency, getCompetencyVector, selectFocusAxis, formatVectorForDisplay } from "../domain/competency.js";
 import type { LanguageConfig } from "../languages/LanguageConfig.js";
 import type { ToolContext } from "./index.js";
 
@@ -11,6 +11,16 @@ function progressSummary(ctx: ToolContext, lang: LanguageConfig) {
       const activeItems = await ctx.learning.listLearningItems("active", 1000);
       const dueItems = await ctx.learning.listDueLearningItems(1000);
       const hygiene = await ctx.learning.getLearningHygieneSnapshot();
+      const pressureRank: Record<string, number> = { high: 3, medium: 2, low: 1 };
+      const rustyExamples = dueItems
+        .slice()
+        .sort((a, b) =>
+          (pressureRank[String(b.reactivation_pressure)] ?? 0) - (pressureRank[String(a.reactivation_pressure)] ?? 0)
+          || (b.priority - a.priority)
+          || (a.id - b.id),
+        )
+        .slice(0, 5)
+        .map((i) => i.title);
       const errors = await ctx.errors.listErrors("all", 1000);
       const errorCategories = errors.reduce<Record<string, number>>((acc, e) => {
         acc[e.category] = (acc[e.category] ?? 0) + 1;
@@ -34,6 +44,7 @@ function progressSummary(ctx: ToolContext, lang: LanguageConfig) {
           syntax_confidence: cv.syntax.confidence,
           reception: Math.round(cv.reception.level * 100),
           reception_confidence: cv.reception.confidence,
+          proficiency: estimateProficiency(cv),
         };
       } catch {}
 
@@ -52,6 +63,7 @@ function progressSummary(ctx: ToolContext, lang: LanguageConfig) {
           candidate_without_evidence: hygiene.candidate_without_evidence,
           stale_new_items: hygiene.stale_new_items,
           due_high_pressure: hygiene.due_high_pressure,
+          rusty_examples: rustyExamples,
           reintroduced_without_production: hygiene.reintroduced_without_production,
           suspicious_items: hygiene.suspicious_items,
         },

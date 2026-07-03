@@ -284,12 +284,12 @@ export class PromptBuilder {
 
   private async _getRecentErrorForCategory(
     category: string,
-  ): Promise<{ user_text: string; correct: string; category: string; explanation?: string } | null> {
+  ): Promise<{ user_text: string; correct: string; category: string; explanation?: string; note?: string | null } | null> {
     try {
       const errors = await this.repos.errors.listErrors(category, 1);
       if (errors.length === 0) return null;
       const e = errors[0];
-      return { user_text: e.user_text, correct: e.correct_form, category: e.category, explanation: this.lang.errorExplanations[e.category] };
+      return { user_text: e.user_text, correct: e.correct_form, category: e.category, explanation: this.lang.errorExplanations[e.category], note: e.note };
     } catch {
       return null;
     }

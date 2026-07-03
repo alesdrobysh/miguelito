@@ -1,9 +1,12 @@
+export type ErrorSeverity = "cosmetic" | "notable" | "critical";
+
 export interface LanguageConfig {
   id: string;
   name: string;
   errorCategories: readonly string[];
   /** Canned, reviewed explanation per error category — reused every time that category recurs. */
   errorExplanations: Record<string, string>;
+  errorSeverity?: Record<string, ErrorSeverity>;
   morphologyCategories: readonly string[];
   calibrationThresholds: {
     morphology: number;
@@ -35,7 +38,7 @@ export interface LanguageConfig {
       words?: string[];
       receptiveWords?: string[];
       productiveWords?: string[];
-      errorInfo: { user_text: string; correct: string; category: string; explanation?: string } | null;
+      errorInfo: { user_text: string; correct: string; category: string; explanation?: string; note?: string | null } | null;
       weakAreas: string[];
     }) => string;
     dreamMemory: (content: string) => string;
@@ -44,6 +47,8 @@ export interface LanguageConfig {
   prompts: {
     morning: string;
     evening: string;
+    reactivationShort?: string;
+    reactivationLong?: string;
     dream: string;
     readLink: (title: string, text: string) => string;
     readingSuggest: (title: string, text: string) => string;

@@ -3,6 +3,30 @@ import type { CompetencyRepository } from "../repositories/interfaces.js";
 
 export type Confidence = "low" | "medium" | "high";
 export type Axis = "lexicon" | "syntax" | "morphology" | "idiomaticity";
+export type CefrEstimate = "insufficient_data" | "A1" | "A2" | "B1" | "B2" | "C1";
+
+export interface CompetencyAxisEstimate {
+  label: string;
+  score: number | null;
+  confidence: Confidence;
+  evidence: string;
+  interpretation: string;
+}
+
+export interface ProficiencyEstimate {
+  cefr: CefrEstimate;
+  confidence: Confidence;
+  summary: string;
+  axes: {
+    lexicon: CompetencyAxisEstimate;
+    syntax: CompetencyAxisEstimate;
+    morphology: CompetencyAxisEstimate;
+    idiomaticity: CompetencyAxisEstimate;
+    reception: CompetencyAxisEstimate;
+    monitoring: CompetencyAxisEstimate;
+  };
+  caveats: string[];
+}
 
 export interface CompetencyVector {
   lexicon: {
@@ -225,4 +249,72 @@ export function formatVectorForDisplay(v: CompetencyVector): string {
     `Reception: ${pct(v.reception.level)} smooth${conf(v.reception.confidence)}; by frequency: ${byFrequencyBand}`,
     `Self-Correction: ${v.monitoring.selfCorrectionObs} obs`,
   ].join(" | ");
+}
+
+export function estimateProficiency(v: CompetencyVector): ProficiencyEstimate {
+  const pct = (n: number) => `${Math.round(n * 100)}%`;
+  const bandEvidence = Object.entries(v.reception.byFrequencyBand)
+    .filter(([, b]) => b.score !== null)
+    .map(([band, b]) => `${band}: ${pct(b.score ?? 0)} over ${b.obs}`)
+    .join(", ") || "no frequency-band reception yet";
+  const axes: ProficiencyEstimate["axes"] = {
+    lexicon: {
+      label: "Lexicon / frequency",
+      score: v.lexicon.lexicalRarity,
+      confidence: v.lexicon.confidence,
+      evidence: `rarity signal ${v.lexicon.lexicalRarity.toFixed(2)}; active chunks ${v.lexicon.activeChunks}`,
+      interpretation: v.lexicon.lexicalRarity > 0.6 ? "uses rarer vocabulary" : v.lexicon.lexicalRarity > 0.3 ? "uses mid-frequency vocabulary" : "uses mostly common vocabulary",
+    },
+    syntax: {
+      label: "Syntax",
+      score: Math.min(v.syntax.meanTunitLength / 12, 1),
+      confidence: v.syntax.confidence,
+      evidence: `T-unit mean ${v.syntax.meanTunitLength.toFixed(1)}, subordination ${pct(v.syntax.subIndex)}`,
+      interpretation: v.syntax.meanTunitLength >= 8 || v.syntax.subIndex >= 0.25 ? "varied or complex sentences" : v.syntax.meanTunitLength >= 4 ? "moderately developed sentences" : "mostly simple sentences",
+    },
+    morphology: {
+      label: "Morphology",
+      score: v.morphology.rate,
+      confidence: v.morphology.confidence,
+      evidence: `accuracy ${pct(v.morphology.rate)} over ${v.morphology.obs} observations`,
+      interpretation: `morphology accuracy ${pct(v.morphology.rate)} over observed obligatory contexts`,
+    },
+    idiomaticity: {
+      label: "Idiomaticity",
+      score: v.idiomaticity.rate,
+      confidence: v.idiomaticity.confidence,
+      evidence: `naturalness ${pct(v.idiomaticity.rate)} over ${v.idiomaticity.obs} observations`,
+      interpretation: v.idiomaticity.rate >= 0.8 ? "often natural Spanish" : v.idiomaticity.rate >= 0.6 ? "usually understandable with some calques" : "still shows frequent literal phrasing",
+    },
+    reception: {
+      label: "Reception",
+      score: v.reception.level,
+      confidence: v.reception.confidence,
+      evidence: `smooth comprehension ${pct(v.reception.level)} over ${v.reception.obs} observations; frequency bands: ${bandEvidence}`,
+      interpretation: v.reception.level >= 0.75 ? "understands current bot output smoothly" : v.reception.level >= 0.45 ? "understands with occasional friction" : "needs simpler bot output for now",
+    },
+    monitoring: {
+      label: "Self-correction / monitoring",
+      score: v.monitoring.selfCorrectionObs > 0 ? Math.min(v.monitoring.selfCorrectionObs / 10, 1) : null,
+      confidence: v.monitoring.selfCorrectionObs >= 5 ? "medium" : "low",
+      evidence: `self-corrections observed ${v.monitoring.selfCorrectionObs} times`,
+      interpretation: v.monitoring.selfCorrectionObs > 0 ? "self-monitoring appears in chat" : "not enough self-correction evidence yet",
+    },
+  };
+  const lowData = v.morphology.confidence === "low" || v.syntax.confidence === "low" || v.reception.confidence === "low";
+  // ponytail: coarse chat-observation heuristic; calibrate later against teacher-rated samples or placement tests.
+  const score = v.morphology.rate * 0.22
+    + v.idiomaticity.rate * 0.18
+    + Math.min(v.syntax.meanTunitLength / 12, 1) * 0.18
+    + v.syntax.subIndex * 0.12
+    + v.reception.level * 0.20
+    + Math.min(v.lexicon.lexicalRarity, 1) * 0.10;
+  const cefr: CefrEstimate = lowData ? "insufficient_data" : score < 0.28 ? "A1" : score < 0.46 ? "A2" : score < 0.66 ? "B1" : score < 0.82 ? "B2" : "C1";
+  return {
+    cefr,
+    confidence: lowData ? "low" : [v.morphology.confidence, v.syntax.confidence, v.reception.confidence, v.idiomaticity.confidence].includes("medium") ? "medium" : "high",
+    summary: cefr === "insufficient_data" ? "Not enough observed chat behavior for a CEFR estimate yet." : `Approximate CEFR from observed chat behavior: ${cefr}.`,
+    axes,
+    caveats: ["This is an estimate from observed chat behavior, not a certified exam result.", "CEFR is a readable summary; the axis evidence is the source of truth."],
+  };
 }

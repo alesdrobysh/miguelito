@@ -107,12 +107,29 @@ describe("runtime manager", () => {
       "start",
       "import",
       "drill",
+      "scenario",
     ]);
     for (const item of TELEGRAM_COMMANDS) {
       expect(item.command).toMatch(/^[a-z0-9_]{1,32}$/);
       expect(item.description.length).toBeGreaterThan(0);
       expect(item.description.length).toBeLessThanOrEqual(256);
     }
+  });
+
+  it("lists opt-in practice scenarios without entering generic chat", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+
+    const list = await manager.handleMessage("spanish", 777, "telegram-user", "/scenario");
+    const picked = await manager.handleMessage("spanish", 777, "telegram-user", "/scenario pedir_comida");
+
+    expect(list).toContain("Escenarios cortos disponibles:");
+    expect(list).toContain("/scenario pedir_comida");
+    expect(picked).toContain("Escenario:");
+    expect(picked).toContain("cafetería");
+    expect(provider.chatCalls).toHaveLength(0);
+    manager.close();
   });
 
   it("keeps start chat-first and avoids showing a learning app surface", async () => {
@@ -364,7 +381,7 @@ describe("runtime manager", () => {
 
     const reply = await manager.handleMessage("spanish", 777, "telegram-user", "La ola de calor fue horrible");
 
-    expect(reply).toBe("¡Bien! He marcado 1 respuesta. Drill completado.");
+    expect(reply).toBe("¡Bien! He marcado 1 respuesta. Drill completado.\nPracticaste: ola de calor.");
     expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(0);
     const evidence = await db.listLearningItemEvidence(itemId!, 5);
     expect(evidence[0]).toEqual(expect.objectContaining({
@@ -393,7 +410,7 @@ describe("runtime manager", () => {
       "3. Llovía.",
     ].join("\n"));
 
-    expect(reply).toBe("¡Bien! He marcado 3 respuestas. Drill completado.");
+    expect(reply).toBe("¡Bien! He marcado 3 respuestas. Drill completado.\nPracticaste: aplicaciones, Pretérito indefinido vs imperfecto, llovía.");
     expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(0);
     expect(provider.chatCalls).toHaveLength(0);
     manager.close();

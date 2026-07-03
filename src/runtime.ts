@@ -11,6 +11,7 @@ import { PromptBuilder } from "./agent/PromptBuilder.js";
 import { AgentRunner } from "./agent/AgentRunner.js";
 import { DreamService } from "./services/DreamService.js";
 import { LearningHygieneService } from "./services/LearningHygieneService.js";
+import { SpanishScenarios } from "./languages/spanish/scenarios.js";
 import type { ChatMessage } from "./llm.js";
 
 export interface RuntimeDeps {
@@ -231,6 +232,7 @@ export class RuntimeManager {
     const { session: convState } = await db.getConversationState();
     const history = await db.getSessionTranscript(convState.session_id, MODEL_HISTORY_LIMIT) as ChatMessage[];
     await db.addChatMessage(chatId, "user", text, convState.session_id);
+    await db.setMetaValue(`last_user_message_at:${language}`, new Date().toISOString());
 
     const commandReply = await this.handleCommand(rt, text);
     if (commandReply !== undefined) {
@@ -255,8 +257,22 @@ export class RuntimeManager {
     if (commandToken === "/start") return formatStart(lang);
     if (commandToken === "/import") return this.handleImportCommand(db, text);
     if (commandToken === "/drill") return this.handleDrillCommand(db, text);
+    if (commandToken === "/scenario") return this.handleScenarioCommand(text);
     if (text.startsWith("/")) return formatCommandRedirect(lang);
     return undefined;
+  }
+
+  private handleScenarioCommand(text: string): string {
+    const id = text.replace(/^\/scenario(?:@[^\s]+)?\s*/i, "").trim();
+    if (!id) {
+      return [
+        "Escenarios cortos disponibles:",
+        ...SpanishScenarios.map((s) => `/${"scenario"} ${s.id} — ${s.title}`),
+      ].join("\n");
+    }
+    const scenario = SpanishScenarios.find((s) => s.id === id);
+    if (!scenario) return "No conozco ese escenario. Usa /scenario para ver las opciones.";
+    return [`Escenario: ${scenario.title}`, scenario.setup_l1, scenario.opening_line_l2].join("\n");
   }
 
   private async handleImportCommand(db: BuddyDb, text: string): Promise<string> {
@@ -297,11 +313,18 @@ export class RuntimeManager {
     const active = await this.listFreshDrillAttempts(db, 10);
     if (active.length > 0) return formatAttemptQueue("Drill en curso — responde el primer punto o usa /drill stop:", active);
 
+    const pressureRank: Record<string, number> = { high: 3, medium: 2, low: 1 };
+    const due = await db.listDueLearningItems(100);
+    const dueIds = new Set(due.map((i) => i.id));
     const all = await db.listLearningItems("all", 100);
     const seenTargets = new Set<string>();
     const items = all
       .filter((item) => ["active", "cooling_down", "candidate"].includes(item.status))
-      .sort((a, b) => (a.evidence_count - b.evidence_count) || (b.priority - a.priority) || (a.id - b.id))
+      .sort((a, b) => (Number(dueIds.has(b.id)) - Number(dueIds.has(a.id)))
+        || ((pressureRank[String(b.reactivation_pressure)] ?? 0) - (pressureRank[String(a.reactivation_pressure)] ?? 0))
+        || (a.evidence_count - b.evidence_count)
+        || (b.priority - a.priority)
+        || (a.id - b.id))
       .filter((item) => {
         const key = normalizePracticeText(drillTarget(item));
         if (!key || seenTargets.has(key)) return false;
@@ -326,6 +349,7 @@ export class RuntimeManager {
       .map((item) => [item.id, item]));
     const answers = splitNumberedPracticeAnswers(text);
     let completed = 0;
+    const completedTitles: string[] = [];
     for (let idx = 0; idx < attempts.length; idx++) {
       const attempt = attempts[idx];
       const answer = answers.length > 1 ? answers[idx] : text;
@@ -353,11 +377,15 @@ export class RuntimeManager {
         source_type: "drill",
       });
       completed++;
+      completedTitles.push(drillTarget(item));
       if (answers.length <= 1) break;
     }
     const remaining = await db.listActiveLearningPracticeAttempts(5);
     const noun = completed === 1 ? "respuesta" : "respuestas";
-    if (remaining.length === 0) return `¡Bien! He marcado ${completed} ${noun}. Drill completado.`;
+    if (remaining.length === 0) return [
+      `¡Bien! He marcado ${completed} ${noun}. Drill completado.`,
+      completedTitles.length ? `Practicaste: ${completedTitles.slice(0, 3).join(", ")}.` : "",
+    ].filter(Boolean).join("\n");
     return formatAttemptQueue(`¡Bien! He marcado ${completed} ${noun}.\nSiguiente:`, remaining);
   }
 

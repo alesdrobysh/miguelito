@@ -13,8 +13,21 @@ interface SchedulerConfig {
   telegramChatId: string;
   morningCronPrompt: string;
   eveningCronPrompt: string;
+  reactivationShortPrompt?: string;
+  reactivationLongPrompt?: string;
+  getDaysSinceLastUserMessage?: () => Promise<number | null>;
 }
 
+export function selectCronPrompt(args: {
+  normalPrompt: string;
+  shortReactivationPrompt: string;
+  longReactivationPrompt: string;
+  daysSinceLastUserMessage: number | null;
+}): string {
+  if (args.daysSinceLastUserMessage == null || args.daysSinceLastUserMessage < 3) return args.normalPrompt;
+  if (args.daysSinceLastUserMessage <= 7) return args.shortReactivationPrompt;
+  return args.longReactivationPrompt;
+}
 export function startScheduler(
   config: SchedulerConfig,
   agentRunner: (prompt: string, options?: { postTurn?: boolean; sourceType?: "cron" | "proactive" | "system" | "user_chat" }) => Promise<{ text: string }>,
@@ -24,7 +37,14 @@ export function startScheduler(
   async function runCronJob(jobName: string, prompt: string): Promise<void> {
     log.info({ job: jobName }, 'cron job fired');
     try {
-      const result = await agentRunner(prompt, { postTurn: false, sourceType: "cron" });
+      const daysSinceLastUserMessage = config.getDaysSinceLastUserMessage ? await config.getDaysSinceLastUserMessage() : null;
+      const selectedPrompt = selectCronPrompt({
+        normalPrompt: prompt,
+        shortReactivationPrompt: config.reactivationShortPrompt ?? prompt,
+        longReactivationPrompt: config.reactivationLongPrompt ?? config.reactivationShortPrompt ?? prompt,
+        daysSinceLastUserMessage,
+      });
+      const result = await agentRunner(selectedPrompt, { postTurn: false, sourceType: "cron" });
       log.info({ job: jobName }, 'cron job complete');
       if (result.text && config.telegramChatId) {
         await transport.sendMessage(config.telegramChatId, result.text);

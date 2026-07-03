@@ -30,6 +30,21 @@ export const spanishBaseConfig: Omit<LanguageConfig, "frequency" | "soulPath"> =
     object_pronoun_order: "El inglés coloca el pronombre de objeto después del verbo; el español lo antepone al verbo conjugado y ordena indirecto antes que directo.",
     other: "Error puntual sin patrón recurrente identificado todavía.",
   },
+  errorSeverity: {
+    spelling: "cosmetic",
+    false_cognate: "notable",
+    word_choice: "notable",
+    preposition: "notable",
+    object_pronoun_order: "notable",
+    gender: "critical",
+    agreement: "critical",
+    verb_conjugation: "critical",
+    ser_estar: "critical",
+    por_para: "critical",
+    subjunctive_avoidance: "critical",
+    preterite_imperfect: "critical",
+    other: "notable",
+  },
   calibrationThresholds: {
     morphology: 0.75,
     idiomaticity: 0.70,
@@ -82,6 +97,7 @@ export const spanishBaseConfig: Omit<LanguageConfig, "frequency" | "soulPath"> =
       if (errorInfo) {
         const explanationSuffix = errorInfo.explanation ? ` — ${errorInfo.explanation}` : "";
         lines.push(`**Error que reforzar**: "${errorInfo.user_text}" → "${errorInfo.correct}" (${errorInfo.category})${explanationSuffix}`);
+        if (/severity:critical/.test(errorInfo.note ?? "")) lines.push("Prioriza una corrección breve si reaparece este patrón.");
       }
       return lines.join("\n");
     },
@@ -93,6 +109,10 @@ export const spanishBaseConfig: Omit<LanguageConfig, "frequency" | "soulPath"> =
       "Inicia una conversación breve de mañana. Revisa `## Autonomous conversation opener policy`: elige UN solo gancho ligero (hilo reciente solo a veces, memoria personal, interés, learning item natural o apertura neutra). No continúes por defecto la conversación anterior ni hagas recap. Si hay un nombre real en `## Perfil del aprendiz`, puedes usarlo; si no hay un nombre real, NO lo preguntes y no hagas onboarding. No finjas vida humana propia. Nunca muestres nombres de modo, marcadores del sistema ni estado interno. Solo texto natural en español, 1-3 frases.",
     evening:
       "Inicia una conversación breve de tarde/noche. Revisa `## Autonomous conversation opener policy`: elige UN solo gancho ligero (hilo reciente solo a veces, memoria personal, interés, learning item natural o apertura neutra). No continúes por defecto la conversación anterior ni hagas recap. Si hay un nombre real en `## Perfil del aprendiz`, puedes usarlo; si no hay un nombre real, NO lo preguntes y no hagas onboarding. No finjas vida humana propia. Nunca muestres nombres de modo, marcadores del sistema ni estado interno. Solo texto natural en español, 1-3 frases.",
+    reactivationShort:
+      "Retoma con una pregunta muy fácil y cálida. No hagas sentir culpa por la pausa; ofrece una entrada ligera en español, 1-3 frases.",
+    reactivationLong:
+      "No menciones la ausencia como problema; ofrece una entrada ligera, amable y muy fácil. Solo texto natural en español, 1-3 frases.",
     dream: `Eres Miguelito, tutor de español por software. Se han completado las conversaciones del día.
 Actualiza el perfil de memoria a largo plazo del aprendiz integrando las observaciones de hoy en el perfil existente.
 
