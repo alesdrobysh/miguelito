@@ -177,6 +177,33 @@ function isCoveredTinyCorrection(item: { id: number; title: string; type?: strin
   });
 }
 
+function editDistance(a: string, b: string): number {
+  const prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let last = i - 1;
+    prev[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = prev[j]!;
+      prev[j] = a[i - 1] === b[j - 1] ? last : Math.min(last, prev[j - 1]!, prev[j]!) + 1;
+      last = tmp;
+    }
+  }
+  return prev[b.length]!;
+}
+
+function isLowQualityDrillCorrection(item: { title: string; type?: string | null }): boolean {
+  if (item.type !== "correction") return false;
+  const sides = correctionSides(item.title);
+  if (!sides) return false;
+  if (sides.right.includes("/")) return true;
+  if (!isTinyCorrectionTitle(item.title)) return false;
+  const left = normalizePracticeText(sides.left).replace(/\s+/g, "");
+  const right = normalizePracticeText(sides.right).replace(/\s+/g, "");
+  if (!left || !right) return true;
+  // ponytail: cheap typo guard; upgrade to evaluator confidence if correction quality remains noisy.
+  return 1 - editDistance(left, right) / Math.max(left.length, right.length) < 0.5;
+}
+
 function answerUsesItem(answer: string, item: { title: string; type?: string | null }): boolean {
   if (item.type === "grammar_point") return normalizePracticeText(answer).length >= 8;
   const normalizedAnswer = ` ${normalizePracticeText(answer)} `;
@@ -257,7 +284,9 @@ function isScenarioEndText(text: string): boolean {
   return /^(?:gracias(?: eso es todo| nada mas)?|eso es todo|nada mas|ya esta|listo|terminamos|fin|cancelar|parar)$/.test(normalized);
 }
 
-function isDrillSelectable(item: { id: number; status: string; evidence_count?: number | null; next_reactivation_at?: string | null }, dueIds: Set<number>, now = Date.now()): boolean {
+function isDrillSelectable(item: { id: number; status: string; type?: string | null; title: string; evidence_count?: number | null; next_reactivation_at?: string | null }, dueIds: Set<number>, now = Date.now()): boolean {
+  if (["ignored", "archived"].includes(item.status)) return false;
+  if (isLowQualityDrillCorrection(item)) return false;
   if (!["active", "cooling_down", "candidate"].includes(item.status)) return false;
   if (dueIds.has(item.id)) return true;
   if ((item.evidence_count ?? 0) === 0) return true;

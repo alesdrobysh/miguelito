@@ -360,6 +360,24 @@ describe("runtime manager", () => {
     manager.close();
   });
 
+  it("skips low-confidence extractor corrections in /drill", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+    const db = manager.runtime("spanish").db;
+    await db.addLearningItem({ type: "correction", title: "noticía → noté", source_type: "correction", priority: 0.99 });
+    await db.addLearningItem({ type: "correction", title: "Me dolía un poco a la derecha → Me dolía un poco la derecha / Me dolía un poco en la derecha", source_type: "correction", priority: 0.98 });
+    await db.addLearningItem({ type: "correction", title: "izquerda → izquierda", source_type: "correction", priority: 0.8 });
+
+    const drill = await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
+
+    expect(drill).not.toContain("noticía");
+    expect(drill).not.toContain("Me dolía un poco a la derecha");
+    expect(drill).toContain("Reescribe correctamente: “izquerda”.");
+    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(1);
+    manager.close();
+  });
+
   it("formats grammar drill items as grammar practice, not phrase usage", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const provider = new FakeProvider();
