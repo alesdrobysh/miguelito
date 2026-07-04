@@ -495,6 +495,27 @@ describe("runtime manager", () => {
     manager.close();
   });
 
+  it("accepts a natural question variant for correction drills", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+    const db = manager.runtime("spanish").db;
+    await db.addLearningItem({
+      type: "correction",
+      title: "Y cuales errores hago? → ¿Y cuáles errores cometo?",
+      source_type: "correction",
+      priority: 0.95,
+    });
+    await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
+
+    const reply = await manager.handleMessage("spanish", 777, "telegram-user", "¿Qué errores cometo?");
+
+    expect(reply).toContain("¡Bien! He marcado 1 respuesta. Drill completado.");
+    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(0);
+    expect(provider.chatCalls).toHaveLength(0);
+    manager.close();
+  });
+
   it("stops an active drill on /drill stop", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const provider = new FakeProvider();

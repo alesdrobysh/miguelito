@@ -132,8 +132,15 @@ function normalizePracticeText(text: string): string {
 
 function drillTargetCandidates(item: { title: string; type?: string | null }): string[] {
   const target = drillTarget(item);
-  // ponytail: slash variants only; upgrade to synonym/evaluator grading if drills need semantic answers.
-  return target.split("/").map((part) => part.trim()).filter(Boolean);
+  // ponytail: tiny deterministic Spanish question variants; upgrade to evaluator grading for broad paraphrases.
+  const variants = [target];
+  const withoutLeadingY = target.replace(/^¿?\s*y\s+/i, target.trim().startsWith("¿") ? "¿" : "").trim();
+  if (withoutLeadingY && withoutLeadingY !== target) variants.push(withoutLeadingY);
+  for (const variant of [...variants]) {
+    const queVariant = variant.replace(/\bcu[aá]les\b/gi, "qué");
+    if (queVariant !== variant) variants.push(queVariant);
+  }
+  return variants.flatMap((variant) => variant.split("/").map((part) => part.trim()).filter(Boolean));
 }
 
 function drillHelpLine(item: { title: string; explanation_l1?: string | null; type?: string | null }): string {
