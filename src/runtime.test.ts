@@ -460,10 +460,37 @@ describe("runtime manager", () => {
     const reply = await manager.handleMessage("spanish", 777, "telegram-user", "Hacer pesas me ayuda mucho");
 
     expect(reply).toContain("Casi");
+    expect(reply).toContain("Pista:");
+    expect(reply).toContain("Respuesta modelo: “ola de calor”");
     expect(reply).toContain("1. Traduce al español: “heat wave”.");
     const attempts = await db.listActiveLearningPracticeAttempts(10);
     expect(attempts).toHaveLength(1);
     expect(attempts.every((attempt) => attempt.user_response == null)).toBe(true);
+    expect(provider.chatCalls).toHaveLength(0);
+    manager.close();
+  });
+
+  it("gives a hint when the learner asks what the drill wants", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+    const db = manager.runtime("spanish").db;
+    await db.addLearningItem({
+      type: "correction",
+      title: "Y cuales errores hago? → ¿Y cuáles errores cometo?",
+      explanation_l1: "Use cometer errores, not hacer errores.",
+      source_type: "correction",
+      priority: 0.95,
+    });
+    await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
+
+    const reply = await manager.handleMessage("spanish", 777, "telegram-user", "не знаю");
+
+    expect(reply).toContain("Sin problema");
+    expect(reply).toContain("Pista: Use cometer errores");
+    expect(reply).toContain("Respuesta modelo: “¿Y cuáles errores cometo?”");
+    expect(reply).toContain("1. Reescribe correctamente: “Y cuales errores hago?”.");
+    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(1);
     expect(provider.chatCalls).toHaveLength(0);
     manager.close();
   });

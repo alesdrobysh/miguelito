@@ -136,6 +136,13 @@ function drillTargetCandidates(item: { title: string; type?: string | null }): s
   return target.split("/").map((part) => part.trim()).filter(Boolean);
 }
 
+function drillHelpLine(item: { title: string; explanation_l1?: string | null; type?: string | null }): string {
+  const target = drillTarget(item);
+  const explanation = item.explanation_l1?.trim();
+  const hint = explanation ? `Pista: ${explanation}` : `Pista: intenta usar “${target}”.`;
+  return `${hint}\nRespuesta modelo: “${target}”. Escríbela tú en una frase o usa /drill stop.`;
+}
+
 function correctionSides(title: string): { left: string; right: string } | null {
   const parts = title.split(/→|->/).map((part) => part.trim()).filter(Boolean);
   return parts.length === 2 ? { left: parts[0], right: parts[1] } : null;
@@ -202,6 +209,11 @@ function isDrillStopText(text: string): boolean {
   const trimmed = text.trim();
   return /^(?:\/drill(?:@[^\s]+)?\s+)?(?:stop|reset|cancelar|parar)(?:\s|$)/i.test(trimmed)
     || /^(?:drill|дрил)\s+(?:stop|стоп|cancel|cancelar|parar)(?:\s|$)/i.test(trimmed);
+}
+
+function isDrillHelpText(text: string): boolean {
+  const normalized = normalizePracticeText(text);
+  return /^(?:no se|no lo se|no entiendo|ayuda|pista|help|hint|what do you want|que quieres|que quieres de mi|что делать|не знаю|не понимаю|помощь|подсказка)$/.test(normalized);
 }
 
 function hasExpiredDrillSession(startedAt: string | null | undefined, now = Date.now()): boolean {
@@ -453,6 +465,14 @@ export class RuntimeManager {
     if (attempts.length === 0) return null;
     const drillItems = new Map((await db.listLearningItems("all", 200))
       .map((item) => [item.id, item]));
+    const currentItem = drillItems.get(attempts[0].learning_item_id);
+    if (currentItem && isDrillHelpText(text)) {
+      return [
+        "Sin problema — te doy una pista para el ejercicio actual.",
+        drillHelpLine(currentItem),
+        formatAttemptQueue("Ejercicio actual:", [attempts[0]]),
+      ].join("\n");
+    }
     const answers = splitNumberedPracticeAnswers(text);
     let completed = 0;
     const completedTitles: string[] = [];
@@ -463,7 +483,13 @@ export class RuntimeManager {
       if (!item || !answer) break;
       const success = answerUsesItem(answer, item);
       if (!success) {
-        if (completed === 0) return formatAttemptQueue("Casi. Prueba con el punto actual:", [attempt]);
+        if (completed === 0) {
+          return [
+            "Casi. Prueba con el punto actual:",
+            item ? drillHelpLine(item) : "",
+            formatAttemptQueue("", [attempt]).trim(),
+          ].filter(Boolean).join("\n");
+        }
         break;
       }
       await db.finishLearningPracticeAttempt({
