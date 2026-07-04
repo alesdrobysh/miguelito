@@ -73,7 +73,7 @@ function isTinyCorrection(sides: { left: string; right: string }): boolean {
 }
 
 function isOrdinaryLexicalCapture(type: string, sourceType?: string | null): boolean {
-  if (["imported", "textbook", "correction"].includes(String(sourceType ?? "conversation"))) return false;
+  if (["import", "imported", "manual", "textbook", "correction"].includes(String(sourceType ?? "conversation"))) return false;
   return new Set(["word", "phrase", "collocation", "idiom", "register_note"]).has(type);
 }
 

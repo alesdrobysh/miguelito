@@ -27,13 +27,21 @@ export class LearningHygieneService {
     let mastered = 0;
     let ignored = 0;
 
+    const autoExtractedOnly = `
+         AND COALESCE(source_type, 'conversation') NOT IN ('textbook', 'import', 'imported', 'manual')
+         AND COALESCE(tags_json, '[]') NOT LIKE '%source:textbook%'
+         AND COALESCE(tags_json, '[]') NOT LIKE '%source:import%'
+         AND COALESCE(tags_json, '[]') NOT LIKE '%source:imported%'
+         AND COALESCE(tags_json, '[]') NOT LIKE '%source:manual%'`;
+
     this.learning.db.run(
       `UPDATE learning_items
        SET status = 'archived', updated_at = ?
        WHERE language = ?
          AND status = 'candidate'
          AND evidence_count = 0
-         AND datetime(created_at) <= datetime('now', '-7 days')`,
+         AND datetime(created_at) <= datetime('now', '-7 days')
+         ${autoExtractedOnly}`,
       [now, lang],
     );
     archived += this.learning.db.getRowsModified();
@@ -45,7 +53,8 @@ export class LearningHygieneService {
          AND status = 'active'
          AND stability = 'new'
          AND evidence_count = 0
-         AND datetime(created_at) <= datetime('now', '-14 days')`,
+         AND datetime(created_at) <= datetime('now', '-14 days')
+         ${autoExtractedOnly}`,
       [now, lang],
     );
     cooledDown += this.learning.db.getRowsModified();

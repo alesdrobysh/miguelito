@@ -35,6 +35,28 @@ describe("LearningHygieneService", () => {
     expect(items.find((item) => item.id === activeId)?.status).toBe("cooling_down");
   });
 
+  it("keeps curated/imported zero-evidence items pending instead of archiving or cooling them", async () => {
+    const db = handle.db;
+    db.db.run(
+      `INSERT INTO learning_items (language, type, title, source_type, tags_json, priority, status, stability, evidence_count, created_at, updated_at)
+       VALUES ('spanish', 'phrase', 'textbook pending', 'textbook', '["source:textbook"]', 0.9, 'candidate', 'new', 0, datetime('now', '-8 days'), datetime('now', '-8 days'))`,
+    );
+    const candidateId = db.db.exec("SELECT last_insert_rowid()")[0].values[0][0] as number;
+    db.db.run(
+      `INSERT INTO learning_items (language, type, title, source_type, tags_json, priority, status, stability, evidence_count, created_at, updated_at)
+       VALUES ('spanish', 'phrase', 'manual pending', 'conversation', '["source:manual"]', 0.9, 'active', 'new', 0, datetime('now', '-15 days'), datetime('now', '-15 days'))`,
+    );
+    const activeId = db.db.exec("SELECT last_insert_rowid()")[0].values[0][0] as number;
+
+    const result = await new LearningHygieneService(db).run();
+
+    expect(result.archived).toBe(0);
+    expect(result.cooledDown).toBe(0);
+    const items = await db.listLearningItems("all", 10);
+    expect(items.find((item) => item.id === candidateId)?.status).toBe("candidate");
+    expect(items.find((item) => item.id === activeId)?.status).toBe("active");
+  });
+
   it("promotes candidates with evidence and masters items only after active production", async () => {
     const db = handle.db;
     const candidate = await db.addLearningItem({ type: "phrase", title: "estoy cansado", status: "candidate", priority: 0.6 });
