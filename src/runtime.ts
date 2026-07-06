@@ -204,12 +204,17 @@ function isLowQualityDrillCorrection(item: { title: string; type?: string | null
   return 1 - editDistance(left, right) / Math.max(left.length, right.length) < 0.5;
 }
 
-function answerUsesItem(answer: string, item: { title: string; type?: string | null }): boolean {
+function answerUsesItem(answer: string, item: { title: string; type?: string | null; source_type?: string | null }): boolean {
   if (item.type === "grammar_point") return normalizePracticeText(answer).length >= 8;
   const normalizedAnswer = ` ${normalizePracticeText(answer)} `;
+  const answerWords = normalizePracticeText(answer).split(/\s+/).filter(Boolean).length;
   return drillTargetCandidates(item).some((target) => {
     const normalizedTitle = normalizePracticeText(target);
-    return normalizedTitle.length > 0 && normalizedAnswer.includes(` ${normalizedTitle} `);
+    if (!normalizedTitle || !normalizedAnswer.includes(` ${normalizedTitle} `)) return false;
+    if (item.type === "correction" || item.source_type === "imported") return true;
+    const targetWords = normalizedTitle.split(/\s+/).filter(Boolean).length;
+    // ponytail: cheap sentence guard; upgrade to evaluator scoring if phrase drills need nuanced grading.
+    return answerWords >= Math.max(3, targetWords + 1);
   });
 }
 
@@ -226,10 +231,12 @@ function splitNumberedPracticeAnswers(text: string): string[] {
 }
 
 function formatAttemptQueue(title: string, attempts: Array<{ prompt_text?: string | null }>): string {
-  return [
-    title,
-    ...attempts.map((attempt, idx) => (attempt.prompt_text || `${idx + 1}. Sigue con otra frase corta.`).replace(/^\d+\./, `${idx + 1}.`)),
-  ].join("\n");
+  const lines = attempts.map((attempt, idx) => {
+    const fallback = `${idx + 1}. Sigue con otra frase corta.`;
+    const prompt = (attempt.prompt_text || fallback).replace(/^\d+\.\s*/, `${idx + 1}. `);
+    return attempts.length === 1 ? prompt.replace(/^1\.\s*/, "") : prompt;
+  });
+  return [title, ...lines].filter(Boolean).join("\n");
 }
 
 function parseDrillTimestamp(raw: string | null | undefined): number | null {
@@ -484,7 +491,7 @@ export class RuntimeManager {
       await db.setMetaValue(DRILL_SESSION_META_KEY, "");
       return "Todavía no tengo material para entrenar. Escribe normalmente o pega frases con /import y las practicamos.";
     }
-    return formatAttemptQueue("Drill de 10 minutos — responde; seguiré hasta /drill stop o hasta que se acabe el tiempo:", next);
+    return formatAttemptQueue("Drill de 10 minutos — responde; /drill stop para parar.", next);
   }
 
   private async processDrillAnswers(db: BuddyDb, text: string): Promise<string | null> {

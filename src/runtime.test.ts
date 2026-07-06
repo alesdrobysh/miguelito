@@ -392,6 +392,23 @@ describe("runtime manager", () => {
     manager.close();
   });
 
+  it("does not accept repeating a phrase target when the prompt asks for a personal sentence", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+    const db = manager.runtime("spanish").db;
+    await db.addLearningItem({ type: "phrase", title: "hombro izquierdo", source_type: "conversation", priority: 0.95 });
+    await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
+
+    const reply = await manager.handleMessage("spanish", 777, "telegram-user", "Hombro izquierdo");
+
+    expect(reply).toContain("Casi");
+    expect(reply).toContain("Escribe una frase personal");
+    expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(1);
+    expect(provider.chatCalls).toHaveLength(0);
+    manager.close();
+  });
+
   it("continues drill with the next exercise after a correct answer", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const provider = new FakeProvider();
@@ -412,7 +429,7 @@ describe("runtime manager", () => {
     manager.close();
   });
 
-  it("starts one active exercise at a time within a timed drill", async () => {
+  it("shows a single active exercise without fake list numbering", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const provider = new FakeProvider();
     const manager = await createRuntimeManager(config, { provider });
@@ -422,7 +439,8 @@ describe("runtime manager", () => {
 
     const reply = await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
 
-    expect(reply).toBe("Drill de 10 minutos — responde; seguiré hasta /drill stop o hasta que se acabe el tiempo:\n1. Traduce al español: “heat wave”.");
+    expect(reply).toBe("Drill de 10 minutos — responde; /drill stop para parar.\nTraduce al español: “heat wave”.");
+    expect(reply).not.toContain("1.");
     expect(reply).not.toContain("2.");
     expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(1);
     expect(provider.chatCalls).toHaveLength(0);
@@ -459,7 +477,7 @@ describe("runtime manager", () => {
     const resumed = await manager.handleMessage("spanish", 777, "telegram-user", "/drill");
 
     expect(resumed).toContain("Drill en curso");
-    expect(resumed).toContain("1. Traduce al español: “heat wave”.");
+    expect(resumed).toContain("Traduce al español: “heat wave”.");
     expect(resumed).not.toContain("2. ¿Cómo dirías “lift weights” en español?");
     expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(1);
     expect(provider.chatCalls).toHaveLength(0);
@@ -480,7 +498,7 @@ describe("runtime manager", () => {
     expect(reply).toContain("Casi");
     expect(reply).toContain("Pista:");
     expect(reply).toContain("Respuesta modelo: “ola de calor”");
-    expect(reply).toContain("1. Traduce al español: “heat wave”.");
+    expect(reply).toContain("Traduce al español: “heat wave”.");
     const attempts = await db.listActiveLearningPracticeAttempts(10);
     expect(attempts).toHaveLength(1);
     expect(attempts.every((attempt) => attempt.user_response == null)).toBe(true);
@@ -507,7 +525,7 @@ describe("runtime manager", () => {
     expect(reply).toContain("Sin problema");
     expect(reply).toContain("Pista: Use cometer errores");
     expect(reply).toContain("Respuesta modelo: “¿Y cuáles errores cometo?”");
-    expect(reply).toContain("1. Reescribe correctamente: “Y cuales errores hago?”.");
+    expect(reply).toContain("Reescribe correctamente: “Y cuales errores hago?”.");
     expect(await db.listActiveLearningPracticeAttempts(10)).toHaveLength(1);
     expect(provider.chatCalls).toHaveLength(0);
     manager.close();
