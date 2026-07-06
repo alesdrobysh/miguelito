@@ -174,7 +174,7 @@ export class PostTurnProcessor {
 
   private async evaluateLearning(input: PostTurnProcessInput): Promise<Pick<PostTurnEvaluation, "learning_items" | "item_evidence"> | null> {
     const systemPrompt = this.baseEvaluatorSystemPrompt(
-      "Extract only reusable learning_items and item_evidence from the latest exchange. Do not return annotation, mode, errors, or interests in this pass. Capture reusable material as learning_items only; do not create separate review queues or table-specific artifacts.",
+      "Extract only reusable, drillable learning_items and item_evidence from the latest exchange. Do not return annotation, mode, errors, or interests in this pass. Capture only items that can become a short /drill exercise: clear corrections with one correct answer, or concrete target words/phrases the learner can use in a sentence. Omit meta questions, fragments, broad grammar topics, pronunciation/register notes, ambiguous corrections with multiple answers, and fuzzy typo guesses.",
       {
         learning_items: [{ type: "grammar_point|correction|phrase|word|collocation|idiom|register_note|pronunciation", title: "por vs para", prompt_l2: "optional L2 prompt", explanation_l1: "short explanation", source_type: "user_question|conversation|correction", priority: "0.9=correction/explicitly asked, 0.7=useful, 0.5=niche", practice_modes: ["short_drill"] }],
         item_evidence: [{ learning_item_id: 123, skill: "passive|active|reactivation", event: "recognized|responded_appropriately|asked_clarification|misunderstood|spontaneous_production|elicited_production|hinted_production|self_correction|incorrect_production|avoidance|assistant_reintroduced", independence: "spontaneous|elicited|hinted|observed", score_delta: "-0.2..0.3", confidence: "0..1", evidence_snippet: "short quote" }],
@@ -286,7 +286,7 @@ export class PostTurnProcessor {
         practice_modes: ["active_production", "cloze"],
         tags: Array.isArray(item.topic_tags) ? item.topic_tags.map((x) => String(x)).filter(Boolean) : [],
       };
-      if (!canAddLearningInput(learningInput)) continue;
+      if (!this.isDrillableLearningInput(learningInput) || !canAddLearningInput(learningInput)) continue;
       const learningId = await this.learningRepo().addLearningItem(learningInput);
       if (learningId !== null) learningItemsAdded++;
     }
@@ -310,7 +310,7 @@ export class PostTurnProcessor {
         priority: correctionPriority,
         practice_modes: ["rewrite"],
       };
-      if (!canAddLearningInput(learningInput)) continue;
+      if (!this.isDrillableLearningInput(learningInput) || !canAddLearningInput(learningInput)) continue;
       const learningId = await this.learningRepo().addLearningItem(learningInput);
       if (learningId !== null) learningItemsAdded++;
     }
@@ -320,7 +320,7 @@ export class PostTurnProcessor {
       .filter((e) => e.userText && e.correct);
     for (const item of evaluation.learning_items ?? []) {
       const input = this.learningItemInput(item, _input);
-      if (!input || this.isDuplicateCorrectionLearningItem(input, appliedCorrections) || !canAddLearningInput(input)) continue;
+      if (!input || this.isDuplicateCorrectionLearningItem(input, appliedCorrections) || !this.isDrillableLearningInput(input) || !canAddLearningInput(input)) continue;
       const learningId = await this.learningRepo().addLearningItem(input);
       if (learningId !== null) learningItemsAdded++;
     }
@@ -383,6 +383,49 @@ export class PostTurnProcessor {
       practice_modes: Array.isArray(item.practice_modes) ? item.practice_modes.map((x) => String(x)).filter(Boolean) : [],
       tags: Array.isArray(item.tags) ? item.tags.map((x) => String(x)).filter(Boolean) : [],
     };
+  }
+
+  private isDrillableLearningInput(input: LearningItemInput): boolean {
+    const type = this.clean(input.type).toLowerCase();
+    const title = this.clean(input.title);
+    const allowed = new Set(["correction", "phrase", "word", "collocation", "idiom"]);
+    if (!title || !allowed.has(type)) return false;
+    if (/[?¿]/.test(title)) return false;
+    if (type === "correction") return this.isDrillableCorrectionTitle(title);
+    const normalized = this.normalizeForDedupe(title);
+    const words = normalized.split(/\s+/).filter(Boolean);
+    if (words.length < 2 && this.clean(input.source_type).toLowerCase() !== "imported") return false;
+    if (/^(?:de|a|en|por|para|con|sin|y|o)\s+/i.test(title)) return false;
+    return normalized.length >= 4;
+  }
+
+  private isDrillableCorrectionTitle(title: string): boolean {
+    const parts = title.split(/→|->/).map((part) => part.trim()).filter(Boolean);
+    if (parts.length !== 2 || parts[1]!.includes("/")) return false;
+    const left = this.normalizeForDedupe(parts[0]!).replace(/\s+/g, "");
+    const right = this.normalizeForDedupe(parts[1]!).replace(/\s+/g, "");
+    if (!left || !right || left === right) return false;
+    const leftWords = this.normalizeForDedupe(parts[0]!).split(/\s+/).filter(Boolean).length;
+    const rightWords = this.normalizeForDedupe(parts[1]!).split(/\s+/).filter(Boolean).length;
+    if (leftWords === 1 && rightWords === 1) {
+      // ponytail: cheap typo/noise gate; upgrade to evaluator confidence if single-token corrections need nuance.
+      return 1 - this.editDistance(left, right) / Math.max(left.length, right.length) >= 0.5;
+    }
+    return true;
+  }
+
+  private editDistance(a: string, b: string): number {
+    const prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+    for (let i = 1; i <= a.length; i++) {
+      let last = i - 1;
+      prev[0] = i;
+      for (let j = 1; j <= b.length; j++) {
+        const tmp = prev[j]!;
+        prev[j] = a[i - 1] === b[j - 1] ? last : Math.min(last, prev[j - 1]!, prev[j]!) + 1;
+        last = tmp;
+      }
+    }
+    return prev[b.length]!;
   }
 
   private learningItemEvidenceInput(item: EvaluatedLearningItemEvidence): LearningItemEvidenceInput | null {

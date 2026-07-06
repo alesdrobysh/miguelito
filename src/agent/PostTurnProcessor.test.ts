@@ -170,6 +170,53 @@ describe("PostTurnProcessor extraction", () => {
     expect(addedLearningItems.map((item) => item.title)).toEqual(["partida → partido"]);
   });
 
+  it("saves only drillable evaluator learning items", async () => {
+    const provider: LLMProvider = {
+      chat: async () => { throw new Error("unused"); },
+      complete: async () => { throw new Error("unused"); },
+      completeJson: async <T,>(): Promise<T> => {
+        const callCount = ((provider as any).callCount = ((provider as any).callCount ?? 0) + 1);
+        if (callCount === 1) {
+          return { annotation: { naturalness: 1, comprehension: "smooth", tunit_length: 1, obligatory: [], used: [] }, mode: "REACT", errors: [], interests: [] } as T;
+        }
+        return {
+          learning_items: [
+            { type: "phrase", title: "hombro izquierdo", priority: 0.8 },
+            { type: "correction", title: "Bueno días → Buenos días", priority: 0.95 },
+            { type: "word", title: "¿qué es mancuerna?", priority: 0.8 },
+            { type: "phrase", title: "de trabajo", priority: 0.8 },
+            { type: "grammar_point", title: "Pretérito indefinido vs imperfecto", priority: 0.8 },
+            { type: "correction", title: "noticía → noté", priority: 0.9 },
+            { type: "correction", title: "Me dolía un poco a la derecha → Me dolía un poco la derecha / Me dolía un poco en la derecha", priority: 0.9 },
+          ],
+          item_evidence: [],
+        } as T;
+      },
+    };
+    const addedLearningItems: LearningItemInput[] = [];
+    const processor = new PostTurnProcessor({
+      provider,
+      lang,
+      errors: { logError: async () => 1 } as unknown as ErrorRepository,
+      competency: { insertTurnAnnotation: async () => undefined, insertProficiencyEvidence: async () => 1 } as unknown as CompetencyRepository,
+      session: {
+        getConversationState: async () => ({ session: { session_id: "s1", turn_count: 0, mode: "REACT" }, lastModes: [], moodHint: "", topicsTouched: "" }),
+        updateConversationState: async () => ({ ok: true, changed: true }),
+      } as unknown as SessionRepository,
+      learning: {
+        getLearningHygieneSnapshot: async () => ({ backlog_status: "healthy", active_without_evidence: 0 }),
+        selectLearningItemsForEvaluation: async () => [],
+        listLearningItems: async () => [],
+        addLearningItem: async (input: LearningItemInput) => { addedLearningItems.push(input); return addedLearningItems.length; },
+        recordLearningItemEvidence: async () => 1,
+      } as unknown as LearningRepository,
+    });
+
+    await processor.process({ userMessage: "me duele el hombro izquierdo", assistantText: "Bien.", chatHistory: [] });
+
+    expect(addedLearningItems.map((item) => item.title)).toEqual(["hombro izquierdo", "Bueno días → Buenos días"]);
+  });
+
   it("counts morphology error categories as obligatory morphology evidence", async () => {
     const provider: LLMProvider = {
       chat: async () => { throw new Error("unused"); },
