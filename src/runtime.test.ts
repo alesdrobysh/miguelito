@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "fs";
+import http from "http";
 import os from "os";
 import path from "path";
 import { loadConfig } from "./infrastructure/config.js";
@@ -280,6 +281,35 @@ describe("runtime manager", () => {
     ]));
     expect(provider.chatCalls).toHaveLength(0);
     manager.close();
+  });
+
+  it("imports an Anki TSV deck from a link", async () => {
+    const server = http.createServer((_req, res) => {
+      res.writeHead(200, { "content-type": "text/tab-separated-values" });
+      res.end("estar agotado\tto be exhausted\nla ola de calor\theat wave\n");
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    const url = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}/deck.tsv`;
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+    const db = manager.runtime("spanish").db;
+
+    try {
+      const reply = await manager.handleMessage("spanish", 777, "telegram-user", `/import ${url}`);
+
+      expect(reply).toContain("2");
+      const items = await db.listLearningItems("all", 10);
+      expect(items.map((i) => ({ title: i.title, explanation_l1: i.explanation_l1 }))).toEqual(expect.arrayContaining([
+        { title: "estar agotado", explanation_l1: "to be exhausted" },
+        { title: "la ola de calor", explanation_l1: "heat wave" },
+      ]));
+      expect(provider.chatCalls).toHaveLength(0);
+    } finally {
+      manager.close();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 
   it("stores Telegram users and keeps imported practice material isolated per user", async () => {

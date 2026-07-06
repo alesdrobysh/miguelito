@@ -24,7 +24,7 @@ npm start
 ## Commands
 
 - `/start` — Spanish-only onboarding.
-- `/import` — paste one item per line: `ola de calor = heat wave`, or Anki TSV: `ola de calor<TAB>heat wave`.
+- `/import` — paste one item per line: `ola de calor = heat wave`, Anki TSV: `ola de calor<TAB>heat wave`, or a direct `https://...` TSV/APKG link.
 - `/drill` — start/continue a short practice session.
 - `/scenario` — choose a short roleplay.
 

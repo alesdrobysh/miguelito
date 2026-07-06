@@ -1,5 +1,8 @@
 import fs from "fs";
+import os from "os";
 import path from "path";
+import { execFileSync } from "child_process";
+import initSqlJs from "sql.js";
 import type { Config } from "./infrastructure/config.js";
 import { BuddyDb } from "./infrastructure/db.js";
 import { listAvailableLanguages, loadLanguage } from "./languages/index.js";
@@ -103,8 +106,46 @@ function cleanImportedField(value: string): string {
     .trim();
 }
 
-function parseImportedPracticeItems(text: string): ImportedPracticeItem[] {
-  const body = text.replace(/^\/import(?:@[^\s]+)?\s*/i, "");
+function isImportUrl(text: string): boolean {
+  return /^\/import(?:@[^\s]+)?\s+https?:\/\/\S+\s*$/i.test(text.trim());
+}
+
+async function fetchImportUrl(text: string): Promise<{ body: string; binary?: Uint8Array }> {
+  const url = text.trim().replace(/^\/import(?:@[^\s]+)?\s+/i, "");
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`No pude descargar la baraja: HTTP ${response.status}`);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.length > 20 * 1024 * 1024) throw new Error("La baraja es demasiado grande para importar aquí.");
+  const type = response.headers.get("content-type") ?? "";
+  const isZip = bytes[0] === 0x50 && bytes[1] === 0x4b;
+  if (isZip || /\.apkg(?:$|[?#])/i.test(url)) return { body: "", binary: bytes };
+  if (/charset=/i.test(type) || type.startsWith("text/") || bytes.length < 2_000_000) return { body: Buffer.from(bytes).toString("utf8") };
+  throw new Error("La baraja no parece TSV/CSV ni .apkg.");
+}
+
+async function parseAnkiPackageItems(bytes: Uint8Array): Promise<ImportedPracticeItem[]> {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "miguelito-apkg-"));
+  const apkgPath = path.join(dir, "deck.apkg");
+  try {
+    fs.writeFileSync(apkgPath, Buffer.from(bytes));
+    const collection = execFileSync("unzip", ["-p", apkgPath, "collection.anki2"], { maxBuffer: 50 * 1024 * 1024 });
+    const SQL = await initSqlJs();
+    const anki = new SQL.Database(new Uint8Array(collection));
+    try {
+      const rows = anki.exec("SELECT flds FROM notes ORDER BY id LIMIT 100")[0]?.values ?? [];
+      return rows.flatMap(([flds]) => {
+        const [front, back] = String(flds ?? "").split("\x1f").map(cleanImportedField);
+        return front ? [{ title: front, translation: back || undefined }] : [];
+      });
+    } finally {
+      anki.close();
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+function parseImportedPracticeItemsFromBody(body: string): ImportedPracticeItem[] {
   const seen = new Set<string>();
   const items: ImportedPracticeItem[] = [];
   for (const rawLine of body.split(/\r?\n/)) {
@@ -121,6 +162,15 @@ function parseImportedPracticeItems(text: string): ImportedPracticeItem[] {
     items.push({ title, translation: parts[1] || undefined });
   }
   return items.slice(0, 100);
+}
+
+async function parseImportedPracticeItems(text: string): Promise<ImportedPracticeItem[]> {
+  if (isImportUrl(text)) {
+    const fetched = await fetchImportUrl(text);
+    return fetched.binary ? parseAnkiPackageItems(fetched.binary) : parseImportedPracticeItemsFromBody(fetched.body);
+  }
+  const body = text.replace(/^\/import(?:@[^\s]+)?\s*/i, "");
+  return parseImportedPracticeItemsFromBody(body);
 }
 
 function drillLine(item: { title: string; explanation_l1?: string | null; source_type?: string | null; type?: string | null }, n: number): string {
@@ -529,7 +579,7 @@ export class RuntimeManager {
   }
 
   private async handleImportCommand(db: BuddyDb, text: string): Promise<string> {
-    const items = parseImportedPracticeItems(text);
+    const items = await parseImportedPracticeItems(text);
     if (items.length === 0) {
       return [
         "Pega las frases después de /import, una por línea.",
