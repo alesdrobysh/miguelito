@@ -264,6 +264,39 @@ describe("runtime manager", () => {
     manager.close();
   });
 
+  it("stores Telegram users and keeps imported practice material isolated per user", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+
+    await manager.handleMessage("spanish", 777, "telegram-user-a", "/import\nbochorno = muggy heat");
+    await manager.handleMessage("spanish", 888, "telegram-user-b", "/import\nhacer pesas = lift weights");
+
+    const db = manager.runtime("spanish").db;
+    const users = db.db.exec("SELECT id, platform, external_user_id FROM users WHERE platform = 'telegram' ORDER BY id")[0]?.values ?? [];
+    expect(users.map((row) => row.slice(1))).toEqual([
+      ["telegram", "telegram-user-a"],
+      ["telegram", "telegram-user-b"],
+    ]);
+    const items = db.db.exec(`SELECT u.external_user_id, li.title
+      FROM learning_items li JOIN users u ON u.id = li.user_id
+      ORDER BY u.external_user_id, li.title`)[0]?.values ?? [];
+    expect(items).toEqual([
+      ["telegram-user-a", "bochorno"],
+      ["telegram-user-b", "hacer pesas"],
+    ]);
+
+    const userADrill = await manager.handleMessage("spanish", 777, "telegram-user-a", "/drill");
+    const userBDrill = await manager.handleMessage("spanish", 888, "telegram-user-b", "/drill");
+
+    expect(userADrill).toContain("muggy heat");
+    expect(userADrill).not.toContain("lift weights");
+    expect(userBDrill).toContain("lift weights");
+    expect(userBDrill).not.toContain("muggy heat");
+    expect(provider.chatCalls).toHaveLength(0);
+    manager.close();
+  });
+
   it("runs a short /drill from imported vocabulary instead of redirecting to generic chat", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const provider = new FakeProvider();

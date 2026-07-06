@@ -304,6 +304,7 @@ function isDrillSelectable(item: { id: number; status: string; type?: string | n
 
 export class RuntimeManager {
   private runtimes = new Map<string, LanguageRuntime>();
+  private userRuntimes = new Map<string, LanguageRuntime>();
 
   constructor(private config: Config, private provider: LLMProvider, private evaluatorProvider: LLMProvider, private sharedDb: BuddyDb) {}
 
@@ -376,8 +377,49 @@ export class RuntimeManager {
     return rt;
   }
 
+  private runtimeWithDb(base: LanguageRuntime, sharedDb: BuddyDb): LanguageRuntime {
+    const db = sharedDb.withLanguage(base.lang.id, base.lang.errorCategories, base.lang.morphologyCategories);
+    const toolCtx = {
+      errors: db,
+      profile: sharedDb,
+      langProfile: db,
+      interests: sharedDb,
+      competency: db,
+      session: db,
+      learning: db,
+      provider: this.provider,
+    };
+    const promptBuilder = new PromptBuilder(
+      { errors: db, profile: sharedDb, langProfile: db, interests: sharedDb, competency: db, session: db, learning: db },
+      base.lang,
+    );
+    const agentRunner = new AgentRunner({ provider: this.provider, evaluatorProvider: this.evaluatorProvider, session: db, promptBuilder, toolCtx, lang: base.lang, dreamMemoryPath: base.dreamMemoryPath });
+    const dreamService = new DreamService(db, db, db, this.evaluatorProvider, {
+      timezone: this.config.timezone,
+      dreamMemoryPath: base.dreamMemoryPath,
+      dreamSystemPrompt: base.lang.prompts.dream,
+      morphologyCategories: new Set(base.lang.morphologyCategories),
+      langId: base.lang.id,
+    }, db, new LearningHygieneService(db));
+    return { lang: base.lang, db, sharedDb, agentRunner, evaluatorProvider: this.evaluatorProvider, promptBuilder, dreamService, dreamMemoryPath: base.dreamMemoryPath };
+  }
+
+  private async runtimeForExternalUser(language: string, externalUserId: string): Promise<LanguageRuntime> {
+    const base = this.runtime(language);
+    // ponytail: keep old direct-db tests/TUI fixtures on the migrated default user; real Telegram ids get isolated rows.
+    if (!externalUserId || externalUserId === "telegram-user") return base;
+    const userId = await this.sharedDb.ensureExternalUser("telegram", externalUserId);
+    if (userId === base.sharedDb.userId) return base;
+    const key = `${language}:${userId}`;
+    const cached = this.userRuntimes.get(key);
+    if (cached) return cached;
+    const rt = this.runtimeWithDb(base, this.sharedDb.withUserId(userId));
+    this.userRuntimes.set(key, rt);
+    return rt;
+  }
+
   async handleMessage(language: string, chatId: number, _userId: string, text: string): Promise<string | null> {
-    const rt = this.runtime(language);
+    const rt = await this.runtimeForExternalUser(language, _userId);
     const { db, agentRunner } = rt;
 
     const { session: convState } = await db.getConversationState();

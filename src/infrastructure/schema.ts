@@ -1,6 +1,18 @@
 export const SCHEMA = `
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    platform TEXT NOT NULL DEFAULT 'local',
+    external_user_id TEXT NOT NULL,
+    display_name TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(platform, external_user_id)
+);
+INSERT OR IGNORE INTO users (id, platform, external_user_id, display_name)
+VALUES (1, 'local', 'default', 'Default user');
 CREATE TABLE IF NOT EXISTS learning_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id),
     language TEXT NOT NULL DEFAULT '',
     type TEXT NOT NULL,
     title TEXT NOT NULL,
@@ -31,10 +43,11 @@ CREATE TABLE IF NOT EXISTS learning_items (
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_learning_items_language_type_title_unique ON learning_items(language, type, title COLLATE NOCASE);
-CREATE INDEX IF NOT EXISTS idx_learning_items_status_priority ON learning_items(language, status, priority DESC, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_learning_items_user_language_type_title_unique ON learning_items(user_id, language, type, title COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS idx_learning_items_status_priority ON learning_items(user_id, language, status, priority DESC, created_at);
 CREATE TABLE IF NOT EXISTS learning_item_evidence (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id),
     learning_item_id INTEGER NOT NULL,
     language TEXT NOT NULL DEFAULT '',
     skill TEXT NOT NULL,
@@ -47,9 +60,10 @@ CREATE TABLE IF NOT EXISTS learning_item_evidence (
     source_message_id INTEGER,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX IF NOT EXISTS idx_learning_item_evidence_item ON learning_item_evidence(language, learning_item_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_learning_item_evidence_item ON learning_item_evidence(user_id, language, learning_item_id, created_at DESC);
 CREATE TABLE IF NOT EXISTS learning_practice_attempts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id),
     learning_item_id INTEGER NOT NULL,
     language TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'active',
@@ -60,10 +74,11 @@ CREATE TABLE IF NOT EXISTS learning_practice_attempts (
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     completed_at TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_learning_practice_attempts_active ON learning_practice_attempts(language, status, created_at);
+CREATE INDEX IF NOT EXISTS idx_learning_practice_attempts_active ON learning_practice_attempts(user_id, language, status, created_at);
 
 CREATE TABLE IF NOT EXISTS error_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id),
     user_text TEXT NOT NULL,
     correct_form TEXT NOT NULL,
     category TEXT NOT NULL DEFAULT 'other',
@@ -77,16 +92,19 @@ CREATE INDEX IF NOT EXISTS idx_error_category ON error_log(category);
 CREATE INDEX IF NOT EXISTS idx_error_created ON error_log(created_at);
 
 CREATE TABLE IF NOT EXISTS user_profile (
-    id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id),
     name TEXT,
     goal TEXT,
     correction_style TEXT,
     started_at TEXT,
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_profile_user_unique ON user_profile(user_id);
 
 CREATE TABLE IF NOT EXISTS turn_annotations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id),
     session_id TEXT,
     turn_number INTEGER,
     obligatory_json TEXT NOT NULL DEFAULT '[]',
@@ -104,6 +122,7 @@ CREATE INDEX IF NOT EXISTS idx_annotation_created ON turn_annotations(created_at
 
 CREATE TABLE IF NOT EXISTS competency_vector (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id),
     morph_successes REAL NOT NULL DEFAULT 0.5,
     morph_trials REAL NOT NULL DEFAULT 1.0,
     morph_obs INTEGER NOT NULL DEFAULT 0,
@@ -120,22 +139,26 @@ CREATE TABLE IF NOT EXISTS competency_vector (
 );
 
 CREATE TABLE IF NOT EXISTS _buddy_meta (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL
+    user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id),
+    key TEXT NOT NULL,
+    value TEXT NOT NULL,
+    PRIMARY KEY (user_id, key)
 );
 
 CREATE TABLE IF NOT EXISTS user_interests (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id),
     interest TEXT NOT NULL COLLATE NOCASE,
     source TEXT DEFAULT 'conversation',
     confidence REAL DEFAULT 0.5,
     first_seen_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     last_seen_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_interest_interest_unique ON user_interests(interest COLLATE NOCASE);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_interest_interest_unique ON user_interests(user_id, interest COLLATE NOCASE);
 
 CREATE TABLE IF NOT EXISTS conversation_state (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id),
     session_id TEXT NOT NULL,
     turn_count INTEGER DEFAULT 0,
     last_mode TEXT,
@@ -149,6 +172,7 @@ CREATE TABLE IF NOT EXISTS conversation_state (
 
 CREATE TABLE IF NOT EXISTS chat_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id),
     chat_id INTEGER NOT NULL,
     role TEXT NOT NULL,
     content TEXT NOT NULL,
@@ -156,10 +180,11 @@ CREATE TABLE IF NOT EXISTS chat_history (
     language TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX IF NOT EXISTS idx_chat_history_chat_id ON chat_history(chat_id, id);
+CREATE INDEX IF NOT EXISTS idx_chat_history_chat_id ON chat_history(user_id, chat_id, id);
 
 CREATE TABLE IF NOT EXISTS proficiency_evidence (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id),
     language TEXT NOT NULL DEFAULT '',
     skill TEXT NOT NULL,
     dimension TEXT NOT NULL,

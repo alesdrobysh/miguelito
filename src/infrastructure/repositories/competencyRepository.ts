@@ -13,8 +13,8 @@ import { SqlRepository, type SaveFn } from "./sqlRepository.js";
 export class SqlCompetencyRepository extends SqlRepository implements CompetencyRepository {
   private readonly morphologyTypes: ReadonlySet<string>;
 
-  constructor(db: Database, languageId: string, save: SaveFn, morphologyCategories: readonly string[]) {
-    super(db, languageId, save);
+  constructor(db: Database, languageId: string, save: SaveFn, morphologyCategories: readonly string[], userId = 1) {
+    super(db, languageId, save, userId);
     this.morphologyTypes = new Set(morphologyCategories);
   }
 
@@ -23,7 +23,7 @@ export class SqlCompetencyRepository extends SqlRepository implements Competency
     const RECEPTION_ALPHA = 0.2;
     const RARITY_ALPHA = 0.15;
 
-    const vec = this.queryRow("SELECT * FROM competency_vector WHERE language = ? ORDER BY id DESC LIMIT 1", [this.languageId]) as CompetencyVectorRow | undefined;
+    const vec = this.queryRow("SELECT * FROM competency_vector WHERE user_id = ? AND language = ? ORDER BY id DESC LIMIT 1", [this.userId, this.languageId]) as CompetencyVectorRow | undefined;
     if (!vec) return;
 
     let morphS = vec.morph_successes * DECAY;
@@ -63,18 +63,19 @@ export class SqlCompetencyRepository extends SqlRepository implements Competency
 
     this.db.run(
       `INSERT INTO competency_vector
-        (morph_successes, morph_trials, morph_obs, idiom_successes, idiom_trials, idiom_obs, syntax_window, reception_ewma, reception_obs, lexical_rarity_ewma, self_correction_obs, language)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [morphS, morphT, morphObs, idiomS, idiomT, idiomObs, JSON.stringify(trimmedWindow), recEwma, recObs, rarityEwma, selfCorrectionObs, this.languageId]
+        (user_id, morph_successes, morph_trials, morph_obs, idiom_successes, idiom_trials, idiom_obs, syntax_window, reception_ewma, reception_obs, lexical_rarity_ewma, self_correction_obs, language)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [this.userId, morphS, morphT, morphObs, idiomS, idiomT, idiomObs, JSON.stringify(trimmedWindow), recEwma, recObs, rarityEwma, selfCorrectionObs, this.languageId]
     );
   }
 
   async insertTurnAnnotation(ann: TurnAnnotationInput): Promise<void> {
     this.db.run(
       `INSERT INTO turn_annotations
-        (session_id, turn_number, obligatory_json, used_json, naturalness, comprehension, tunit_length, had_subordination, lexical_rarity, self_correction, language)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (user_id, session_id, turn_number, obligatory_json, used_json, naturalness, comprehension, tunit_length, had_subordination, lexical_rarity, self_correction, language)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        this.userId,
         ann.session_id ?? null,
         ann.turn_number ?? null,
         JSON.stringify(ann.obligatory),
@@ -94,17 +95,17 @@ export class SqlCompetencyRepository extends SqlRepository implements Competency
 
   async getRecentAnnotations(limit: number): Promise<TurnAnnotation[]> {
     return this.queryAll(
-      `SELECT * FROM turn_annotations WHERE language = ? ORDER BY id DESC LIMIT ?`,
-      [this.languageId, limit]
+      `SELECT * FROM turn_annotations WHERE user_id = ? AND language = ? ORDER BY id DESC LIMIT ?`,
+      [this.userId, this.languageId, limit]
     ) as TurnAnnotation[];
   }
 
   async getCompetencyVector(): Promise<CompetencyVectorRow> {
-    let row = this.queryRow(`SELECT * FROM competency_vector WHERE language = ? ORDER BY id DESC LIMIT 1`, [this.languageId]);
+    let row = this.queryRow(`SELECT * FROM competency_vector WHERE user_id = ? AND language = ? ORDER BY id DESC LIMIT 1`, [this.userId, this.languageId]);
     if (!row) {
-      this.db.run("INSERT INTO competency_vector (language) VALUES (?)", [this.languageId]);
+      this.db.run("INSERT INTO competency_vector (user_id, language) VALUES (?, ?)", [this.userId, this.languageId]);
       this.save();
-      row = this.queryRow(`SELECT * FROM competency_vector WHERE language = ? ORDER BY id DESC LIMIT 1`, [this.languageId]);
+      row = this.queryRow(`SELECT * FROM competency_vector WHERE user_id = ? AND language = ? ORDER BY id DESC LIMIT 1`, [this.userId, this.languageId]);
     }
     return row as CompetencyVectorRow;
   }
@@ -115,9 +116,9 @@ export class SqlCompetencyRepository extends SqlRepository implements Competency
     const merged = { ...current, ...fields };
     this.db.run(
       `INSERT INTO competency_vector
-        (morph_successes, morph_trials, morph_obs, idiom_successes, idiom_trials, idiom_obs, syntax_window, reception_ewma, reception_obs, language)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [merged.morph_successes, merged.morph_trials, merged.morph_obs, merged.idiom_successes, merged.idiom_trials, merged.idiom_obs, merged.syntax_window, merged.reception_ewma, merged.reception_obs, this.languageId]
+        (user_id, morph_successes, morph_trials, morph_obs, idiom_successes, idiom_trials, idiom_obs, syntax_window, reception_ewma, reception_obs, language)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [this.userId, merged.morph_successes, merged.morph_trials, merged.morph_obs, merged.idiom_successes, merged.idiom_trials, merged.idiom_obs, merged.syntax_window, merged.reception_ewma, merged.reception_obs, this.languageId]
     );
     this.save();
   }
@@ -125,9 +126,10 @@ export class SqlCompetencyRepository extends SqlRepository implements Competency
   async insertProficiencyEvidence(evidence: ProficiencyEvidenceInput): Promise<number> {
     this.db.run(
       `INSERT INTO proficiency_evidence
-        (language, skill, dimension, challenge_band, outcome, confidence, weight, evidence_text, challenge_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (user_id, language, skill, dimension, challenge_band, outcome, confidence, weight, evidence_text, challenge_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        this.userId,
         this.languageId,
         evidence.skill,
         evidence.dimension,
@@ -146,8 +148,8 @@ export class SqlCompetencyRepository extends SqlRepository implements Competency
 
   async listProficiencyEvidence(limit: number): Promise<ProficiencyEvidenceRow[]> {
     return this.queryAll(
-      `SELECT * FROM proficiency_evidence WHERE language = ? ORDER BY id DESC LIMIT ?`,
-      [this.languageId, limit]
+      `SELECT * FROM proficiency_evidence WHERE user_id = ? AND language = ? ORDER BY id DESC LIMIT ?`,
+      [this.userId, this.languageId, limit]
     ) as ProficiencyEvidenceRow[];
   }
 
@@ -157,13 +159,13 @@ export class SqlCompetencyRepository extends SqlRepository implements Competency
        FROM (
          SELECT challenge_band, weight
          FROM proficiency_evidence
-         WHERE language = ? AND skill = 'production'
+         WHERE user_id = ? AND language = ? AND skill = 'production'
          ORDER BY id DESC LIMIT ?
        )
        GROUP BY challenge_band
        ORDER BY SUM(weight) DESC
        LIMIT 1`,
-      [this.languageId, limit]
+      [this.userId, this.languageId, limit]
     ) as { challenge_band: string } | undefined;
     return row ? (row.challenge_band as ProficiencyChallengeBand) : null;
   }

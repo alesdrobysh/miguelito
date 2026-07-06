@@ -108,9 +108,9 @@ export function createTelegramTransport(config: Config, language: string, token:
   });
 }
 
-export function startTelegramTransport(manager: RuntimeManager, config: Config, language: string, transport: TelegramTransport): void {
+export async function startTelegramTransport(manager: RuntimeManager, config: Config, language: string, transport: TelegramTransport): Promise<void> {
   transport.onMessage((chatId, userId, text) => manager.handleMessage(language, Number(chatId), userId, text));
-  transport.start({
+  await transport.start({
     onStart: (info: { username: string }) => log.info({ username: info.username, language }, "bot started"),
     allowed_updates: [...TELEGRAM_ALLOWED_UPDATES],
   });

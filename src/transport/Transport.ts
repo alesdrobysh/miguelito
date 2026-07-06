@@ -3,5 +3,5 @@ export type MessageHandler = (chatId: number, userId: string, text: string) => P
 export interface Transport {
   onMessage(handler: MessageHandler): void;
   sendMessage(chatId: string | number, text: string): Promise<void>;
-  start(opts?: Record<string, unknown>): void;
+  start(opts?: Record<string, unknown>): void | Promise<void>;
 }

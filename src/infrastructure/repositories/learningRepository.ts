@@ -185,8 +185,8 @@ function pressureFor(activeScore: number, passiveScore: number): string {
 }
 
 export class SqlLearningRepository extends SqlRepository {
-  constructor(db: Database, languageId: string, save: SaveFn) {
-    super(db, languageId, save);
+  constructor(db: Database, languageId: string, save: SaveFn, userId = 1) {
+    super(db, languageId, save, userId);
   }
 
   async addLearningItem(input: LearningItemInput): Promise<number | null> {
@@ -215,8 +215,8 @@ export class SqlLearningRepository extends SqlRepository {
              END,
              reactivation_pressure = CASE WHEN reactivation_pressure = 'low' THEN 'medium' ELSE reactivation_pressure END,
              updated_at = ?
-         WHERE id = ? AND language = ?`,
-        [priority, input.prompt_l2?.trim() || null, input.explanation_l1?.trim() || null, input.evidence_snippet?.trim() || null, next, next, now, existing.id, this.languageId],
+         WHERE id = ? AND user_id = ? AND language = ?`,
+        [priority, input.prompt_l2?.trim() || null, input.explanation_l1?.trim() || null, input.evidence_snippet?.trim() || null, next, next, now, existing.id, this.userId, this.languageId],
       );
       if (this.db.getRowsModified() > 0) this.save();
       return existing.id;
@@ -227,10 +227,11 @@ export class SqlLearningRepository extends SqlRepository {
       : statusForNewLearningItem(type, title, priority, requestedStatus, snapshot, input.prompt_l2);
     this.db.run(
       `INSERT OR IGNORE INTO learning_items
-       (language, type, title, prompt_l2, explanation_l1, source_type, source_message_id, evidence_snippet,
+       (user_id, language, type, title, prompt_l2, explanation_l1, source_type, source_message_id, evidence_snippet,
         priority, status, practice_modes_json, tags_json, due_at, next_reactivation_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        this.userId,
         this.languageId,
         type,
         title,
@@ -260,10 +261,10 @@ export class SqlLearningRepository extends SqlRepository {
     const key = canonicalLearningItemKey(type, title);
     const candidates = this.queryAll<LearningItem>(
       `SELECT * FROM learning_items
-       WHERE language = ? AND status NOT IN ('ignored', 'archived', 'mastered')
+       WHERE user_id = ? AND language = ? AND status NOT IN ('ignored', 'archived', 'mastered')
        ORDER BY evidence_count DESC, priority DESC, datetime(updated_at) DESC, id ASC
        LIMIT 500`,
-      [this.languageId],
+      [this.userId, this.languageId],
     );
     return candidates.find((item) => canonicalLearningItemKey(String(item.type), item.title) === key) ?? null;
   }
@@ -276,10 +277,10 @@ export class SqlLearningRepository extends SqlRepository {
     if (!left || !right || left === right) return false;
     return this.queryAll<LearningItem>(
       `SELECT * FROM learning_items
-       WHERE language = ? AND type = 'correction' AND status NOT IN ('ignored', 'archived', 'mastered')
+       WHERE user_id = ? AND language = ? AND type = 'correction' AND status NOT IN ('ignored', 'archived', 'mastered')
        ORDER BY datetime(created_at) DESC, id DESC
        LIMIT 1000`,
-      [this.languageId],
+      [this.userId, this.languageId],
     ).some((item) => {
       const existing = correctionSides(item.title);
       if (!existing || isTinyCorrection(existing)) return false;
@@ -291,10 +292,10 @@ export class SqlLearningRepository extends SqlRepository {
     const capped = Math.max(1, Math.min(5000, Math.round(limit || 500)));
     const items = this.queryAll<LearningItem>(
       `SELECT * FROM learning_items
-       WHERE language = ? AND status NOT IN ('ignored', 'archived', 'mastered')
+       WHERE user_id = ? AND language = ? AND status NOT IN ('ignored', 'archived', 'mastered')
        ORDER BY datetime(created_at) ASC, id ASC
        LIMIT ?`,
-      [this.languageId, capped],
+      [this.userId, this.languageId, capped],
     );
     const groups = new Map<string, LearningItem[]>();
     for (const item of items) {
@@ -314,11 +315,11 @@ export class SqlLearningRepository extends SqlRepository {
         return bRank - aRank || a.id - b.id;
       });
       for (const dup of duplicates) {
-        this.db.run(`UPDATE learning_item_evidence SET learning_item_id = ? WHERE language = ? AND learning_item_id = ?`, [keeper.id, this.languageId, dup.id]);
-        this.db.run(`UPDATE learning_practice_attempts SET learning_item_id = ? WHERE language = ? AND learning_item_id = ?`, [keeper.id, this.languageId, dup.id]);
+        this.db.run(`UPDATE learning_item_evidence SET learning_item_id = ? WHERE user_id = ? AND language = ? AND learning_item_id = ?`, [keeper.id, this.userId, this.languageId, dup.id]);
+        this.db.run(`UPDATE learning_practice_attempts SET learning_item_id = ? WHERE user_id = ? AND language = ? AND learning_item_id = ?`, [keeper.id, this.userId, this.languageId, dup.id]);
         const passiveScore = clamp01(Math.max(Number(keeper.passive_score ?? 0), Number(dup.passive_score ?? 0)));
         const activeScore = clamp01(Math.max(Number(keeper.active_score ?? 0), Number(dup.active_score ?? 0)));
-        const evidenceCount = this.queryRow<{ count: number }>(`SELECT COUNT(*) AS count FROM learning_item_evidence WHERE language = ? AND learning_item_id = ?`, [this.languageId, keeper.id])?.count ?? (Number(keeper.evidence_count ?? 0) + Number(dup.evidence_count ?? 0));
+        const evidenceCount = this.queryRow<{ count: number }>(`SELECT COUNT(*) AS count FROM learning_item_evidence WHERE user_id = ? AND language = ? AND learning_item_id = ?`, [this.userId, this.languageId, keeper.id])?.count ?? (Number(keeper.evidence_count ?? 0) + Number(dup.evidence_count ?? 0));
         const failureCount = Number(keeper.failure_count ?? 0) + Number(dup.failure_count ?? 0);
         const avoidanceCount = Number(keeper.avoidance_count ?? 0) + Number(dup.avoidance_count ?? 0);
         const stability = stabilityFor(activeScore, passiveScore, evidenceCount);
@@ -341,12 +342,12 @@ export class SqlLearningRepository extends SqlRepository {
                  ELSE next_reactivation_at
                END,
                reactivation_pressure = ?, updated_at = ?
-           WHERE id = ? AND language = ?`,
-          [Number(dup.priority ?? 0), passiveScore, activeScore, stability, evidenceCount, failureCount, avoidanceCount, status, dup.prompt_l2, dup.explanation_l1, dup.evidence_snippet, dup.last_seen_at, dup.last_reactivated_at, dup.last_understood_at, dup.last_produced_at, dup.next_reactivation_at, dup.next_reactivation_at, dup.next_reactivation_at, dup.next_reactivation_at, pressureFor(activeScore, passiveScore), now, keeper.id, this.languageId],
+           WHERE id = ? AND user_id = ? AND language = ?`,
+          [Number(dup.priority ?? 0), passiveScore, activeScore, stability, evidenceCount, failureCount, avoidanceCount, status, dup.prompt_l2, dup.explanation_l1, dup.evidence_snippet, dup.last_seen_at, dup.last_reactivated_at, dup.last_understood_at, dup.last_produced_at, dup.next_reactivation_at, dup.next_reactivation_at, dup.next_reactivation_at, dup.next_reactivation_at, pressureFor(activeScore, passiveScore), now, keeper.id, this.userId, this.languageId],
         );
         this.db.run(
-          `UPDATE learning_items SET status = 'archived', updated_at = ? WHERE id = ? AND language = ?`,
-          [now, dup.id, this.languageId],
+          `UPDATE learning_items SET status = 'archived', updated_at = ? WHERE id = ? AND user_id = ? AND language = ?`,
+          [now, dup.id, this.userId, this.languageId],
         );
         changed++;
       }
@@ -360,10 +361,10 @@ export class SqlLearningRepository extends SqlRepository {
     const limit = Math.max(1, Math.min(200, Math.round(options.limit ?? 50)));
     const items = this.queryAll<LearningItem>(
       `SELECT * FROM learning_items
-       WHERE language = ? AND status NOT IN ('ignored', 'archived', 'mastered')
+       WHERE user_id = ? AND language = ? AND status NOT IN ('ignored', 'archived', 'mastered')
        ORDER BY datetime(created_at) ASC, id ASC
        LIMIT ?`,
-      [this.languageId, scanLimit],
+      [this.userId, this.languageId, scanLimit],
     );
     const candidates: FuzzyLearningItemDuplicateCandidate[] = [];
     for (let i = 0; i < items.length; i++) {
@@ -417,20 +418,20 @@ export class SqlLearningRepository extends SqlRepository {
     if (!ids.every(Number.isFinite) || !ids.includes(keeperId)) return null;
     const archivedId = ids.find((id) => id !== keeperId)!;
     const keeper = this.queryRow<LearningItem>(
-      `SELECT * FROM learning_items WHERE language = ? AND id = ? AND status NOT IN ('ignored', 'archived', 'mastered')`,
-      [this.languageId, keeperId],
+      `SELECT * FROM learning_items WHERE user_id = ? AND language = ? AND id = ? AND status NOT IN ('ignored', 'archived', 'mastered')`,
+      [this.userId, this.languageId, keeperId],
     );
     const dup = this.queryRow<LearningItem>(
-      `SELECT * FROM learning_items WHERE language = ? AND id = ? AND status NOT IN ('ignored', 'archived', 'mastered')`,
-      [this.languageId, archivedId],
+      `SELECT * FROM learning_items WHERE user_id = ? AND language = ? AND id = ? AND status NOT IN ('ignored', 'archived', 'mastered')`,
+      [this.userId, this.languageId, archivedId],
     );
     if (!keeper || !dup) return null;
     const now = nowIso();
-    this.db.run(`UPDATE learning_item_evidence SET learning_item_id = ? WHERE language = ? AND learning_item_id = ?`, [keeper.id, this.languageId, dup.id]);
-    this.db.run(`UPDATE learning_practice_attempts SET learning_item_id = ? WHERE language = ? AND learning_item_id = ?`, [keeper.id, this.languageId, dup.id]);
+    this.db.run(`UPDATE learning_item_evidence SET learning_item_id = ? WHERE user_id = ? AND language = ? AND learning_item_id = ?`, [keeper.id, this.userId, this.languageId, dup.id]);
+    this.db.run(`UPDATE learning_practice_attempts SET learning_item_id = ? WHERE user_id = ? AND language = ? AND learning_item_id = ?`, [keeper.id, this.userId, this.languageId, dup.id]);
     const passiveScore = clamp01(Math.max(Number(keeper.passive_score ?? 0), Number(dup.passive_score ?? 0)));
     const activeScore = clamp01(Math.max(Number(keeper.active_score ?? 0), Number(dup.active_score ?? 0)));
-    const evidenceCount = this.queryRow<{ count: number }>(`SELECT COUNT(*) AS count FROM learning_item_evidence WHERE language = ? AND learning_item_id = ?`, [this.languageId, keeper.id])?.count ?? (Number(keeper.evidence_count ?? 0) + Number(dup.evidence_count ?? 0));
+    const evidenceCount = this.queryRow<{ count: number }>(`SELECT COUNT(*) AS count FROM learning_item_evidence WHERE user_id = ? AND language = ? AND learning_item_id = ?`, [this.userId, this.languageId, keeper.id])?.count ?? (Number(keeper.evidence_count ?? 0) + Number(dup.evidence_count ?? 0));
     const failureCount = Number(keeper.failure_count ?? 0) + Number(dup.failure_count ?? 0);
     const avoidanceCount = Number(keeper.avoidance_count ?? 0) + Number(dup.avoidance_count ?? 0);
     const stability = stabilityFor(activeScore, passiveScore, evidenceCount);
@@ -454,7 +455,7 @@ export class SqlLearningRepository extends SqlRepository {
              ELSE next_reactivation_at
            END,
            reactivation_pressure = ?, updated_at = ?
-       WHERE id = ? AND language = ?`,
+       WHERE id = ? AND user_id = ? AND language = ?`,
       [
         decision.mergedTitle?.trim() || null,
         Number(dup.priority ?? 0),
@@ -481,12 +482,13 @@ export class SqlLearningRepository extends SqlRepository {
         pressureFor(activeScore, passiveScore),
         now,
         keeper.id,
+        this.userId,
         this.languageId,
       ],
     );
     this.db.run(
-      `UPDATE learning_items SET status = 'archived', updated_at = ? WHERE id = ? AND language = ?`,
-      [now, dup.id, this.languageId],
+      `UPDATE learning_items SET status = 'archived', updated_at = ? WHERE id = ? AND user_id = ? AND language = ?`,
+      [now, dup.id, this.userId, this.languageId],
     );
     this.save();
     return { keeperId: keeper.id, archivedId: dup.id };
@@ -511,16 +513,16 @@ export class SqlLearningRepository extends SqlRepository {
          SUM(CASE WHEN status IN ('active', 'cooling_down') AND reactivation_pressure = 'high' AND (next_reactivation_at IS NULL OR datetime(next_reactivation_at) <= datetime('now')) THEN 1 ELSE 0 END) AS due_high_pressure,
          SUM(CASE WHEN status IN ('active', 'cooling_down') AND last_reactivated_at IS NOT NULL AND last_produced_at IS NULL THEN 1 ELSE 0 END) AS reintroduced_without_production
        FROM learning_items
-       WHERE language = ? AND status NOT IN ('ignored', 'archived', 'mastered')`,
-      [this.languageId],
+       WHERE user_id = ? AND language = ? AND status NOT IN ('ignored', 'archived', 'mastered')`,
+      [this.userId, this.languageId],
     ) ?? { active: 0, candidate: 0, active_without_evidence: 0, candidate_without_evidence: 0, stale_new_items: 0, due_high_pressure: 0, reintroduced_without_production: 0 };
     const suspicious = this.queryAll<{ title: string }>(
       `SELECT title FROM learning_items
-       WHERE language = ? AND status NOT IN ('ignored', 'archived', 'mastered')
+       WHERE user_id = ? AND language = ? AND status NOT IN ('ignored', 'archived', 'mastered')
          AND type = 'correction'
        ORDER BY datetime(created_at) DESC, id DESC
        LIMIT 100`,
-      [this.languageId],
+      [this.userId, this.languageId],
     ).filter((item) => looksLikeSuspiciousCorrection("correction", item.title)).map((item) => item.title).slice(0, 10);
     const activeWithoutEvidence = Number(row.active_without_evidence ?? 0);
     const backlog_status = activeWithoutEvidence > 50 ? "blocked" : activeWithoutEvidence > 20 ? "crowded" : "healthy";
@@ -541,13 +543,13 @@ export class SqlLearningRepository extends SqlRepository {
     const capped = Math.max(1, Math.min(200, Math.round(limit || 50)));
     if (status === "all") {
       return this.queryAll(
-        `SELECT * FROM learning_items WHERE language = ? ORDER BY priority DESC, created_at ASC, id ASC LIMIT ?`,
-        [this.languageId, capped],
+        `SELECT * FROM learning_items WHERE user_id = ? AND language = ? ORDER BY priority DESC, created_at ASC, id ASC LIMIT ?`,
+        [this.userId, this.languageId, capped],
       ) as LearningItem[];
     }
     return this.queryAll(
-      `SELECT * FROM learning_items WHERE language = ? AND status = ? ORDER BY priority DESC, created_at ASC, id ASC LIMIT ?`,
-      [this.languageId, status, capped],
+      `SELECT * FROM learning_items WHERE user_id = ? AND language = ? AND status = ? ORDER BY priority DESC, created_at ASC, id ASC LIMIT ?`,
+      [this.userId, this.languageId, status, capped],
     ) as LearningItem[];
   }
 
@@ -555,7 +557,7 @@ export class SqlLearningRepository extends SqlRepository {
     const capped = Math.max(1, Math.min(20, Math.round(limit || 5)));
     return this.queryAll<LearningItem>(
       `SELECT * FROM learning_items
-       WHERE language = ?
+       WHERE user_id = ? AND language = ?
          AND status IN ('active', 'cooling_down')
          AND (next_reactivation_at IS NULL OR datetime(next_reactivation_at) <= datetime('now'))
        ORDER BY
@@ -565,7 +567,7 @@ export class SqlLearningRepository extends SqlRepository {
          datetime(updated_at) ASC,
          id ASC
        LIMIT ?`,
-      [this.languageId, capped],
+      [this.userId, this.languageId, capped],
     );
   }
 
@@ -585,37 +587,37 @@ export class SqlLearningRepository extends SqlRepository {
       if (selected.size >= capped) break;
       add(this.queryAll<LearningItem>(
         `SELECT * FROM learning_items
-         WHERE language = ? AND status IN ('active', 'cooling_down')
+         WHERE user_id = ? AND language = ? AND status IN ('active', 'cooling_down')
            AND (lower(title) LIKE ? OR lower(COALESCE(prompt_l2, '')) LIKE ? OR lower(COALESCE(evidence_snippet, '')) LIKE ?)
          ORDER BY evidence_count ASC, priority DESC, datetime(updated_at) DESC, id DESC
          LIMIT 8`,
-        [this.languageId, `%${token}%`, `%${token}%`, `%${token}%`],
+        [this.userId, this.languageId, `%${token}%`, `%${token}%`, `%${token}%`],
       ));
     }
 
     add(this.queryAll<LearningItem>(
       `SELECT * FROM learning_items
-       WHERE language = ? AND status IN ('active', 'cooling_down')
+       WHERE user_id = ? AND language = ? AND status IN ('active', 'cooling_down')
          AND last_reactivated_at IS NOT NULL
          AND datetime(last_reactivated_at) >= datetime('now', '-1 day')
        ORDER BY datetime(last_reactivated_at) DESC, evidence_count ASC, priority DESC
        LIMIT ?`,
-      [this.languageId, Math.min(20, capped)],
+      [this.userId, this.languageId, Math.min(20, capped)],
     ));
     add(await this.listDueLearningItems(Math.min(20, capped)));
     add(this.queryAll<LearningItem>(
       `SELECT * FROM learning_items
-       WHERE language = ? AND status IN ('active', 'cooling_down')
+       WHERE user_id = ? AND language = ? AND status IN ('active', 'cooling_down')
        ORDER BY datetime(updated_at) DESC, datetime(created_at) DESC, id DESC
        LIMIT ?`,
-      [this.languageId, Math.min(20, capped)],
+      [this.userId, this.languageId, Math.min(20, capped)],
     ));
     add(this.queryAll<LearningItem>(
       `SELECT * FROM learning_items
-       WHERE language = ? AND status = 'active'
+       WHERE user_id = ? AND language = ? AND status = 'active'
        ORDER BY priority DESC, evidence_count ASC, datetime(created_at) ASC, id ASC
        LIMIT ?`,
-      [this.languageId, capped],
+      [this.userId, this.languageId, capped],
     ));
 
     return Array.from(selected.values()).slice(0, capped);
@@ -627,13 +629,13 @@ export class SqlLearningRepository extends SqlRepository {
     const now = nowIso();
     let changed = 0;
     for (const id of cleanIds) {
-      const item = this.queryRow<LearningItem>(`SELECT * FROM learning_items WHERE id = ? AND language = ?`, [id, this.languageId]);
+      const item = this.queryRow<LearningItem>(`SELECT * FROM learning_items WHERE id = ? AND user_id = ? AND language = ?`, [id, this.userId, this.languageId]);
       if (!item) continue;
       this.db.run(
         `UPDATE learning_items
          SET last_reactivated_at = ?, next_reactivation_at = ?, updated_at = ?
-         WHERE id = ? AND language = ?`,
-        [now, afterReintroductionDate(Number(item.active_score ?? 0), Number(item.passive_score ?? 0)), now, id, this.languageId],
+         WHERE id = ? AND user_id = ? AND language = ?`,
+        [now, afterReintroductionDate(Number(item.active_score ?? 0), Number(item.passive_score ?? 0)), now, id, this.userId, this.languageId],
       );
       changed += this.db.getRowsModified();
     }
@@ -643,7 +645,7 @@ export class SqlLearningRepository extends SqlRepository {
 
   async recordLearningItemEvidence(input: LearningItemEvidenceInput): Promise<number> {
     const itemId = Number(input.learning_item_id);
-    const item = this.queryRow<LearningItem>(`SELECT * FROM learning_items WHERE id = ? AND language = ?`, [itemId, this.languageId]);
+    const item = this.queryRow<LearningItem>(`SELECT * FROM learning_items WHERE id = ? AND user_id = ? AND language = ?`, [itemId, this.userId, this.languageId]);
     if (!item) throw new Error(`Learning item #${itemId} not found`);
     const rawSkill = String(input.skill ?? "passive").trim().toLowerCase();
     const skill = VALID_EVIDENCE_SKILLS.has(rawSkill) ? rawSkill : "passive";
@@ -657,9 +659,9 @@ export class SqlLearningRepository extends SqlRepository {
     const sourceType = String(input.source_type ?? "conversation").trim() || "conversation";
     this.db.run(
       `INSERT INTO learning_item_evidence
-       (learning_item_id, language, skill, event, independence, score_delta, confidence, evidence_snippet, source_type, source_message_id, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [itemId, this.languageId, skill, event, independence, scoreDelta, confidence, input.evidence_snippet?.trim() || null, sourceType, input.source_message_id ?? null, now],
+       (user_id, learning_item_id, language, skill, event, independence, score_delta, confidence, evidence_snippet, source_type, source_message_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [this.userId, itemId, this.languageId, skill, event, independence, scoreDelta, confidence, input.evidence_snippet?.trim() || null, sourceType, input.source_message_id ?? null, now],
     );
     const evidenceId = this.db.exec("SELECT last_insert_rowid()")[0].values[0][0] as number;
 
@@ -677,8 +679,8 @@ export class SqlLearningRepository extends SqlRepository {
        SET passive_score = ?, active_score = ?, stability = ?, last_seen_at = ?, last_understood_at = ?, last_produced_at = ?,
            last_reactivated_at = ?, next_reactivation_at = ?, reactivation_pressure = ?, evidence_count = ?, failure_count = ?, avoidance_count = ?,
            status = ?, updated_at = ?
-       WHERE id = ? AND language = ?`,
-      [passiveScore, activeScore, stability, now, lastUnderstoodAt, lastProducedAt, lastReactivatedAt, nextReactivationDate(activeScore, passiveScore), pressureFor(activeScore, passiveScore), evidenceCount, failureCount, avoidanceCount, status, now, itemId, this.languageId],
+       WHERE id = ? AND user_id = ? AND language = ?`,
+      [passiveScore, activeScore, stability, now, lastUnderstoodAt, lastProducedAt, lastReactivatedAt, nextReactivationDate(activeScore, passiveScore), pressureFor(activeScore, passiveScore), evidenceCount, failureCount, avoidanceCount, status, now, itemId, this.userId, this.languageId],
     );
     this.save();
     return evidenceId;
@@ -687,23 +689,23 @@ export class SqlLearningRepository extends SqlRepository {
   async listLearningItemEvidence(learningItemId: number, limit = 20): Promise<LearningItemEvidenceRow[]> {
     const capped = Math.max(1, Math.min(100, Math.round(limit || 20)));
     return this.queryAll<LearningItemEvidenceRow>(
-      `SELECT * FROM learning_item_evidence WHERE language = ? AND learning_item_id = ? ORDER BY created_at DESC, id DESC LIMIT ?`,
-      [this.languageId, learningItemId, capped],
+      `SELECT * FROM learning_item_evidence WHERE user_id = ? AND language = ? AND learning_item_id = ? ORDER BY created_at DESC, id DESC LIMIT ?`,
+      [this.userId, this.languageId, learningItemId, capped],
     );
   }
 
   async startLearningPracticeAttempt(input: StartLearningPracticeAttemptInput): Promise<LearningPracticeAttempt> {
     const itemId = Number(input.learning_item_id);
-    const item = this.queryRow<LearningItem>(`SELECT * FROM learning_items WHERE id = ? AND language = ?`, [itemId, this.languageId]);
+    const item = this.queryRow<LearningItem>(`SELECT * FROM learning_items WHERE id = ? AND user_id = ? AND language = ?`, [itemId, this.userId, this.languageId]);
     if (!item) throw new Error(`Learning item #${itemId} not found`);
     const active = this.queryRow<LearningPracticeAttempt>(
-      `SELECT * FROM learning_practice_attempts WHERE learning_item_id = ? AND language = ? AND status = 'active' ORDER BY id ASC LIMIT 1`,
-      [itemId, this.languageId],
+      `SELECT * FROM learning_practice_attempts WHERE user_id = ? AND learning_item_id = ? AND language = ? AND status = 'active' ORDER BY id ASC LIMIT 1`,
+      [this.userId, itemId, this.languageId],
     );
     if (active) return active;
     this.db.run(
-      `INSERT INTO learning_practice_attempts (learning_item_id, language, status, prompt_text, created_at) VALUES (?, ?, 'active', ?, ?)`,
-      [itemId, this.languageId, input.prompt_text?.trim() || null, nowIso()],
+      `INSERT INTO learning_practice_attempts (user_id, learning_item_id, language, status, prompt_text, created_at) VALUES (?, ?, ?, 'active', ?, ?)`,
+      [this.userId, itemId, this.languageId, input.prompt_text?.trim() || null, nowIso()],
     );
     const id = this.db.exec("SELECT last_insert_rowid()")[0].values[0][0] as number;
     this.save();
@@ -713,15 +715,15 @@ export class SqlLearningRepository extends SqlRepository {
   async listActiveLearningPracticeAttempts(limit = 10): Promise<LearningPracticeAttempt[]> {
     const capped = Math.max(1, Math.min(50, Math.round(limit || 10)));
     return this.queryAll<LearningPracticeAttempt>(
-      `SELECT * FROM learning_practice_attempts WHERE language = ? AND status = 'active' ORDER BY created_at ASC, id ASC LIMIT ?`,
-      [this.languageId, capped],
+      `SELECT * FROM learning_practice_attempts WHERE user_id = ? AND language = ? AND status = 'active' ORDER BY created_at ASC, id ASC LIMIT ?`,
+      [this.userId, this.languageId, capped],
     );
   }
 
   async finishLearningPracticeAttempt(input: FinishLearningPracticeAttemptInput): Promise<LearningPracticeAttempt> {
     const attempt = this.queryRow<LearningPracticeAttempt>(
-      `SELECT * FROM learning_practice_attempts WHERE id = ? AND language = ? AND status = 'active'`,
-      [input.attempt_id, this.languageId],
+      `SELECT * FROM learning_practice_attempts WHERE id = ? AND user_id = ? AND language = ? AND status = 'active'`,
+      [input.attempt_id, this.userId, this.languageId],
     );
     if (!attempt) throw new Error(`Active learning practice attempt #${input.attempt_id} not found`);
     const now = nowIso();
@@ -731,14 +733,14 @@ export class SqlLearningRepository extends SqlRepository {
     this.db.run(
       `UPDATE learning_practice_attempts
        SET status = 'completed', user_response = ?, grade = ?, note = ?, completed_at = ?
-       WHERE id = ? AND language = ?`,
-      [input.user_response.trim(), grade, input.note?.trim() || null, now, attempt.id, this.languageId],
+       WHERE id = ? AND user_id = ? AND language = ?`,
+      [input.user_response.trim(), grade, input.note?.trim() || null, now, attempt.id, this.userId, this.languageId],
     );
     this.db.run(
       `UPDATE learning_items
        SET reps = reps + 1, last_practiced_at = ?, due_at = ?, updated_at = ?
-       WHERE id = ? AND language = ?`,
-      [now, dueAt, now, attempt.learning_item_id, this.languageId],
+       WHERE id = ? AND user_id = ? AND language = ?`,
+      [now, dueAt, now, attempt.learning_item_id, this.userId, this.languageId],
     );
     this.save();
     return this.queryRow<LearningPracticeAttempt>(`SELECT * FROM learning_practice_attempts WHERE id = ?`, [attempt.id])!;
@@ -749,8 +751,8 @@ export class SqlLearningRepository extends SqlRepository {
     this.db.run(
       `UPDATE learning_practice_attempts
        SET status = 'abandoned', note = ?, completed_at = ?
-       WHERE language = ? AND status = 'active'`,
-      [note.trim() || "practice stopped", now, this.languageId],
+       WHERE user_id = ? AND language = ? AND status = 'active'`,
+      [note.trim() || "practice stopped", now, this.userId, this.languageId],
     );
     const changed = this.db.getRowsModified();
     if (changed > 0) this.save();

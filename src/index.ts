@@ -36,7 +36,7 @@ async function main() {
       const transport = createTelegramTransport(config, language, token);
       const rt = manager.runtime(language);
       startLanguageScheduler(config, rt, transport);
-      startTelegramTransport(manager, config, language, transport);
+      await startTelegramTransport(manager, config, language, transport);
       await runDreamIfOverdue(config, rt, rt.db);
     }
 

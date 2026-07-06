@@ -45,8 +45,8 @@ function mergeNotes(...notes: unknown[]): string | null {
 export class SqlErrorRepository extends SqlRepository implements ErrorRepository {
   private readonly validCategories: ReadonlySet<string>;
 
-  constructor(db: Database, languageId: string, save: SaveFn, validCategories: readonly string[]) {
-    super(db, languageId, save);
+  constructor(db: Database, languageId: string, save: SaveFn, validCategories: readonly string[], userId = 1) {
+    super(db, languageId, save, userId);
     this.validCategories = new Set(validCategories);
   }
 
@@ -58,8 +58,8 @@ export class SqlErrorRepository extends SqlRepository implements ErrorRepository
   async logError(userText: string, correct: string, category: string, note: string): Promise<number> {
     const cat = this.normalizeCategory(category);
     this.db.run(
-      `INSERT INTO error_log (user_text, correct_form, category, language, note) VALUES (?, ?, ?, ?, ?)`,
-      [userText, correct, cat, this.languageId, note]
+      `INSERT INTO error_log (user_id, user_text, correct_form, category, language, note) VALUES (?, ?, ?, ?, ?, ?)`,
+      [this.userId, userText, correct, cat, this.languageId, note]
     );
     const rowidResult = this.db.exec("SELECT last_insert_rowid()");
     const id = rowidResult[0].values[0][0] as number;
@@ -71,10 +71,10 @@ export class SqlErrorRepository extends SqlRepository implements ErrorRepository
     const capped = Math.max(1, Math.min(5000, Math.round(limit || 1000)));
     const rows = this.queryAll<ErrorItem & { status?: string }>(
       `SELECT * FROM error_log
-       WHERE language = ? AND COALESCE(status, 'active') = 'active'
+       WHERE user_id = ? AND language = ? AND COALESCE(status, 'active') = 'active'
        ORDER BY datetime(created_at) ASC, id ASC
        LIMIT ?`,
-      [this.languageId, capped],
+      [this.userId, this.languageId, capped],
     );
     const groups = new Map<string, Array<ErrorItem & { status?: string }>>();
     for (const row of rows) {
@@ -113,10 +113,10 @@ export class SqlErrorRepository extends SqlRepository implements ErrorRepository
     const capped = Math.max(1, Math.min(5000, Math.round(limit || 1000)));
     const rows = this.queryAll<ErrorItem & { status?: string }>(
       `SELECT * FROM error_log
-       WHERE language = ? AND COALESCE(status, 'active') = 'active'
+       WHERE user_id = ? AND language = ? AND COALESCE(status, 'active') = 'active'
        ORDER BY datetime(created_at) ASC, id ASC
        LIMIT ?`,
-      [this.languageId, capped],
+      [this.userId, this.languageId, capped],
     );
     let changed = 0;
     const archived = new Set<number>();
@@ -154,25 +154,25 @@ export class SqlErrorRepository extends SqlRepository implements ErrorRepository
 
   async listErrors(category: string, limit: number): Promise<ErrorItem[]> {
     if (category === "all") {
-      return this.queryAll(`SELECT * FROM error_log WHERE language = ? AND COALESCE(status, 'active') = 'active' ORDER BY created_at DESC LIMIT ?`, [this.languageId, limit]) as ErrorItem[];
+      return this.queryAll(`SELECT * FROM error_log WHERE user_id = ? AND language = ? AND COALESCE(status, 'active') = 'active' ORDER BY created_at DESC LIMIT ?`, [this.userId, this.languageId, limit]) as ErrorItem[];
     }
     return this.queryAll(
-      `SELECT * FROM error_log WHERE language = ? AND category = ? AND COALESCE(status, 'active') = 'active' ORDER BY created_at DESC LIMIT ?`,
-      [this.languageId, category, limit]
+      `SELECT * FROM error_log WHERE user_id = ? AND language = ? AND category = ? AND COALESCE(status, 'active') = 'active' ORDER BY created_at DESC LIMIT ?`,
+      [this.userId, this.languageId, category, limit]
     ) as ErrorItem[];
   }
 
   async listRecentErrors(since: string, categories?: string[]): Promise<ErrorItem[]> {
     if (!categories || categories.length === 0) {
       return this.queryAll(
-        `SELECT * FROM error_log WHERE language = ? AND created_at >= ? ORDER BY id ASC`,
-        [this.languageId, since]
+        `SELECT * FROM error_log WHERE user_id = ? AND language = ? AND created_at >= ? ORDER BY id ASC`,
+        [this.userId, this.languageId, since]
       ) as ErrorItem[];
     }
     const placeholders = categories.map(() => "?").join(",");
     return this.queryAll(
-      `SELECT * FROM error_log WHERE language = ? AND created_at >= ? AND category IN (${placeholders}) ORDER BY id ASC`,
-      [this.languageId, since, ...categories]
+      `SELECT * FROM error_log WHERE user_id = ? AND language = ? AND created_at >= ? AND category IN (${placeholders}) ORDER BY id ASC`,
+      [this.userId, this.languageId, since, ...categories]
     ) as ErrorItem[];
   }
 }

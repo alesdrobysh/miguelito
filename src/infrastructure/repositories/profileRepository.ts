@@ -4,12 +4,12 @@ import type { ProfileRepository } from "../../repositories/interfaces.js";
 import { SqlRepository, type SaveFn, nowIso } from "./sqlRepository.js";
 
 export class SqlProfileRepository extends SqlRepository implements ProfileRepository {
-  constructor(db: Database, languageId: string, save: SaveFn) {
-    super(db, languageId, save);
+  constructor(db: Database, languageId: string, save: SaveFn, userId = 1) {
+    super(db, languageId, save, userId);
   }
 
   async getProfile(): Promise<UserProfile | null> {
-    const row = this.queryRow(`SELECT * FROM user_profile WHERE id = 1`);
+    const row = this.queryRow(`SELECT * FROM user_profile WHERE user_id = ? ORDER BY id DESC LIMIT 1`, [this.userId]);
     return (row ?? null) as UserProfile | null;
   }
 
@@ -25,8 +25,8 @@ export class SqlProfileRepository extends SqlRepository implements ProfileReposi
     }
 
     this.db.run(
-      `INSERT OR IGNORE INTO user_profile (id, started_at, updated_at) VALUES (1, ?, ?)`,
-      [nowIso(), nowIso()]
+      `INSERT OR IGNORE INTO user_profile (user_id, started_at, updated_at) VALUES (?, ?, ?)`,
+      [this.userId, nowIso(), nowIso()]
     );
     this.save();
 
@@ -36,8 +36,8 @@ export class SqlProfileRepository extends SqlRepository implements ProfileReposi
     const setClauses = keys.map((k) => `${k} = ?`).join(", ");
     const values = [...Object.values(filtered), nowIso()];
     this.db.run(
-      `UPDATE user_profile SET ${setClauses}, updated_at = ? WHERE id = 1`,
-      values
+      `UPDATE user_profile SET ${setClauses}, updated_at = ? WHERE user_id = ?`,
+      [...values, this.userId]
     );
     this.save();
 

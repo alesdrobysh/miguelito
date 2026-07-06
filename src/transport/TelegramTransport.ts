@@ -63,13 +63,11 @@ export class TelegramTransport implements Transport {
     }
   }
 
-  start(opts?: Record<string, unknown>): void {
+  async start(opts?: Record<string, unknown>): Promise<void> {
     this.bot.api.setMyCommands([...TELEGRAM_COMMANDS]).catch((e) => {
       log.error({ ...this.logFields, err: e }, 'Telegram set commands error');
     });
-    this.bot.start(opts as any).catch((e) => {
-      log.error({ ...this.logFields, err: e }, 'Telegram bot start error');
-    });
+    await this.bot.start(opts as any);
   }
 
   private _isAllowed(ctx: Context): boolean {

@@ -14,14 +14,14 @@ function uuid(): string {
 }
 
 export class SqlSessionRepository extends SqlRepository implements SessionRepository {
-  constructor(db: Database, languageId: string, save: SaveFn) {
-    super(db, languageId, save);
+  constructor(db: Database, languageId: string, save: SaveFn, userId = 1) {
+    super(db, languageId, save, userId);
   }
 
   async addChatMessage(chatId: number, role: string, content: string, sessionId?: string): Promise<void> {
     this.db.run(
-      `INSERT INTO chat_history (chat_id, role, content, session_id, language) VALUES (?, ?, ?, ?, ?)`,
-      [chatId, role, content, sessionId ?? null, this.languageId]
+      `INSERT INTO chat_history (user_id, chat_id, role, content, session_id, language) VALUES (?, ?, ?, ?, ?, ?)`,
+      [this.userId, chatId, role, content, sessionId ?? null, this.languageId]
     );
     this.save();
   }
@@ -30,14 +30,14 @@ export class SqlSessionRepository extends SqlRepository implements SessionReposi
     if (limit && limit > 0) {
       return this.queryAll(
         `SELECT role, content, created_at FROM (
-           SELECT id, role, content, created_at FROM chat_history WHERE session_id = ? ORDER BY id DESC LIMIT ?
+           SELECT id, role, content, created_at FROM chat_history WHERE user_id = ? AND session_id = ? ORDER BY id DESC LIMIT ?
          ) ORDER BY id ASC`,
-        [sessionId, limit]
+        [this.userId, sessionId, limit]
       ) as { role: string; content: string; created_at: string }[];
     }
     return this.queryAll(
-      `SELECT role, content, created_at FROM chat_history WHERE session_id = ? ORDER BY id ASC`,
-      [sessionId]
+      `SELECT role, content, created_at FROM chat_history WHERE user_id = ? AND session_id = ? ORDER BY id ASC`,
+      [this.userId, sessionId]
     ) as { role: string; content: string; created_at: string }[];
   }
 
@@ -45,28 +45,28 @@ export class SqlSessionRepository extends SqlRepository implements SessionReposi
     if (limit && limit > 0) {
       return this.queryAll(
         `SELECT role, content FROM (
-           SELECT id, role, content FROM chat_history WHERE chat_id = ? AND language = ? ORDER BY id DESC LIMIT ?
+           SELECT id, role, content FROM chat_history WHERE user_id = ? AND chat_id = ? AND language = ? ORDER BY id DESC LIMIT ?
          ) ORDER BY id ASC`,
-        [chatId, this.languageId, limit]
+        [this.userId, chatId, this.languageId, limit]
       ) as { role: string; content: string }[];
     }
     return this.queryAll(
-      `SELECT role, content FROM chat_history WHERE chat_id = ? AND language = ? ORDER BY id ASC`,
-      [chatId, this.languageId]
+      `SELECT role, content FROM chat_history WHERE user_id = ? AND chat_id = ? AND language = ? ORDER BY id ASC`,
+      [this.userId, chatId, this.languageId]
     ) as { role: string; content: string }[];
   }
 
   async getTodaysMessages(date: string): Promise<{ role: string; content: string; created_at: string }[]> {
     return this.queryAll(
-      `SELECT role, content, created_at FROM chat_history WHERE date(created_at) = ? AND language = ? ORDER BY id ASC`,
-      [date, this.languageId]
+      `SELECT role, content, created_at FROM chat_history WHERE user_id = ? AND date(created_at) = ? AND language = ? ORDER BY id ASC`,
+      [this.userId, date, this.languageId]
     ) as { role: string; content: string; created_at: string }[];
   }
 
   async getConversationState(): Promise<ConversationStateResult> {
     const row = this.queryRow(
-      `SELECT * FROM conversation_state WHERE language = ? ORDER BY id DESC LIMIT 1`,
-      [this.languageId]
+      `SELECT * FROM conversation_state WHERE user_id = ? AND language = ? ORDER BY id DESC LIMIT 1`,
+      [this.userId, this.languageId]
     ) as ConversationStateData | undefined;
 
     if (row) {
@@ -80,9 +80,9 @@ export class SqlSessionRepository extends SqlRepository implements SessionReposi
     const sessionId = uuid();
     const now = nowIso();
     this.db.run(
-      `INSERT INTO conversation_state (session_id, turn_count, last_two_modes, topics_touched, language, started_at, updated_at)
-       VALUES (?, 0, '[]', '[]', ?, ?, ?)`,
-      [sessionId, this.languageId, now, now]
+      `INSERT INTO conversation_state (user_id, session_id, turn_count, last_two_modes, topics_touched, language, started_at, updated_at)
+       VALUES (?, ?, 0, '[]', '[]', ?, ?, ?)`,
+      [this.userId, sessionId, this.languageId, now, now]
     );
     const rowidResult = this.db.exec("SELECT last_insert_rowid()");
     const newId = rowidResult[0].values[0][0];

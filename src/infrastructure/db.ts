@@ -18,7 +18,7 @@ import type {
 } from "../repositories/interfaces.js";
 
 import { SCHEMA } from "./schema.js";
-import { dropLegacyLearningTables, runMigrations } from "./migrations.js";
+import { dropLegacyLearningTables, migrateUsers, runMigrations } from "./migrations.js";
 import { SqlErrorRepository } from "./repositories/errorRepository.js";
 import { SqlSessionRepository } from "./repositories/sessionRepository.js";
 import { SqlProfileRepository } from "./repositories/profileRepository.js";
@@ -44,20 +44,41 @@ export class BuddyDb implements ErrorRepository, SessionRepository, ProfileRepos
     public readonly languageId: string,
     validCategories: readonly string[],
     morphologyCategories: readonly string[],
+    public readonly userId = 1,
   ) {
     this.db = db;
     this.dbPath = dbPath;
     const save = () => this.save();
-    this.errors = new SqlErrorRepository(db, languageId, save, validCategories);
-    this.sessions = new SqlSessionRepository(db, languageId, save);
-    this.profiles = new SqlProfileRepository(db, languageId, save);
-    this.interests = new SqlInterestRepository(db, languageId, save);
-    this.competency = new SqlCompetencyRepository(db, languageId, save, morphologyCategories);
-    this.learning = new SqlLearningRepository(db, languageId, save);
+    this.errors = new SqlErrorRepository(db, languageId, save, validCategories, userId);
+    this.sessions = new SqlSessionRepository(db, languageId, save, userId);
+    this.profiles = new SqlProfileRepository(db, languageId, save, userId);
+    this.interests = new SqlInterestRepository(db, languageId, save, userId);
+    this.competency = new SqlCompetencyRepository(db, languageId, save, morphologyCategories, userId);
+    this.learning = new SqlLearningRepository(db, languageId, save, userId);
   }
 
   withLanguage(languageId: string, errorCategories: readonly string[], morphologyCategories: readonly string[]): BuddyDb {
-    return new BuddyDb(this.db, this.dbPath, languageId, errorCategories, morphologyCategories);
+    return new BuddyDb(this.db, this.dbPath, languageId, errorCategories, morphologyCategories, this.userId);
+  }
+
+  withUserId(userId: number): BuddyDb {
+    return new BuddyDb(this.db, this.dbPath, this.languageId, [], [], userId);
+  }
+
+  async ensureExternalUser(platform: string, externalUserId: string, displayName?: string): Promise<number> {
+    const cleanPlatform = platform.trim() || "local";
+    const cleanExternalId = externalUserId.trim() || "default";
+    this.db.run(
+      `INSERT INTO users (platform, external_user_id, display_name, updated_at)
+       VALUES (?, ?, ?, datetime('now'))
+       ON CONFLICT(platform, external_user_id) DO UPDATE SET
+         display_name = COALESCE(excluded.display_name, users.display_name),
+         updated_at = datetime('now')`,
+      [cleanPlatform, cleanExternalId, displayName?.trim() || null],
+    );
+    const row = this.db.exec("SELECT id FROM users WHERE platform = ? AND external_user_id = ?", [cleanPlatform, cleanExternalId])[0]?.values[0];
+    this.save();
+    return Number(row?.[0] ?? 1);
   }
 
   static async open(
@@ -77,10 +98,13 @@ export class BuddyDb implements ErrorRepository, SessionRepository, ProfileRepos
     }
     const db = new SQL.Database(buf);
     dropLegacyLearningTables(db);
+    // Add user_id before applying the full schema: CREATE INDEX statements in
+    // SCHEMA reference new columns such as user_id, so the columns must exist first.
+    migrateUsers(db);
     db.run(SCHEMA);
     runMigrations(db);
     fs.writeFileSync(dbPath, Buffer.from(db.export()));
-    return new BuddyDb(db, dbPath, languageId, errorCategories, morphologyCategories);
+    return new BuddyDb(db, dbPath, languageId, errorCategories, morphologyCategories, 1);
   }
 
   private save(): void {
@@ -241,12 +265,12 @@ export class BuddyDb implements ErrorRepository, SessionRepository, ProfileRepos
   }
 
   async getMetaValue(key: string): Promise<string | null> {
-    const rows = this.db.exec("SELECT value FROM _buddy_meta WHERE key = ?", [key]);
+    const rows = this.db.exec("SELECT value FROM _buddy_meta WHERE user_id = ? AND key = ?", [this.userId, key]);
     return (rows[0]?.values[0]?.[0] as string | null) ?? null;
   }
 
   async setMetaValue(key: string, value: string): Promise<void> {
-    this.db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES (?, ?)", [key, value]);
+    this.db.run("INSERT OR REPLACE INTO _buddy_meta (user_id, key, value) VALUES (?, ?, ?)", [this.userId, key, value]);
     this.save();
   }
 

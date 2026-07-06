@@ -23,6 +23,7 @@ export function dropLegacyLearningTables(db: Database): void {
 
 export function runMigrations(db: Database): void {
   dropLegacyLearningTables(db);
+  migrateUsers(db);
 
   const chatInfo = db.exec("PRAGMA table_info(chat_history)");
   const chatCols = (chatInfo[0]?.values ?? []).map((r) => r[1] as string);
@@ -128,7 +129,72 @@ export function runMigrations(db: Database): void {
   migrateProficiencyEvidenceChallengeBand(db);
   dropLegacyProficiencyEvidenceLevelColumn(db);
   migrateLearningItemLifecycle(db);
-  db.run("INSERT OR REPLACE INTO _buddy_meta (key, value) VALUES ('schema_version', '16')");
+  migrateUsers(db);
+  db.run("INSERT OR REPLACE INTO _buddy_meta (user_id, key, value) VALUES (1, 'schema_version', '17')");
+}
+
+const USER_SCOPED_TABLES = [
+  "learning_items",
+  "learning_item_evidence",
+  "learning_practice_attempts",
+  "error_log",
+  "user_profile",
+  "turn_annotations",
+  "competency_vector",
+  "user_interests",
+  "conversation_state",
+  "chat_history",
+  "proficiency_evidence",
+];
+
+function hasTable(db: Database, table: string): boolean {
+  return !!db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name = ?", [table])[0]?.values[0];
+}
+
+function tableCols(db: Database, table: string): string[] {
+  return (db.exec(`PRAGMA table_info(${table})`)[0]?.values ?? []).map((r) => r[1] as string);
+}
+
+export function migrateUsers(db: Database): void {
+  db.run(`CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    platform TEXT NOT NULL DEFAULT 'local',
+    external_user_id TEXT NOT NULL,
+    display_name TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(platform, external_user_id)
+  )`);
+  db.run("INSERT OR IGNORE INTO users (id, platform, external_user_id, display_name) VALUES (1, 'local', 'default', 'Default user')");
+
+  for (const table of USER_SCOPED_TABLES) {
+    if (!hasTable(db, table)) continue;
+    const cols = tableCols(db, table);
+    if (!cols.includes("user_id")) db.run(`ALTER TABLE ${table} ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1`);
+  }
+
+  if (hasTable(db, "_buddy_meta") && !tableCols(db, "_buddy_meta").includes("user_id")) {
+    db.run(`CREATE TABLE _buddy_meta_new (
+      user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id),
+      key TEXT NOT NULL,
+      value TEXT NOT NULL,
+      PRIMARY KEY (user_id, key)
+    )`);
+    db.run("INSERT OR REPLACE INTO _buddy_meta_new (user_id, key, value) SELECT 1, key, value FROM _buddy_meta");
+    db.run("DROP TABLE _buddy_meta");
+    db.run("ALTER TABLE _buddy_meta_new RENAME TO _buddy_meta");
+  }
+
+  if (hasTable(db, "learning_items")) {
+    db.run("DROP INDEX IF EXISTS idx_learning_items_language_type_title_unique");
+    db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_learning_items_user_language_type_title_unique ON learning_items(user_id, language, type, title COLLATE NOCASE)");
+  }
+  if (hasTable(db, "user_interests")) {
+    db.run("DROP INDEX IF EXISTS idx_interest_interest_unique");
+    db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_interest_interest_unique ON user_interests(user_id, interest COLLATE NOCASE)");
+  }
+  if (hasTable(db, "user_profile")) db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_user_profile_user_unique ON user_profile(user_id)");
+  if (hasTable(db, "chat_history")) db.run("CREATE INDEX IF NOT EXISTS idx_chat_history_user_chat_id ON chat_history(user_id, chat_id, id)");
 }
 
 function migrateLearningItemLifecycle(db: Database): void {

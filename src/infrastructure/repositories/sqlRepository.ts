@@ -30,6 +30,7 @@ export abstract class SqlRepository {
     protected readonly db: Database,
     protected readonly languageId: string,
     private readonly saveFn: SaveFn,
+    protected readonly userId = 1,
   ) {}
 
   protected save(): void {
