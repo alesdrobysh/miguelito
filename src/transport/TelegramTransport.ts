@@ -6,10 +6,11 @@ import { logger } from "../infrastructure/logger.js";
 const log = logger.child({ ctx: 'telegram' });
 
 export const TELEGRAM_COMMANDS = [
-  { command: "start", description: "Start Miguelito" },
-  { command: "import", description: "Import phrases to train" },
-  { command: "drill", description: "Practice imported phrases" },
-  { command: "scenario", description: "Start a short opt-in scenario" },
+  { command: "start", description: "Запустить Miguelito" },
+  { command: "import", description: "Импортировать фразы/Anki TSV" },
+  { command: "drill", description: "Короткая тренировка" },
+  { command: "scenario", description: "Короткий сценарий" },
+  { command: "costs", description: "Расходы LLM" },
 ] as const;
 
 const MENU_COMMANDS = TELEGRAM_COMMANDS.map((c) => c.command) as string[];

@@ -1,54 +1,42 @@
 # Miguelito
 
-<p align="center">
-  <img src="web/public/SCR-20260603-jsmp.jpeg" alt="Miguelito" width="180" />
-</p>
+Miguelito is a Telegram-first Spanish tutor: conversation → useful material extraction/import → contextual repetition → observed passive/active progress.
 
-An AI language tutor that lives in your Telegram or browser. It has memory — it tracks vocabulary, your interests, your goals — and sends you practice prompts morning and evening.
+## What works now
 
-Currently supports Spanish.
-
-## How it works
-
-- You chat with Miguelito in Telegram (or the web UI)
-- It teaches in context: picks up on errors, logs vocabulary, adjusts to your level
-- After each turn it quietly evaluates your response and updates your profile
-- Morning and evening it sends a personalized practice message
-- Each night it consolidates its memory about you ("dreaming")
+- Spanish Telegram bot in one Node process.
+- Multi-user Telegram isolation in the shared SQL.js DB.
+- `/import` for pasted phrases and Anki TSV exports (`front<TAB>back`).
+- `/drill` for short opt-in practice from imported or conversation-native items.
+- `/scenario` for short roleplay scenarios.
+- `/costs` for a 7-day LLM usage/cost summary.
+- Nightly memory/dream and learning hygiene jobs.
 
 ## Quick start
 
 ```bash
 cp .env.example .env
-# Fill in OPENROUTER_API_KEY and TELEGRAM_BOT_TOKEN
+# Fill OPENROUTER_API_KEY, TELEGRAM_BOT_TOKEN/TELEGRAM_SPANISH_BOT_TOKEN, TELEGRAM_CHAT_ID
 npm install
-npm run dev
+npm run build
+npm start
 ```
 
-## Transports
+## Commands
 
-| Mode | What it is | Set `TRANSPORT=` |
-|------|-----------|-----------------|
-| `telegram` | Telegram bot | `telegram` |
-| `web` | Browser chat UI | `web` |
-| `tui` | Terminal UI | `tui` |
+- `/start` — Spanish-only onboarding.
+- `/import` — paste one item per line: `ola de calor = heat wave`, or Anki TSV: `ola de calor<TAB>heat wave`.
+- `/drill` — start/continue a short practice session.
+- `/scenario` — choose a short roleplay.
+- `/costs` — show recent LLM spend.
 
-## Web UI
+## Reports
 
 ```bash
-npm run web        # starts the React dev server
+npm run report:costs -- 7
+npm run report:learning
 ```
 
-The web UI runs entirely in the browser using WebLLM (local model) or OpenRouter. No server needed.
+## Landing page
 
-## Models
-
-Configured via `.env`:
-- `CHAT_MODEL` — fast model for live turns (default: Gemini Flash)
-- `EVALUATOR_MODEL` — smarter async model for evaluation and dreams (default: DeepSeek)
-
-You can swap in any model available on OpenRouter, or point at a local Ollama instance with `PROVIDER=ollama`.
-
-## Schedule
-
-Morning and evening practice messages are sent on cron (default 9:00 / 19:30, configurable via `MORNING_CRON` / `EVENING_CRON` and `TIMEZONE`).
+A minimal static landing page lives in `docs/index.html` for GitHub Pages or any static host.

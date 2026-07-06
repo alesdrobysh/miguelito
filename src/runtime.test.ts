@@ -108,6 +108,7 @@ describe("runtime manager", () => {
       "import",
       "drill",
       "scenario",
+      "costs",
     ]);
     for (const item of TELEGRAM_COMMANDS) {
       expect(item.command).toMatch(/^[a-z0-9_]{1,32}$/);
@@ -194,6 +195,34 @@ describe("runtime manager", () => {
     manager.close();
   });
 
+  it("reports recent LLM cost totals without calling the model", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+    const db = manager.runtime("spanish").db;
+    await db.recordLlmUsage({
+      userId: db.userId,
+      language: "spanish",
+      provider: "openrouter",
+      model: "cheap-model",
+      purpose: "chat",
+      promptTokens: 10,
+      completionTokens: 5,
+      totalTokens: 15,
+      costUsd: 0.000123,
+      latencyMs: 50,
+    });
+
+    const reply = await manager.handleMessage("spanish", 777, "telegram-user", "/costs");
+
+    expect(reply).toContain("Расходы LLM");
+    expect(reply).toContain("$0.000123");
+    expect(reply).toContain("15 токен");
+    expect(reply).toContain("cheap-model");
+    expect(provider.chatCalls).toHaveLength(0);
+    manager.close();
+  });
+
   it("keeps start chat-first and avoids showing a learning app surface", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const provider = new FakeProvider();
@@ -259,6 +288,24 @@ describe("runtime manager", () => {
       expect.objectContaining({ title: "bochorno", source_type: "imported", explanation_l1: "muggy heat" }),
       expect.objectContaining({ title: "ola de calor", source_type: "imported", explanation_l1: "heat wave" }),
       expect.objectContaining({ title: "hacer pesas", source_type: "imported" }),
+    ]));
+    expect(provider.chatCalls).toHaveLength(0);
+    manager.close();
+  });
+
+  it("imports Anki TSV exports as practice material", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+    const db = manager.runtime("spanish").db;
+
+    const reply = await manager.handleMessage("spanish", 777, "telegram-user", "/import\nla ola de calor\theat wave\tweather\n<b>hacer pesas</b>\tlift weights\n");
+
+    expect(reply).toContain("2");
+    const items = await db.listLearningItems("all", 10);
+    expect(items.map((i) => ({ title: i.title, explanation_l1: i.explanation_l1 }))).toEqual(expect.arrayContaining([
+      { title: "la ola de calor", explanation_l1: "heat wave" },
+      { title: "hacer pesas", explanation_l1: "lift weights" },
     ]));
     expect(provider.chatCalls).toHaveLength(0);
     manager.close();

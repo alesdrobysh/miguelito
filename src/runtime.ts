@@ -93,6 +93,16 @@ interface ImportedPracticeItem {
   translation?: string;
 }
 
+function cleanImportedField(value: string): string {
+  return value.replace(/<br\s*\/?>/gi, " ")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .trim();
+}
+
 function parseImportedPracticeItems(text: string): ImportedPracticeItem[] {
   const body = text.replace(/^\/import(?:@[^\s]+)?\s*/i, "");
   const seen = new Set<string>();
@@ -100,13 +110,15 @@ function parseImportedPracticeItems(text: string): ImportedPracticeItem[] {
   for (const rawLine of body.split(/\r?\n/)) {
     const line = rawLine.replace(/^[-*•]\s*/, "").trim();
     if (!line) continue;
-    const parts = line.split(/\s*(?:=|—|–)\s*/).map((p) => p.trim()).filter(Boolean);
+    const fields = line.includes("\t") ? line.split("\t") : line.split(/\s*(?:=|—|–)\s*/);
+    const parts = fields.map(cleanImportedField).filter(Boolean);
     const title = (parts[0] ?? "").trim();
     if (!title) continue;
     const key = title.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
-    items.push({ title, translation: parts.slice(1).join(" — ") || undefined });
+    // ponytail: Anki TSV uses first two fields; tags/media columns are ignored until users need richer imports.
+    items.push({ title, translation: parts[1] || undefined });
   }
   return items.slice(0, 100);
 }
@@ -481,8 +493,32 @@ export class RuntimeManager {
     if (commandToken === "/import") return this.handleImportCommand(db, text);
     if (commandToken === "/drill") return this.handleDrillCommand(db, text);
     if (commandToken === "/scenario") return this.handleScenarioCommand(db, text);
+    if (commandToken === "/costs") return this.handleCostsCommand(db);
     if (text.startsWith("/")) return formatCommandRedirect(lang);
     return undefined;
+  }
+
+  private async handleCostsCommand(db: BuddyDb): Promise<string> {
+    const rows = db.db.exec(
+      `SELECT purpose, model,
+              ROUND(SUM(COALESCE(cost_usd, 0)), 6),
+              SUM(COALESCE(total_tokens, 0)),
+              COUNT(*)
+       FROM llm_usage
+       WHERE user_id = ? AND language = ? AND created_at >= datetime('now', '-7 days')
+       GROUP BY purpose, model
+       ORDER BY SUM(COALESCE(cost_usd, 0)) DESC`,
+      [db.userId, db.languageId],
+    )[0]?.values ?? [];
+    const totalCost = rows.reduce((sum, row) => sum + Number(row[2] ?? 0), 0);
+    const totalTokens = rows.reduce((sum, row) => sum + Number(row[3] ?? 0), 0);
+    const calls = rows.reduce((sum, row) => sum + Number(row[4] ?? 0), 0);
+    const details = rows.slice(0, 5).map(([purpose, model, cost, tokens, count]) => `- ${purpose} / ${model}: $${Number(cost ?? 0).toFixed(6)}, ${tokens} токенов, ${count} вызовов`);
+    return [
+      "Расходы LLM за 7 дней:",
+      `Итого: $${totalCost.toFixed(6)}, ${totalTokens} токенов, ${calls} вызовов.`,
+      ...details,
+    ].join("\n");
   }
 
   private async handleScenarioCommand(db: BuddyDb, text: string): Promise<string> {
