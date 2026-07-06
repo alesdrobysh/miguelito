@@ -1,6 +1,6 @@
 import { logger } from "../infrastructure/logger.js";
 import type { ChatMessage, ToolCall } from "../llm.js";
-import type { ChatOptions, ChatResult } from "./interfaces.js";
+import type { ChatOptions, ChatResult, ChatUsage } from "./interfaces.js";
 
 export interface OpenAiCompatibleConfig {
   apiKey?: string;
@@ -60,6 +60,10 @@ export async function chatCompletion(
   log.debug({ status: resp.status, latencyMs }, "http response");
 
   const data = (await resp.json()) as Record<string, unknown>;
+  const usage = parseUsage(data.usage);
+  if (usage) {
+    log.info({ model: config.model, latencyMs, usage }, "llm cost tracking");
+  }
   const choices = data.choices as Array<Record<string, unknown>> | undefined;
   const choice = choices?.[0];
   if (!choice) throw new Error("no_choices_in_response");
@@ -70,7 +74,24 @@ export async function chatCompletion(
   return {
     content: (message.content as string | null) ?? null,
     toolCalls: (message.tool_calls as ToolCall[] | undefined) ?? [],
+    usage,
   };
+}
+
+function parseUsage(raw: unknown): ChatUsage | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const usage = raw as Record<string, unknown>;
+  const parsed: ChatUsage = {
+    promptTokens: numberOrUndefined(usage.prompt_tokens),
+    completionTokens: numberOrUndefined(usage.completion_tokens),
+    totalTokens: numberOrUndefined(usage.total_tokens),
+    costUsd: numberOrUndefined(usage.cost),
+  };
+  return Object.values(parsed).some((value) => value !== undefined) ? parsed : undefined;
+}
+
+function numberOrUndefined(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 export function promptToMessages(systemPrompt: string | null, userPrompt: string): ChatMessage[] {

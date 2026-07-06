@@ -29,6 +29,12 @@ export interface LLMConfig {
 export interface ChatResult {
   content: string | null;
   toolCalls: ToolCall[];
+  usage?: {
+    promptTokens?: number;
+    completionTokens?: number;
+    totalTokens?: number;
+    costUsd?: number;
+  };
 }
 
 export async function llmChat(

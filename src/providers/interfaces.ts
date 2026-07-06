@@ -13,6 +13,14 @@ export interface ChatOptions {
 export interface ChatResult {
   content: string | null;
   toolCalls: ToolCall[];
+  usage?: ChatUsage;
+}
+
+export interface ChatUsage {
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+  costUsd?: number;
 }
 
 export interface LLMProvider {
