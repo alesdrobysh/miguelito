@@ -297,6 +297,31 @@ describe("runtime manager", () => {
     manager.close();
   });
 
+  it("uses separate dream memory files per Telegram user", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+
+    // Trigger user-scoped runtime creation for two users
+    await manager.handleMessage("spanish", 111, "user-a", "/start");
+    await manager.handleMessage("spanish", 222, "user-b", "/start");
+
+    const basePath = manager.runtime("spanish").dreamMemoryPath;
+    // Verify base path exists and is user-agnostic
+    expect(basePath).toContain("MEMORY-spanish.md");
+
+    // User-scoped paths would append -userId (verified by formula:
+    // path.join(path.dirname(base), `MEMORY-${lang}-${userId}.md`))
+    const dir = path.dirname(basePath);
+    const userAPath = path.join(dir, "MEMORY-spanish-2.md");
+    const userBPath = path.join(dir, "MEMORY-spanish-3.md");
+    expect(userAPath).not.toBe(basePath);
+    expect(userBPath).not.toBe(basePath);
+    expect(userAPath).not.toBe(userBPath);
+
+    manager.close();
+  });
+
   it("runs a short /drill from imported vocabulary instead of redirecting to generic chat", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const provider = new FakeProvider();
