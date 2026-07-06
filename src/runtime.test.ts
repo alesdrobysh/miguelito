@@ -108,7 +108,6 @@ describe("runtime manager", () => {
       "import",
       "drill",
       "scenario",
-      "costs",
     ]);
     for (const item of TELEGRAM_COMMANDS) {
       expect(item.command).toMatch(/^[a-z0-9_]{1,32}$/);
@@ -192,34 +191,6 @@ describe("runtime manager", () => {
     const normal = await manager.handleMessage("spanish", 777, "telegram-user", "hola normal");
     expect(normal).toBe("echo:hola normal");
     expect(provider.chatCalls).toHaveLength(2);
-    manager.close();
-  });
-
-  it("reports recent LLM cost totals without calling the model", async () => {
-    const config = loadConfig(env({ DATA_DIR: tmpDir }));
-    const provider = new FakeProvider();
-    const manager = await createRuntimeManager(config, { provider });
-    const db = manager.runtime("spanish").db;
-    await db.recordLlmUsage({
-      userId: db.userId,
-      language: "spanish",
-      provider: "openrouter",
-      model: "cheap-model",
-      purpose: "chat",
-      promptTokens: 10,
-      completionTokens: 5,
-      totalTokens: 15,
-      costUsd: 0.000123,
-      latencyMs: 50,
-    });
-
-    const reply = await manager.handleMessage("spanish", 777, "telegram-user", "/costs");
-
-    expect(reply).toContain("Расходы LLM");
-    expect(reply).toContain("$0.000123");
-    expect(reply).toContain("15 токен");
-    expect(reply).toContain("cheap-model");
-    expect(provider.chatCalls).toHaveLength(0);
     manager.close();
   });
 

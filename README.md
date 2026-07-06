@@ -9,7 +9,6 @@ Miguelito is a Telegram-first Spanish tutor: conversation → useful material ex
 - `/import` for pasted phrases and Anki TSV exports (`front<TAB>back`).
 - `/drill` for short opt-in practice from imported or conversation-native items.
 - `/scenario` for short roleplay scenarios.
-- `/costs` for a 7-day LLM usage/cost summary.
 - Nightly memory/dream and learning hygiene jobs.
 
 ## Quick start
@@ -28,7 +27,6 @@ npm start
 - `/import` — paste one item per line: `ola de calor = heat wave`, or Anki TSV: `ola de calor<TAB>heat wave`.
 - `/drill` — start/continue a short practice session.
 - `/scenario` — choose a short roleplay.
-- `/costs` — show recent LLM spend.
 
 ## Reports
 
