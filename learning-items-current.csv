@@ -1,0 +1,398 @@
+id,type,status,priority,evidence_count,active_score,passive_score,reactivation_pressure,created_at,title,evidence_snippet
+296,correction,active,0.95,0,0,0,medium,2026-07-03 21:16:10,Bueno días → Buenos días,Bueno días. Me quisiera comer algo
+294,correction,active,0.9,2,0,0.1,high,2026-06-30 07:42:10,La hola de calor → La ola de calor,Todo está bien aquí. La hola de calor se fue y finalmente puedo respirar normalmente
+293,correction,active,0.9,0,0,0,medium,2026-06-28 18:43:53,del anuncio → de un anuncio,Qué ejemplo del anuncio que apela a las emociones tienes?
+291,correction,active,0.9,0,0,0,medium,2026-06-27 18:56:56,día del descanso → día de descanso,"Hoy no fui al gimnasio, tengo un día del descanso"
+290,correction,active,0.9,0,0,0,medium,2026-06-26 18:20:42,No productivo → No he sido productivo,No productivo por la ola de calor que tenemos en Europa los últimos días
+286,correction,active,0.9,0,0,0,medium,2026-06-26 12:55:36,me preguntó si dónde voy → me preguntó dónde voy,me preguntó si dónde voy
+272,phrase,active,0.9,0,0,0,medium,2026-06-26 12:55:36,Me ha preguntado cuándo / dónde / por qué...,Me ha preguntado cuándo nos casamos.
+271,phrase,active,0.9,0,0,0,medium,2026-06-26 12:55:36,Me ha preguntado si...,Me ha preguntado si voy a la fiesta.
+270,phrase,active,0.9,0,0,0,medium,2026-06-26 12:55:36,Me ha dicho que...,Me ha dicho que se va de viaje.
+268,correction,active,0.9,0,0,0,medium,2026-06-26 12:55:36,el anuncio dirige a jóvenes → el anuncio se dirige a jóvenes,el anuncio dirige a jóvenes
+267,correction,active,0.9,0,0,0,medium,2026-06-26 12:55:36,regala lo → regálalo,regala lo
+266,correction,active,0.9,0,0,0,medium,2026-06-26 12:55:36,no tiralo → no lo tires,no tiralo
+257,phrase,active,0.9,0,0,0,medium,2026-06-26 12:55:36,No lo tires. Regálalo o intercámbialo,No lo tires. Regálalo o intercámbialo.
+253,phrase,active,0.9,1,0.2,0,high,2026-06-26 12:55:36,El anuncio se dirige a jóvenes / adultos / gente mayor,El anuncio se dirige a jóvenes.
+252,phrase,active,0.9,0,0,0,medium,2026-06-26 12:55:36,Me parece impactante / efectivo / sugerente,Me parece impactante. / Me parece efectivo. / Me parece sugerente.
+289,correction,active,0.8,0,0,0,medium,2026-06-26 12:55:36,me ha felicitado de mi trabajo → me ha felicitado por mi trabajo,me ha felicitado de mi trabajo
+288,correction,active,0.8,0,0,0,medium,2026-06-26 12:55:36,preguntó por repetir → pidió repetir / pidió que repitiera,preguntó por repetir
+287,correction,active,0.8,0,0,0,medium,2026-06-26 12:55:36,me pidió qué repita → me pidió que repitiera / que repita,me pidió qué repita
+284,phrase,active,0.8,0,0,0,medium,2026-06-26 12:55:36,Es una cosa que se usa para...,Es una cosa que se usa para unir una puerta con una pared.
+282,phrase,active,0.8,0,0,0,medium,2026-06-26 12:55:36,"¿Puedes repetirlo, por favor?","¿Puedes repetirlo, por favor?"
+281,phrase,active,0.8,0,0,0,medium,2026-06-26 12:55:36,No te he entendido bien,"Perdona, no te he entendido bien."
+277,grammar_point,active,0.8,0,0,0,medium,2026-06-26 12:55:36,pedir algo vs preguntar algo,Me pidió un favor. / Me preguntó la hora.
+276,phrase,active,0.8,0,0,0,medium,2026-06-26 12:55:36,Me ha pedido que...,Me ha pedido que le deje un libro.
+275,phrase,active,0.8,0,0,0,medium,2026-06-26 12:55:36,Me ha dado las gracias por...,Me ha dado las gracias por el regalo.
+274,phrase,active,0.8,0,0,0,medium,2026-06-26 12:55:36,Me ha felicitado por...,Me ha felicitado por mi nuevo trabajo.
+273,phrase,active,0.8,0,0,0,medium,2026-06-26 12:55:36,Me ha recordado que tengo que...,Me ha recordado que tengo que llevarle el informe.
+269,correction,active,0.8,1,0.1,0,high,2026-06-26 12:55:36,apela las emociones → apela a las emociones,apela las emociones
+259,phrase,active,0.8,0,0,0,medium,2026-06-26 12:55:36,Asegúrate de que el contenido llama la atención,Asegúrate de que el contenido llama la atención.
+258,phrase,active,0.8,0,0,0,medium,2026-06-26 12:55:36,Dónalas a personas que sí las van a usar,Dónalas a personas que sí las van a usar.
+255,collocation,active,0.8,0,0,0,medium,2026-06-26 12:55:36,una campaña para concienciar sobre un problema,Es una campaña para concienciar sobre un problema.
+254,phrase,active,0.8,3,0.1,0,high,2026-06-26 12:55:36,El anuncio apela a las emociones,El anuncio apela a las emociones.
+285,phrase,active,0.7,0,0,0,medium,2026-06-26 12:55:36,Te echo de menos,Te echo de menos.
+283,phrase,active,0.7,0,0,0,medium,2026-06-26 12:55:36,¿Qué quieres decir?,¿Qué quieres decir?
+280,phrase,active,0.7,0,0,0,medium,2026-06-26 12:55:36,Dígale que ha llamado...,Dígale que ha llamado Martina.
+279,phrase,active,0.7,0,0,0,medium,2026-06-26 12:55:36,¿De parte de quién?,¿De parte de quién?
+278,phrase,active,0.7,0,0,0,medium,2026-06-26 12:55:36,¿Podría hablar con...?,¿Podría hablar con Pedro Aragón?
+264,phrase,active,0.7,0,0,0,medium,2026-06-26 12:55:36,No compres si estás triste,No compres si estás triste.
+263,phrase,active,0.7,0,0,0,medium,2026-06-26 12:55:36,Haz una lista antes de ir de compras,Haz una lista antes de ir de compras.
+262,phrase,active,0.7,0,0,0,medium,2026-06-26 12:55:36,Piensa en el planeta,Piensa en el planeta.
+261,phrase,active,0.7,0,0,0,medium,2026-06-26 12:55:36,No vivas peligrosamente. Vive.,No vivas peligrosamente. Vive.
+260,phrase,active,0.7,0,0,0,medium,2026-06-26 12:55:36,Pon más sabor a tu vida,Pon más sabor a tu vida.
+256,collocation,active,0.7,0,0,0,medium,2026-06-26 12:55:36,una llamada a la acción,Usa siempre una llamada a la acción.
+265,phrase,active,0.6,0,0,0,medium,2026-06-26 12:55:36,una música pegadiza,El anuncio tiene una música pegadiza.
+251,correction,cooling_down,0.9,1,0,0,high,2026-06-26 08:38:52,hace mucha calor → hace mucho calor,Todo bien aquí. De verdad hoy quiero ir al gimnasio. Aunque tengo dudas porque hace mucha calor. Aún es mañana y está 31 grados
+249,correction,cooling_down,0.9,0,0,0,low,2026-06-24 08:17:04,partida → partido,No hay ninguna partida interesante hoy entonces no voy a ver fútbol
+248,correction,cooling_down,0.9,1,0,0.1,low,2026-06-22 18:08:51,el mundia del fútbol → el mundial de fútbol,Todo ha ido bien por aquí. Después del trabajo estoy viendo el mundia del fútbol
+246,correction,cooling_down,0.9,0,0,0,low,2026-06-22 07:08:02,un otro día → otro día,Hoy tengo un otro día de descanso. Voy al gimnasio mañana
+245,correction,cooling_down,0.9,0,0,0,low,2026-06-21 19:31:16,la gimnasio → al gimnasio,No fui la gimnasio hoy porque fui ayer
+244,correction,cooling_down,0.9,0,0,0,low,2026-06-20 17:54:46,El gimnasio fue casi vacío → El gimnasio estaba casi vacío / estuvo casi vacío,Siempre hago los mismos ejercicios. El plane no se cambia
+243,correction,cooling_down,0.9,2,0.30000000000000004,0,low,2026-06-20 17:54:46,plane → plan,Siempre hago los mismos ejercicios. El plane no se cambia
+242,correction,cooling_down,0.9,2,0,0,low,2026-06-20 17:53:08,por mucha calor → porque hacía mucho calor,El gimnasio fue casi vacío por mucha calor
+241,correction,cooling_down,0.9,1,0,0,low,2026-06-20 17:53:08,fue casi vacío → estaba casi vacío / estuvo casi vacío,El gimnasio fue casi vacío por mucha calor
+240,correction,cooling_down,0.9,0,0,0,low,2026-06-20 09:57:13,tranquillo → tranquilo,Prefiero un ambiente tranquillo
+230,correction,cooling_down,0.9,0,0,0,low,2026-06-17 18:08:07,tres últimos entrenamientos → los tres últimos entrenamientos,Con los overhead squats progreso muy lentamente. Durante tres últimos entrenamientos lo hizo con el mismo peso
+229,correction,cooling_down,0.9,0,0,0,low,2026-06-17 18:08:07,lo hizo → los hice / lo he hecho,Con los overhead squats progreso muy lentamente. Durante tres últimos entrenamientos lo hizo con el mismo peso
+228,correction,cooling_down,0.9,0,0,0,low,2026-06-17 18:05:03,cardios → cardio,Me siento bien sin cardios
+225,correction,cooling_down,0.9,0,0,0,low,2026-06-17 07:50:33,lo s → los,Extreme hardcore o lo s ritmos latinos
+222,word,cooling_down,0.9,1,0.3,0,low,2026-06-16 18:38:05,abrochar,¿Qué significa ”abrochate”?
+221,phrase,cooling_down,0.9,4,0,0.2,low,2026-06-16 18:33:05,cumplir las normas,¿Qué significa ”cumple las normas”?
+219,correction,cooling_down,0.9,3,0,0.1,low,2026-06-16 18:27:55,los dips en rodillas → los dips de rodillas,Me obligan a luchar más los dips en rodillas.
+218,word,cooling_down,0.9,6,0.8,0.2,low,2026-06-16 18:25:45,luchar,¿Qué significa luchar?
+217,correction,cooling_down,0.9,0,0,0,low,2026-06-16 09:35:37,"enganché → enganchó (or enganchó, but context suggests 'lo enganché' might be intended as 'I hooked him'; however, standard usage is 'enganchar' without change; note: 'enganché' is correct in some dialects as 'I hooked/hooked up', but here likely a word choice issue; correct form for 'hooked me' would be 'me enganchó' if referring to the book hooking the learner, but learner wrote 'lo enganché' meaning 'I hooked it' — the intended meaning might be 'me enganchó' (it hooked me) or 'me enganché' (I got hooked). Correcting as word_choice.","¡Hola, tío! Lo enganché desde pricipio"
+216,correction,cooling_down,0.9,1,0.15,0,high,2026-06-16 09:35:37,pricipio → principio,"¡Hola, tío! Lo enganché desde pricipio"
+213,correction,cooling_down,0.9,0,0,0,low,2026-06-12 17:57:19,otra tema → otro tema,Elige otra tema
+212,correction,cooling_down,0.9,0,0,0,low,2026-06-12 17:56:54,lo que → de que / (omitir),Hola. Me aburro lo que cada vez me preguntas en los viajes.
+209,grammar_point,cooling_down,0.9,1,0,0.1,low,2026-06-12 07:39:50,subjuntivo en cláusulas de relativo con antecedente indefinido o inexistente,¿Porque usamos subjuntivo aquí?
+208,correction,cooling_down,0.9,0,0,0,low,2026-06-12 07:39:50,Porque → Por qué,¿Porque usamos subjuntivo aquí?
+207,correction,cooling_down,0.9,2,0.4,0,low,2026-06-12 07:39:25,depende de que me falta → depende de lo que me falte,Eso depende de que me falta más en cada momento
+205,correction,cooling_down,0.9,0,0,0,low,2026-06-11 17:42:03,chulos → chulas,Hay cositas pequeñas chulos como fotos o entradas viejas de mis vacaciones
+203,correction,cooling_down,0.9,1,0,0,low,2026-06-11 17:41:06,hay interruptor en la pared → hay un interruptor en la pared,"Sí, hay interruptor en la pared y cajones en mi escritorio"
+194,correction,cooling_down,0.9,0,0,0,low,2026-06-11 17:37:48,te comportes tan tonto → te comportes de manera tan tonta / te comportes tan tontamente,No me gusta que te comportes tan tonto
+193,correction,cooling_down,0.9,0,0,0,low,2026-06-11 17:37:29,¿Estabas preguntando de eso? → ¿Estabas preguntando por eso?,¿Estabas preguntando de eso?
+189,correction,cooling_down,0.9,0,0,0,low,2026-06-10 17:49:53,rnficar → enfocarte,Dime en qué tengo que rnficar
+188,correction,cooling_down,0.9,0,0,0,low,2026-06-10 17:49:05,anymore → ya más / más,"Hola, no quiero hablar del mar anymore"
+186,correction,cooling_down,0.9,0,0,0,low,2026-06-10 07:55:00,qué lleva tilde en 'no hay de qué',No hay de qué
+182,correction,cooling_down,0.9,0,0,0,low,2026-06-09 19:41:14,rompeando → rompiendo,Me gusta observar las olas rompeando con fuerza
+180,correction,cooling_down,0.9,0,0,0,low,2026-06-09 13:13:35,bebir → beber,antes irme de casa suelo bebir agua
+179,correction,cooling_down,0.9,0,0,0,low,2026-06-09 13:13:35,antes irme de casa → antes de irme de casa,antes irme de casa suelo bebir agua
+176,correction,cooling_down,0.9,0,0,0,low,2026-06-09 13:13:09,estes → estos,"quiero aprender estes verbos
+
+✔️ Распорядок дня:
+• Despertarse — просыпаться
+• Levantarse — вставать
+• Ducharse — принимать душ
+• Lavarse — мыться
+• Afeitarse — бриться
+• Peinarse — расчёсываться
+• Maquillarse — краситься
+• Vestirse — одеваться
+• Ponerse — надевать
+• Acostarse — ложиться спать
+• Dormirse — засыпать
+
+Движение и положение: 
+• Sentarse — садиться 
+• Irse — уходить, уезжать
+• Acercarse — приближаться 
+• Perderse — теряться, пропускать что-то
+
+Эмоции и состояния: 
+• Sentirse — чувствовать себя 
+• Enamorarse — влюбляться 
+• Divertirse — веселиться 
+• Aburrirse — скучать 
+• Enojarse / enfadarse — злиться 
+• Preocuparse — беспокоиться 
+• Quejarse — жаловаться 
+• Callarse — замолчать
+
+Осознанные действия:
+• Olvidarse — забывать 
+•  Darse cuenta — осознавать 
+• Quedarse — оставаться 
+• Atreverse — осмеливаться 
+
+💡 Многие глаголы меняют значение в возвратной и невозвратной форме. 
+Dormir — спать, dormirse— засыпать.
+ Ir — идти, irse — уходить. 
+Poner — класть, ponerse — надевать."
+175,correction,cooling_down,0.9,0,0,0,low,2026-06-09 08:37:10,el ruido de las olas → el sonido de las olas,"Me gustaría agradecerle a Tenerife en especial por una semana maravillosa. Fuí allí hace dos años y pasé el tiempo muy tranquilo y silencioso. Caminé por paisajes secos de Tenerife sur, subí al Pico Teide una noche y me sentí por muchas horas frente al océano escuchando el ruido de las olas"
+174,correction,cooling_down,0.9,0,0,0,low,2026-06-09 08:37:10,me sentí por muchas horas → me senté durante muchas horas / estuve sentado muchas horas,"Me gustaría agradecerle a Tenerife en especial por una semana maravillosa. Fuí allí hace dos años y pasé el tiempo muy tranquilo y silencioso. Caminé por paisajes secos de Tenerife sur, subí al Pico Teide una noche y me sentí por muchas horas frente al océano escuchando el ruido de las olas"
+172,correction,cooling_down,0.9,0,0,0,low,2026-06-08 10:51:18,pensar sobre el mar → pensar en el mar,Siempre tengo un momento para pensar sobre el mar.
+168,correction,cooling_down,0.9,1,0,0,low,2026-06-08 08:56:55,ondas → olas,Cuando hay muchas ondas en el mar prefiero sentarme más lejos
+167,correction,cooling_down,0.9,0,0,0,low,2026-06-08 08:56:55,frente del → frente al,Cuando hay muchas ondas en el mar prefiero sentarme más lejos
+166,correction,cooling_down,0.9,0,0,0,low,2026-06-07 17:41:13,Qué es los cauces de arroyos → ¿Qué son los cauces de arroyos?,¿Qué es los cauces de arroyos?
+164,correction,cooling_down,0.9,0,0,0,low,2026-06-07 11:06:31,destinaciones → destinos,Las cumbres son mis destinaciones
+163,word,cooling_down,0.9,0,0,0,low,2026-06-07 11:05:16,cumbre,¿Qué es la cumbre?
+162,correction,cooling_down,0.9,0,0,0,low,2026-06-07 11:04:24,entrar el nube → entrar en la nube,A veces me gusta subir alto y entrar el nube. El pasaje se convierte en algo misterioso
+158,correction,cooling_down,0.9,0,0,0,low,2026-06-06 17:57:52,"todo lo que me ayudas → todo lo que me ayudas (aceptable coloquial) / todo lo que me ayudas (correcto, pero más natural: 'todo lo que me ayudas' o 'todo lo que me has ayudado')",Te agradezco mucho todo lo que me ayudas
+157,correction,cooling_down,0.9,0,0,0,low,2026-06-06 17:56:53,Te lo agradezco mucho por lo que me explicas todo → Te agradezco mucho todo lo que me explicas,Te lo agradezco mucho por lo que me explicas todo
+156,correction,cooling_down,0.9,1,0.3,0,low,2026-06-06 17:56:07,agradezco con naturalidad → te lo agradezco de corazón / te lo agradezco mucho,"¿Puedo decir ""agradezco con naturalidad""?"
+152,correction,cooling_down,0.9,0,0,0,low,2026-06-06 08:45:54,el fin de semana es una temporada → el fin de semana es un periodo corto / el fin de semana es un momento de calma,Entonces no puedo decir que el fin de semana es una temporada
+151,word,cooling_down,0.9,0,0,0,low,2026-06-06 08:43:52,temporada,Qué es temporada
+147,correction,cooling_down,0.9,0,0,0,low,2026-06-05 18:10:08,en otra manera → de otra manera,No entiendo. Explicame en otra manera
+144,correction,cooling_down,0.9,0,0,0,low,2026-06-05 18:09:24,¿Qué es fomentar? → ¿Qué significa fomentar?,¿Qué es fomentar?
+143,correction,cooling_down,0.9,0,0,0,low,2026-06-05 18:08:55,Habían solo filósofos clásicos → Había solo filósofos clásicos,Es qué aún he escuchado solo tres episodios del podcast. Habían solo filósofos clásicos en esos episodios
+139,correction,cooling_down,0.9,0,0,0,low,2026-06-05 09:28:02,las bosques → los bosques,Me gusta la variedad. Me gusta ver las bosques verdes y los lagos azules
+138,correction,cooling_down,0.9,0,0,0,low,2026-06-04 18:02:41,Pienso de ir → Pienso ir,Pienso de ir a La Palma o a La Gran  Canaria.
+135,correction,cooling_down,0.9,0,0,0,low,2026-06-04 18:01:43,sea → es,Hola. No estoy planteando un viaje a Canarias ahora mismo. Solo pienso que sea maravilloso ir allí un día
+133,phrase,cooling_down,0.9,0,0,0,low,2026-06-04 09:55:42,"Maestro, baja el ritmo",traduzca en español “mistrzu zwolnij”
+132,phrase,cooling_down,0.9,0,0,0,low,2026-06-04 09:55:42,frena un poco,"¡eh, frena un poco!"
+131,phrase,cooling_down,0.9,1,0,0.1,low,2026-06-04 09:55:42,baja el ritmo,"maestro, baja el ritmo"
+130,word,cooling_down,0.9,0,0,0,low,2026-06-04 09:50:32,fomentar,que es fomentar
+129,grammar_point,cooling_down,0.9,0,0,0,low,2026-06-04 09:41:57,como vs ya que (causa),La diferencia entre como y ya que
+123,correction,cooling_down,0.9,0,0,0,low,2026-06-03 20:36:45,Verbo mover en pretérito indefinido,mover en pretérito indefinido
+120,correction,cooling_down,0.9,1,0.1,0,high,2026-06-03 20:34:24,Tilde en 'qué' en preguntas directas,¿Cómo se dice огрызок яблока en español?
+118,correction,cooling_down,0.9,0,0,0,low,2026-06-03 19:49:34,no me dices puede ser → no me digas,no me digas o no me dices puede ser
+117,phrase,cooling_down,0.9,0,0,0,low,2026-06-03 19:49:00,¡de ninguna manera!,no waaay en español
+116,phrase,cooling_down,0.9,1,0.2,0,high,2026-06-03 19:49:00,¡no puede ser!,no waaay en español
+114,correction,cooling_down,0.9,0,0,0,low,2026-06-03 19:47:50,a protrait → un retrato,a protrait en español
+113,correction,cooling_down,0.9,0,0,0,low,2026-06-03 19:46:25,the wisper → el susurro,y “the wisper”
+111,correction,cooling_down,0.9,0,0,0,low,2026-06-03 19:46:22,necesito vs nececito,¿Cómo se dice whisper en español?
+106,correction,cooling_down,0.9,0,0,0,low,2026-06-03 19:21:12,todas las palabras → todas las palabras (but more natural: 'todo el vocabulario'),"Vale, nececito charlar contigo para mejorar mi españos y hablar con fluidez con mi maestra. Necesito todas las palabras."
+105,correction,cooling_down,0.9,0,0,0,low,2026-06-03 19:21:12,españos → español,"Vale, nececito charlar contigo para mejorar mi españos y hablar con fluidez con mi maestra. Necesito todas las palabras."
+102,phrase,cooling_down,0.9,1,0,0.1,low,2026-06-03 19:21:12,hablar con fluidez,hablar con fluidez con mi maestra
+95,phrase,cooling_down,0.9,0,0,0,low,2026-06-03 19:17:18,vender,"En español, la palabra «sell» se traduce como **vender**."
+94,correction,cooling_down,0.9,1,0,0,low,2026-06-03 19:01:27,¿Funcionas? → ¿Funciona? (referring to the assistant),¿Funcionas?
+93,correction,cooling_down,0.9,0,0,0,low,2026-06-03 18:43:29,a escuchar → escuchar,qué música me recomiendas a escuchar mientras hago mi tarea de casa de español
+90,word,cooling_down,0.9,1,0,0.1,low,2026-06-03 18:34:58,techo,cómo se dice потолок en español
+89,correction,cooling_down,0.9,0,0,0,low,2026-06-03 18:34:58,cómo se dice потолок en español → ¿Cómo se dice techo en español?,cómo se dice потолок en español
+82,correction,cooling_down,0.9,0,0,0,low,2026-06-03 18:13:30,¿Cómo se llaman meses en español? → ¿Cómo se llaman los meses en español?,¿Cómo se llaman meses en español?
+80,correction,cooling_down,0.9,0,0,0,low,2026-06-03 07:09:35,de trabajo → del trabajo,Exactamente. Me ayuda a desconectar de trabajo y sentir mi cuerpo
+78,correction,cooling_down,0.9,0,0,0,low,2026-06-03 07:08:49,no salgo para hacer senderismo → no salgo a hacer senderismo,Ayer fuí al gimnasio. No salgo para hacer senderismo ya qué tengo que trabajar
+73,word,cooling_down,0.9,0,0,0,low,2026-06-02 21:10:20,mancuerna,qué es mancuerna?
+70,phrase,cooling_down,0.9,0,0,0,low,2026-06-02 21:10:20,¿qué es mancuerna?,qué es mancuerna?
+69,correction,cooling_down,0.9,0,0,0,low,2026-06-02 21:09:46,lo derecho → el derecho,Creo qué ya que el homro izquerdo no puede mantener su lado el barbell pesa más en lo derecho
+68,correction,cooling_down,0.9,0,0,0,low,2026-06-02 21:09:46,homro izquerdo → hombro izquierdo,Creo qué ya que el homro izquerdo no puede mantener su lado el barbell pesa más en lo derecho
+66,phrase,cooling_down,0.9,0,0,0,low,2026-06-02 21:09:46,hombro izquierdo,el hombro izquierdo no puede mantener su lado
+65,correction,cooling_down,0.9,0,0,0,low,2026-06-02 21:08:04,Me dolía un poco a la derecha → Me dolía un poco la derecha / Me dolía un poco en la derecha,Me dolía un poco a la derecha
+63,correction,cooling_down,0.9,0,0,0,low,2026-06-02 21:07:34,noticía → noté,No noticía esa falta antes de hoy
+59,correction,cooling_down,0.9,0,0,0,low,2026-06-02 21:06:35,una problema → un problema,Paracé qué la fuerza en el homro a la izquerda es una problema.
+58,correction,cooling_down,0.9,0,0,0,low,2026-06-02 21:06:35,izquerda → izquierda,Paracé qué la fuerza en el homro a la izquerda es una problema.
+55,correction,cooling_down,0.9,0,0,0,low,2026-06-02 21:06:35,Paracé → Parece,Paracé qué la fuerza en el homro a la izquerda es una problema.
+52,correction,cooling_down,0.9,0,0,0,low,2026-06-02 21:04:06,Etrené → Entrené,Etrené hoy y ahora estoy recuperando
+15,correction,cooling_down,0.9,2,0.4,0,medium,2026-06-02 16:50:35,spelling of opciones,"Hay muchas opcioces, es verdad."
+14,correction,cooling_down,0.9,2,0.4,0,medium,2026-06-02 16:50:35,opcioces → opciones,"Hay muchas opcioces, es verdad."
+12,correction,cooling_down,0.9,2,0.4,0,medium,2026-06-02 16:50:03,aplicaciones (plural sin tilde),"Siempre uso las aplicaciónes. Por ejemplo en Polonia donde vivo actualmente, uso mapa-tyrystyczna.pl"
+10,word,cooling_down,0.9,2,0.4,0,medium,2026-06-02 16:49:25,adecuada,"Agua, comida, un móvil con un powerbank."
+9,phrase,cooling_down,0.9,2,0.4,0,medium,2026-06-02 16:49:25,una lista adecuada,Es una lista muy adecuada
+47,correction,cooling_down,0.9,0,0,0,low,2026-06-02 16:47:41,Y cuales errores hago? → ¿Y cuáles errores cometo?,Y cuales errores hago?
+44,phrase,cooling_down,0.9,1,0,0,low,2026-06-02 16:47:41,cometer errores,Y cuáles errores hago?
+8,correction,cooling_down,0.9,4,0,0,low,2026-06-02 16:46:29,que vs qué,Sabía qué la parte más alta es pico
+32,phrase,cooling_down,0.9,1,0.2,0,high,2026-06-02 16:20:17,despistado / ser despistado,Qué es despistado?
+30,correction,cooling_down,0.9,1,0.2,0,high,2026-06-02 16:08:05,No estaba es esta cafeteria → No estaba en esta cafetería,"No estaba es esta cafeteria, solo es un texto de ejercicio"
+27,grammar_point,cooling_down,0.9,1,0.2,0,high,2026-06-02 16:06:47,Pretérito indefinido vs imperfecto,Me das algún ejercicio para pretérito indefinido vs imperfecto?
+25,correction,cooling_down,0.9,2,0.4,0,medium,2026-06-02 15:33:26,lo oposito → lo opuesto,Qué es lo oposito de bajada?
+21,word,cooling_down,0.9,6,0.35,0.2,low,2026-06-02 15:32:36,agradecer,Qué es agradecer? Qué es bajada?
+20,phrase,cooling_down,0.9,6,0,0.30000000000000004,low,2026-06-02 15:32:36,bajada,la bajada de una montaña
+18,correction,cooling_down,0.9,1,0,0,low,2026-06-02 15:31:14,me entreno → entreno,Me entreno con pesos
+16,correction,cooling_down,0.9,3,0,0,low,2026-06-02 15:30:47,Qué piensas en eso → ¿Qué piensas de eso?,Voy al gimnasio ahora. Qué piensas en eso?
+239,grammar_point,cooling_down,0.7,0,0,0,low,2026-06-20 09:55:41,subjunctive with 'alegrarse de que',Todo va bien
+238,phrase,cooling_down,0.7,0,0,0,low,2026-06-20 09:55:40,ir sobre ruedas,Todo va bien
+236,phrase,cooling_down,0.7,0,0,0,low,2026-06-19 18:58:58,qué buen plan para relajarse,"Estoy en casa por la noche, voy a ver el mundial de fútbol"
+235,phrase,cooling_down,0.7,1,0,0,low,2026-06-19 18:58:58,el mundial de fútbol,"Estoy en casa por la noche, voy a ver el mundial de fútbol"
+234,word,cooling_down,0.7,2,0.2,0,low,2026-06-18 17:39:55,agarre,¿Qué es la fase excéntrica? ¿Qué es el desafío? ¿Qué es el agarre?
+233,word,cooling_down,0.7,0,0,0,low,2026-06-18 17:39:55,desafío,¿Qué es la fase excéntrica? ¿Qué es el desafío? ¿Qué es el agarre?
+232,word,cooling_down,0.7,0,0,0,low,2026-06-18 17:39:54,fase excéntrica,¿Qué es la fase excéntrica? ¿Qué es el desafío? ¿Qué es el agarre?
+226,phrase,cooling_down,0.7,0,0,0,low,2026-06-17 16:36:01,da igual,recuerda la frase “da igual”
+223,phrase,cooling_down,0.7,0,0,0,low,2026-06-16 18:38:06,abrochártelo,¿Qué significa ”abrochate”?
+220,word,cooling_down,0.7,4,0,0.25,low,2026-06-16 18:29:52,engancharse,¿Qué significa engánchate?
+214,word,cooling_down,0.7,0,0,0,low,2026-06-12 17:58:05,trama,es сюжет?
+206,correction,cooling_down,0.7,3,0,0,low,2026-06-12 07:38:15,todos tipos de → todo tipo de / todos los tipos de,"Qué alegría saludarte, Miguelito. Me gustan todos tipos de paisajes, incluso montañas, mares, bosques, campos y mucho más"
+200,word,cooling_down,0.7,0,0,0,low,2026-06-11 17:38:52,alfombra,Dame una lista de palabras utiles
+199,word,cooling_down,0.7,2,0.15,0.2,low,2026-06-11 17:38:52,cajón,Dame una lista de palabras utiles
+198,word,cooling_down,0.7,0,0,0,low,2026-06-11 17:38:52,enchufe,Dame una lista de palabras utiles
+197,word,cooling_down,0.7,2,0.2,0.2,low,2026-06-11 17:38:52,interruptor,Dame una lista de palabras utiles
+196,word,cooling_down,0.7,0,0,0,low,2026-06-11 17:38:52,estantería,Dame una lista de palabras utiles
+184,phrase,cooling_down,0.7,2,0.6,0,low,2026-06-10 07:54:46,no hay de qué,De nada
+183,phrase,cooling_down,0.7,4,0.2,0.15,low,2026-06-10 07:53:44,te lo agradezco mucho,"Cuando alguien me ayuda, digo gracias"
+181,word,cooling_down,0.7,0,0,0,low,2026-06-09 13:13:35,saludable,antes irme de casa suelo bebir agua
+178,phrase,cooling_down,0.7,0,0,0,low,2026-06-09 13:13:09,antes de irte,"quiero aprender estes verbos
+
+✔️ Распорядок дня:
+• Despertarse — просыпаться
+• Levantarse — вставать
+• Ducharse — принимать душ
+• Lavarse — мыться
+• Afeitarse — бриться
+• Peinarse — расчёсываться
+• Maquillarse — краситься
+• Vestirse — одеваться
+• Ponerse — надевать
+• Acostarse — ложиться спать
+• Dormirse — засыпать
+
+Движение и положение: 
+• Sentarse — садиться 
+• Irse — уходить, уезжать
+• Acercarse — приближаться 
+• Perderse — теряться, пропускать что-то
+
+Эмоции и состояния: 
+• Sentirse — чувствовать себя 
+• Enamorarse — влюбляться 
+• Divertirse — веселиться 
+• Aburrirse — скучать 
+• Enojarse / enfadarse — злиться 
+• Preocuparse — беспокоиться 
+• Quejarse — жаловаться 
+• Callarse — замолчать
+
+Осознанные действия:
+• Olvidarse — забывать 
+•  Darse cuenta — осознавать 
+• Quedarse — оставаться 
+• Atreverse — осмеливаться 
+
+💡 Многие глаголы меняют значение в возвратной и невозвратной форме. 
+Dormir — спать, dormirse— засыпать.
+ Ir — идти, irse — уходить. 
+Poner — класть, ponerse — надевать."
+177,phrase,cooling_down,0.7,0,0,0,low,2026-06-09 13:13:09,al despertarte,"quiero aprender estes verbos
+
+✔️ Распорядок дня:
+• Despertarse — просыпаться
+• Levantarse — вставать
+• Ducharse — принимать душ
+• Lavarse — мыться
+• Afeitarse — бриться
+• Peinarse — расчёсываться
+• Maquillarse — краситься
+• Vestirse — одеваться
+• Ponerse — надевать
+• Acostarse — ложиться спать
+• Dormirse — засыпать
+
+Движение и положение: 
+• Sentarse — садиться 
+• Irse — уходить, уезжать
+• Acercarse — приближаться 
+• Perderse — теряться, пропускать что-то
+
+Эмоции и состояния: 
+• Sentirse — чувствовать себя 
+• Enamorarse — влюбляться 
+• Divertirse — веселиться 
+• Aburrirse — скучать 
+• Enojarse / enfadarse — злиться 
+• Preocuparse — беспокоиться 
+• Quejarse — жаловаться 
+• Callarse — замолчать
+
+Осознанные действия:
+• Olvidarse — забывать 
+•  Darse cuenta — осознавать 
+• Quedarse — оставаться 
+• Atreverse — осмеливаться 
+
+💡 Многие глаголы меняют значение в возвратной и невозвратной форме. 
+Dormir — спать, dormirse— засыпать.
+ Ir — идти, irse — уходить. 
+Poner — класть, ponerse — надевать."
+171,phrase,cooling_down,0.7,5,0.15000000000000002,0.2,high,2026-06-08 08:56:55,te entiendo perfectamente,Cuando hay muchas ondas en el mar prefiero sentarme más lejos
+170,word,cooling_down,0.7,0,0,0,low,2026-06-08 08:56:55,brisa marina,Cuando hay muchas ondas en el mar prefiero sentarme más lejos
+169,word,cooling_down,0.7,0,0,0,low,2026-06-08 08:56:55,bravo,Cuando hay muchas ondas en el mar prefiero sentarme más lejos
+165,word,cooling_down,0.7,0,0,0,low,2026-06-07 17:40:00,obsidiana,Quiero encontrar un trozo de obsidiana
+160,word,cooling_down,0.7,0,0,0,low,2026-06-06 17:57:52,planificar,Te agradezco mucho todo lo que me ayudas
+159,phrase,cooling_down,0.7,1,0,0.1,low,2026-06-06 17:57:52,te ayudará a conectar mejor,Te agradezco mucho todo lo que me ayudas
+154,phrase,cooling_down,0.7,0,0,0,low,2026-06-06 17:55:18,agradecer con naturalidad,Traduzca agradecer con naturalidad a ruso
+153,phrase,cooling_down,0.7,0,0,0,low,2026-06-06 08:45:54,temporada vs fin de semana / momento,Entonces no puedo decir que el fin de semana es una temporada
+150,grammar_point,cooling_down,0.7,0,0,0,low,2026-06-05 18:11:14,palabras esdrújulas,¿Qué es esdrújula?
+141,word,cooling_down,0.7,0,0,0,low,2026-06-05 18:06:51,destacarse,¿Y qué es destacarse?
+134,word,cooling_down,0.7,0,0,0,low,2026-06-04 09:56:34,patinete,hulajnoga en español
+128,grammar_point,cooling_down,0.7,0,0,0,low,2026-06-04 07:18:48,la última vez + pretérito indefinido,En el gimnasio suelo escuchar Natalia Oreiro o Shakira. Pero la última vez escuché el podcast Philosophize this
+127,phrase,cooling_down,0.7,4,0.8500000000000001,0,low,2026-06-04 07:18:48,suelo + infinitivo,En el gimnasio suelo escuchar Natalia Oreiro o Shakira. Pero la última vez escuché el podcast Philosophize this
+126,word,cooling_down,0.7,0,0,0,low,2026-06-04 07:00:18,retrato,"Revisa `## Perfil del aprendiz`: si hay un nombre real, puedes usarlo; si no hay un nombre real o aparece como `—`, NO lo preguntes y no hagas onboarding. Revisa `## Perfil actual del aprendiz`: integra como tutor hasta una expresión de `Vocabulario receptivo`; si hay `Vocabulario productivo`, crea una necesidad comunicativa breve para que la persona pueda producir una expresión. No finjas vida humana propia. Nunca muestres nombres de modo, marcadores del sistema ni estado interno. Solo texto natural en español."
+124,word,cooling_down,0.7,0,0,0,low,2026-06-03 20:36:54,el interior del coche,салон автомобиля en español
+122,phrase,cooling_down,0.7,0,0,0,low,2026-06-03 20:34:24,quedarse sin un lugar donde tirar los restos de comida,¿Cómo se dice огрызок яблока en español?
+121,phrase,cooling_down,0.7,0,0,0,low,2026-06-03 20:34:24,corazón de manzana,¿Cómo se dice огрызок яблока en español?
+119,phrase,cooling_down,0.7,1,0,0.1,low,2026-06-03 19:51:11,dar un paso hacia,make a step towards en español
+110,phrase,cooling_down,0.7,0,0,0,low,2026-06-03 19:46:22,susurrar,Se dice **susurrar**.
+103,phrase,cooling_down,0.7,0,0,0,low,2026-06-03 19:21:12,hacer el check-in,necesitas hacer el check-in
+101,phrase,cooling_down,0.7,1,0,0,low,2026-06-03 19:21:12,charlar contigo,"Vale, nececito charlar contigo para mejorar mi españos"
+100,word,cooling_down,0.7,0,0,0,low,2026-06-03 19:19:48,caridad / filantropía,¿Cómo se dice благотворительность en español?
+99,phrase,cooling_down,0.7,0,0,0,low,2026-06-03 19:19:48,caridad,Se dice caridad
+98,word,cooling_down,0.7,0,0,0,low,2026-06-03 19:19:01,transferir,¿Cómo se dice transfer the money en español?
+97,phrase,cooling_down,0.7,0,0,0,low,2026-06-03 19:19:01,transferir el dinero,¿Cómo se dice transfer the money en español? Se dice transferir el dinero.
+92,phrase,cooling_down,0.7,0,0,0,low,2026-06-03 18:43:29,jazz ligero,una lista de jazz ligero
+91,phrase,cooling_down,0.7,0,0,0,low,2026-06-03 18:43:29,bossa nova,una lista de bossa nova
+85,phrase,cooling_down,0.7,0,0,0,low,2026-06-03 18:29:51,montar la tienda,montar la tienda de campaña
+83,phrase,cooling_down,0.7,0,0,0,low,2026-06-03 18:20:34,linterna,¿Qúe es linterna?
+81,phrase,cooling_down,0.7,0,0,0,low,2026-06-03 18:13:30,los meses del año,Los meses del año son enero...
+75,phrase,cooling_down,0.7,6,0.25,0.2,low,2026-06-03 07:08:49,desconectar después de la jornada laboral,¿Sientes que te ayuda a desconectar después de la jornada laboral?
+72,phrase,cooling_down,0.7,2,0.2,0.1,low,2026-06-02 21:10:20,trabajar de forma independiente,Así podrías trabajar cada brazo de forma independiente
+71,phrase,cooling_down,0.7,0,0,0,low,2026-06-02 21:10:20,una mancuerna,Una mancuerna es el peso que se sostiene con una sola mano
+62,phrase,cooling_down,0.7,0,0,0,low,2026-06-02 21:07:34,se te cae,sientes que el peso se te cae hacia ese lado
+61,phrase,cooling_down,0.7,0,0,0,low,2026-06-02 21:07:34,sacan a la luz,los ejercicios más técnicos sacan a la luz esos pequeños desequilibrios
+60,phrase,cooling_down,0.7,0,0,0,low,2026-06-02 21:07:34,desequilibrios,sacan a la luz esos pequeños desequilibrios
+53,phrase,cooling_down,0.7,1,0.2,0,low,2026-06-02 21:05:41,overhead squats,empecé haciendo overhead squats con 27kg
+51,phrase,cooling_down,0.7,0,0,0,low,2026-06-02 21:03:34,tío,"Qué tal, tío?"
+50,phrase,cooling_down,0.7,0,0,0,low,2026-06-02 21:03:34,qué tal,"Qué tal, tío?"
+49,phrase,cooling_down,0.7,0,0,0,low,2026-06-02 17:30:15,ajustar nuestras charlas,Podré ajustar nuestras charlas según lo que necesites
+48,phrase,cooling_down,0.7,0,0,0,low,2026-06-02 17:30:15,empezar nuestra andadura,Para empezar nuestra andadura
+46,phrase,cooling_down,0.7,0,0,0,low,2026-06-02 16:47:41,ortografía,¿Te gustaría que nos fijemos más en la ortografía?
+45,phrase,cooling_down,0.7,0,0,0,low,2026-06-02 16:47:41,acentuación,a veces dudas con la acentuación en el pasado
+6,phrase,cooling_down,0.7,0,0,0,low,2026-06-02 16:46:29,la parte más alta,Sabía que la parte más alta es pico
+41,phrase,cooling_down,0.7,0,0,0,low,2026-06-02 16:45:12,clases grupales,¿Prefieres las clases grupales o te gusta más entrenar a tu aire?
+40,phrase,cooling_down,0.7,1,0,0.1,low,2026-06-02 16:45:12,a tu aire,entrenar a tu aire
+39,phrase,cooling_down,0.7,0,0,0,low,2026-06-02 16:45:12,combinar cardio con pesas,combinar un poco de cardio para la resistencia con pesas para fortalecer los músculos
+5,phrase,cooling_down,0.7,0,0,0,low,2026-06-02 16:42:34,parque nacional del teide,en el Parque Nacional del Teide
+4,phrase,cooling_down,0.7,0,0,0,low,2026-06-02 16:42:34,paseos tranquilos,paseos más cortos y tranquilos
+3,phrase,cooling_down,0.7,0,0,0,low,2026-06-02 16:42:34,rutas de senderismo,¿Sueles hacer rutas largas de senderismo?
+1,phrase,cooling_down,0.7,1,0,0.2,low,2026-06-02 16:42:00,las islas canarias,Especialmente a las islas Canarias
+37,phrase,cooling_down,0.7,0,0,0,low,2026-06-02 16:23:12,mitad y mitad,Como se dice 50/50 con palabras?
+36,register_note,cooling_down,0.7,0,0,0,low,2026-06-02 16:20:17,ser vs estar con adjetivos de personalidad,Qué es despistado?
+34,phrase,cooling_down,0.7,0,0,0,low,2026-06-02 16:20:17,perder las llaves,siempre pierdo mis llaves
+28,phrase,cooling_down,0.7,0,0,0,low,2026-06-02 16:07:24,llovía a cántaros,mientras llovía a cántaros
+26,phrase,cooling_down,0.7,0,0,0,low,2026-06-02 16:06:47,a cántaros,llover a cántaros
+24,phrase,cooling_down,0.7,0,0,0,low,2026-06-02 15:33:26,subida,Lo opuesto de bajada es subida.
+23,phrase,cooling_down,0.7,0,0,0,low,2026-06-02 15:33:26,lo opuesto,¿Qué es lo opuesto de bajada?
+17,phrase,cooling_down,0.7,5,0,0.2,low,2026-06-02 15:31:14,entrenar con pesos,Me entreno con pesos
+227,correction,cooling_down,0.5,0,0,0,low,2026-06-17 16:36:01,recuerda la frase → recuerda la frase (correcto),recuerda la frase “da igual”
+215,word,cooling_down,0.5,0,0,0,low,2026-06-12 17:58:05,argumento,es сюжет?
+185,phrase,cooling_down,0.5,1,0,0.1,low,2026-06-10 07:54:46,faltaría más,De nada
+155,phrase,cooling_down,0.5,0,0,0,low,2026-06-06 17:55:18,благодарить от души,Traduzca agradecer con naturalidad a ruso
+136,collocation,cooling_down,0.5,0,0,0,low,2026-06-04 18:01:43,ir allí un día,Hola. No estoy planteando un viaje a Canarias ahora mismo. Solo pienso que sea maravilloso ir allí un día
+125,word,cooling_down,0.5,0,0,0,low,2026-06-03 20:36:54,el habitáculo,салон автомобиля en español
+2,phrase,cooling_down,0.5,0,0,0,low,2026-06-02 16:42:00,paisajes volcánicos,paisajes volcánicos únicos
+295,correction,ignored,0.9,0,0,0,medium,2026-07-01 14:27:08,hola → ola,La hola de calor se fue y puedo ir al gimnasio hoy por la tarde
+250,correction,ignored,0.9,0,0,0,low,2026-06-25 08:47:35,Me levante → Me levanté,"Hola. Me levante a las ocho y media. Desayuné, tomé un café, leí un poco y ahora estoy trabajando."
+247,correction,ignored,0.9,1,0,0.2,high,2026-06-22 18:08:49,Auw → Australia,Argentina contra Auw
+237,correction,ignored,0.9,0,0,0,low,2026-06-20 09:55:40,Todo va bien → Todo va bien,Todo va bien
+224,correction,ignored,0.9,0,0,0,low,2026-06-16 18:39:30,abrochár → abrochar,Traduzca abrochár a ruso
+210,correction,ignored,0.9,0,0,0,low,2026-06-12 07:41:19,como → cómo,Es que no sé como usar subjuntivo
+195,correction,ignored,0.9,1,0,0,low,2026-06-11 17:38:52,utiles → útiles,Dame una lista de palabras utiles
+192,correction,ignored,0.9,0,0,0,low,2026-06-11 07:11:19,mio → mío,"Uno de los dos es mio, el otro es de mi mujer. Nosotros trabajamos desde casa"
+191,correction,ignored,0.9,0,0,0,low,2026-06-11 07:11:14,Si → Sí,"Si, es verdad"
+190,correction,ignored,0.9,3,0,0.1,low,2026-06-10 17:50:57,tambien → también,Hay techo en mi casa. Paredes tambien
+146,correction,ignored,0.9,0,0,0,low,2026-06-05 18:10:08,Explicame → Explícame,No entiendo. Explicame en otra manera
+142,correction,ignored,0.9,0,0,0,low,2026-06-05 18:08:55,Es qué → Es que,Es qué aún he escuchado solo tres episodios del podcast. Habían solo filósofos clásicos en esos episodios
+115,correction,ignored,0.9,0,0,0,low,2026-06-03 19:47:50,a → un,a protrait en español
+77,correction,ignored,0.9,0,0,0,low,2026-06-03 07:08:49,ya qué → ya que,Ayer fuí al gimnasio. No salgo para hacer senderismo ya qué tengo que trabajar
+76,correction,ignored,0.9,6,0.2,0.05,high,2026-06-03 07:08:49,fuí → fui,Ayer fuí al gimnasio. No salgo para hacer senderismo ya qué tengo que trabajar
+67,correction,ignored,0.9,0,0,0,low,2026-06-02 21:09:46,Creo qué → Creo que,Creo qué ya que el homro izquerdo no puede mantener su lado el barbell pesa más en lo derecho
+64,correction,ignored,0.9,0,0,0,low,2026-06-02 21:07:34,esa falta → esa falta,No noticía esa falta antes de hoy
+57,correction,ignored,0.9,0,0,0,low,2026-06-02 21:06:35,homro → hombro,Paracé qué la fuerza en el homro a la izquerda es una problema.
+54,correction,ignored,0.9,0,0,0,low,2026-06-02 21:05:41,tuvé → tuve,empecé haciendo overhead squats con 27kg pero tras dos series tuvé que bajar el peso. 27kg es demasiado para mi
+31,correction,ignored,0.9,1,0.2,0,high,2026-06-02 16:08:05,cafeteria → cafetería,"No estaba es esta cafeteria, solo es un texto de ejercicio"
+29,correction,ignored,0.9,1,0.2,0,high,2026-06-02 16:07:24,llovia → llovía,"Entré, llovia"
+13,phrase,ignored,0.7,0,0,0,medium,2026-06-02 16:50:35,opciones,con tantas opciones
+297,correction,ignored,0.55,0,0,0,medium,2026-07-03 22:45:12,con que → con qué,Y con que son los cruasanes?
+292,correction,archived,0.9,0,0,0,medium,2026-06-28 11:28:36,mucha calor → mucho calor,"Me gustaría dar un paseo pero hoy hace mucha calor, ahora mismo está 38 grados y prefiero estar en casa"
+231,correction,archived,0.9,0,0,0,medium,2026-06-18 09:11:12,¿Funcionas? → ¿Funciona?,¿Funcionas?
+187,correction,archived,0.9,0,0,0,medium,2026-06-10 07:55:21,No hay de que → No hay de qué,No hay de que
+104,correction,archived,0.9,0,0,0,medium,2026-06-03 19:21:12,nececito → necesito,"Vale, nececito charlar contigo para mejorar mi españos y hablar con fluidez con mi maestra. Necesito todas las palabras."
+96,word,archived,0.9,0,0,0,medium,2026-06-03 19:17:18,vender,¿Cómo se dice sell en español?
+88,phrase,archived,0.9,0,0,0,medium,2026-06-03 18:34:58,techo,cómo se dice потолок en español
+84,correction,archived,0.9,0,0,0,medium,2026-06-03 18:20:34,Qúe → Qué,¿Qúe es linterna?
+11,correction,archived,0.9,0,0,0,medium,2026-06-02 16:50:03,aplicaciónes → aplicaciones,"Siempre uso las aplicaciónes. Por ejemplo en Polonia donde vivo actualmente, uso mapa-tyrystyczna.pl"
+7,correction,archived,0.9,2,0,0,high,2026-06-02 16:46:29,qué → que,Sabía qué la parte más alta es pico
+35,phrase,archived,0.9,0,0,0,low,2026-06-02 16:20:17,despistado / despistada,Qué es despistado?
+22,word,archived,0.9,3,0,0.30000000000000004,high,2026-06-02 15:32:36,bajada,Qué es agradecer? Qué es bajada?
+19,phrase,archived,0.9,2,0,0.2,high,2026-06-02 15:32:36,agradecer,tus articulaciones lo agradecen
+112,word,archived,0.7,0,0,0,medium,2026-06-03 19:46:22,susurrar,¿Cómo se dice whisper en español?
+108,collocation,archived,0.7,0,0,0,medium,2026-06-03 19:21:12,hablar con fluidez,"Vale, nececito charlar contigo para mejorar mi españos y hablar con fluidez con mi maestra. Necesito todas las palabras."
+43,collocation,archived,0.7,0,0,0,medium,2026-06-02 16:45:37,a tu aire,Qué es a mi aire?
+33,phrase,archived,0.7,0,0,0,low,2026-06-02 16:20:17,ser despistado,Soy muy despistado
