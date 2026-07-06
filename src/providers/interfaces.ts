@@ -8,6 +8,7 @@ export interface ChatOptions {
   structured?: boolean;
   stop?: string[];
   timeoutMs?: number;
+  costContext?: Partial<LlmUsageContext>;
 }
 
 export interface ChatResult {
@@ -21,6 +22,18 @@ export interface ChatUsage {
   completionTokens?: number;
   totalTokens?: number;
   costUsd?: number;
+}
+
+export interface LlmUsageContext {
+  userId: number;
+  language: string;
+  provider: string;
+  model: string;
+  purpose: "chat" | "evaluator" | "dream" | "tool" | "system";
+}
+
+export interface LlmUsageInput extends LlmUsageContext, ChatUsage {
+  latencyMs?: number;
 }
 
 export interface LLMProvider {

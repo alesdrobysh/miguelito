@@ -55,7 +55,7 @@ export class DreamService {
           { role: "user", content: userPrompt },
         ],
         undefined,
-        { temperature: 0.3, maxTokens: 2048 },
+        { temperature: 0.3, maxTokens: 2048, costContext: { purpose: "dream" } },
       );
 
       const updated = result.content?.trim();

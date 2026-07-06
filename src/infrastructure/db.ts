@@ -16,6 +16,7 @@ import type {
   ErrorRepository, SessionRepository, ProfileRepository,
   InterestRepository, CompetencyRepository, LearningRepository, MetaRepository,
 } from "../repositories/interfaces.js";
+import type { LlmUsageInput } from "../providers/interfaces.js";
 
 import { SCHEMA } from "./schema.js";
 import { dropLegacyLearningTables, migrateUsers, runMigrations } from "./migrations.js";
@@ -271,6 +272,27 @@ export class BuddyDb implements ErrorRepository, SessionRepository, ProfileRepos
 
   async setMetaValue(key: string, value: string): Promise<void> {
     this.db.run("INSERT OR REPLACE INTO _buddy_meta (user_id, key, value) VALUES (?, ?, ?)", [this.userId, key, value]);
+    this.save();
+  }
+
+  async recordLlmUsage(input: LlmUsageInput): Promise<void> {
+    this.db.run(
+      `INSERT INTO llm_usage
+       (user_id, language, provider, model, purpose, prompt_tokens, completion_tokens, total_tokens, cost_usd, latency_ms)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        input.userId,
+        input.language,
+        input.provider,
+        input.model,
+        input.purpose,
+        input.promptTokens ?? null,
+        input.completionTokens ?? null,
+        input.totalTokens ?? null,
+        input.costUsd ?? null,
+        input.latencyMs ?? null,
+      ],
+    );
     this.save();
   }
 

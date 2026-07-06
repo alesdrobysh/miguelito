@@ -22,6 +22,7 @@ import type {
   AppliedFuzzyLearningItemMerge,
   LearningHygieneSnapshot,
 } from "../domain/types.js";
+import type { LlmUsageInput } from "../providers/interfaces.js";
 
 export interface LearningRepository {
   addLearningItem(input: LearningItemInput): Promise<number | null>;
@@ -83,4 +84,8 @@ export interface CompetencyRepository {
 export interface MetaRepository {
   getMetaValue(key: string): Promise<string | null>;
   setMetaValue(key: string, value: string): Promise<void>;
+}
+
+export interface LlmUsageRepository {
+  recordLlmUsage(input: LlmUsageInput): Promise<void>;
 }

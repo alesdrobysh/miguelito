@@ -14,6 +14,7 @@
     "audit:fuzzy-dedupe": "tsx scripts/audit-fuzzy-dedupe.ts",
     "adjudicate:fuzzy-dedupe": "tsx scripts/adjudicate-fuzzy-dedupe.ts",
     "report:learning": "tsx scripts/report-learning-metrics.ts",
+    "report:costs": "tsx scripts/report-llm-costs.ts",
     "test": "vitest run"
   },
   "keywords": [],

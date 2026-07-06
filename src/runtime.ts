@@ -6,6 +6,7 @@ import { listAvailableLanguages, loadLanguage } from "./languages/index.js";
 import type { LanguageConfig } from "./languages/LanguageConfig.js";
 import { OpenRouterProvider } from "./providers/OpenRouterProvider.js";
 import { OllamaProvider } from "./providers/OllamaProvider.js";
+import { CostTrackingProvider } from "./providers/CostTrackingProvider.js";
 import type { LLMProvider } from "./providers/interfaces.js";
 import { PromptBuilder } from "./agent/PromptBuilder.js";
 import { AgentRunner } from "./agent/AgentRunner.js";
@@ -316,27 +317,43 @@ export class RuntimeManager {
     return this.runtimes.has(language);
   }
 
+  private trackedProvider(db: BuddyDb, purpose: "chat" | "evaluator"): LLMProvider {
+    const model = this.config.provider === "ollama"
+      ? this.config.ollamaModel
+      : purpose === "chat" ? this.config.chatModel : this.config.evaluatorModel;
+    const inner = purpose === "chat" ? this.provider : this.evaluatorProvider;
+    return new CostTrackingProvider(inner, (usage) => db.recordLlmUsage(usage), {
+      userId: db.userId,
+      language: db.languageId,
+      provider: this.config.provider,
+      model,
+      purpose,
+    });
+  }
+
   async addLanguageConfig(lang: LanguageConfig, dreamMemoryPath: string): Promise<void> {
     if (this.runtimes.has(lang.id)) return;
     const db = this.sharedDb.withLanguage(lang.id, lang.errorCategories, lang.morphologyCategories);
+    const provider = this.trackedProvider(db, "chat");
+    const evaluatorProvider = this.trackedProvider(db, "evaluator");
     const toolCtx = {
       errors: db, profile: this.sharedDb, langProfile: db,
       interests: this.sharedDb, competency: db, session: db, learning: db,
-      provider: this.provider,
+      provider,
     };
     const promptBuilder = new PromptBuilder(
       { errors: db, profile: this.sharedDb, langProfile: db, interests: this.sharedDb, competency: db, session: db, learning: db },
       lang,
     );
-    const agentRunner = new AgentRunner({ provider: this.provider, evaluatorProvider: this.evaluatorProvider, session: db, promptBuilder, toolCtx, lang, dreamMemoryPath });
-    const dreamService = new DreamService(db, db, db, this.evaluatorProvider, {
+    const agentRunner = new AgentRunner({ provider, evaluatorProvider, session: db, promptBuilder, toolCtx, lang, dreamMemoryPath });
+    const dreamService = new DreamService(db, db, db, evaluatorProvider, {
       timezone: this.config.timezone,
       dreamMemoryPath,
       dreamSystemPrompt: lang.prompts.dream,
       morphologyCategories: new Set(lang.morphologyCategories),
       langId: lang.id,
     }, db, new LearningHygieneService(db));
-    this.runtimes.set(lang.id, { lang, db, sharedDb: this.sharedDb, agentRunner, evaluatorProvider: this.evaluatorProvider, promptBuilder, dreamService, dreamMemoryPath });
+    this.runtimes.set(lang.id, { lang, db, sharedDb: this.sharedDb, agentRunner, evaluatorProvider, promptBuilder, dreamService, dreamMemoryPath });
   }
 
   async addLanguage(language: string): Promise<void> {
@@ -344,6 +361,8 @@ export class RuntimeManager {
     const lang = loadLanguage(language);
     const dreamMemoryPath = path.join(this.config.dataDir, "memory", `MEMORY-${lang.id}.md`);
     const db = this.sharedDb.withLanguage(lang.id, lang.errorCategories, lang.morphologyCategories);
+    const provider = this.trackedProvider(db, "chat");
+    const evaluatorProvider = this.trackedProvider(db, "evaluator");
 
     const toolCtx = {
       errors: db,
@@ -353,14 +372,14 @@ export class RuntimeManager {
       competency: db,
       session: db,
       learning: db,
-      provider: this.provider,
+      provider,
     };
     const promptBuilder = new PromptBuilder(
       { errors: db, profile: this.sharedDb, langProfile: db, interests: this.sharedDb, competency: db, session: db, learning: db },
       lang,
     );
-    const agentRunner = new AgentRunner({ provider: this.provider, evaluatorProvider: this.evaluatorProvider, session: db, promptBuilder, toolCtx, lang, dreamMemoryPath });
-    const dreamService = new DreamService(db, db, db, this.evaluatorProvider, {
+    const agentRunner = new AgentRunner({ provider, evaluatorProvider, session: db, promptBuilder, toolCtx, lang, dreamMemoryPath });
+    const dreamService = new DreamService(db, db, db, evaluatorProvider, {
       timezone: this.config.timezone,
       dreamMemoryPath,
       dreamSystemPrompt: lang.prompts.dream,
@@ -368,7 +387,7 @@ export class RuntimeManager {
       langId: lang.id,
     }, db, new LearningHygieneService(db));
 
-    this.runtimes.set(lang.id, { lang, db, sharedDb: this.sharedDb, agentRunner, evaluatorProvider: this.evaluatorProvider, promptBuilder, dreamService, dreamMemoryPath });
+    this.runtimes.set(lang.id, { lang, db, sharedDb: this.sharedDb, agentRunner, evaluatorProvider, promptBuilder, dreamService, dreamMemoryPath });
   }
 
   runtime(language: string): LanguageRuntime {
@@ -379,6 +398,8 @@ export class RuntimeManager {
 
   private runtimeWithDb(base: LanguageRuntime, sharedDb: BuddyDb): LanguageRuntime {
     const db = sharedDb.withLanguage(base.lang.id, base.lang.errorCategories, base.lang.morphologyCategories);
+    const provider = this.trackedProvider(db, "chat");
+    const evaluatorProvider = this.trackedProvider(db, "evaluator");
     const dreamMemoryPath = sharedDb.userId === 1
       ? base.dreamMemoryPath
       : path.join(path.dirname(base.dreamMemoryPath), `MEMORY-${base.lang.id}-${sharedDb.userId}.md`);
@@ -390,21 +411,21 @@ export class RuntimeManager {
       competency: db,
       session: db,
       learning: db,
-      provider: this.provider,
+      provider,
     };
     const promptBuilder = new PromptBuilder(
       { errors: db, profile: sharedDb, langProfile: db, interests: sharedDb, competency: db, session: db, learning: db },
       base.lang,
     );
-    const agentRunner = new AgentRunner({ provider: this.provider, evaluatorProvider: this.evaluatorProvider, session: db, promptBuilder, toolCtx, lang: base.lang, dreamMemoryPath });
-    const dreamService = new DreamService(db, db, db, this.evaluatorProvider, {
+    const agentRunner = new AgentRunner({ provider, evaluatorProvider, session: db, promptBuilder, toolCtx, lang: base.lang, dreamMemoryPath });
+    const dreamService = new DreamService(db, db, db, evaluatorProvider, {
       timezone: this.config.timezone,
       dreamMemoryPath,
       dreamSystemPrompt: base.lang.prompts.dream,
       morphologyCategories: new Set(base.lang.morphologyCategories),
       langId: base.lang.id,
     }, db, new LearningHygieneService(db));
-    return { lang: base.lang, db, sharedDb, agentRunner, evaluatorProvider: this.evaluatorProvider, promptBuilder, dreamService, dreamMemoryPath };
+    return { lang: base.lang, db, sharedDb, agentRunner, evaluatorProvider, promptBuilder, dreamService, dreamMemoryPath };
   }
 
   private async runtimeForExternalUser(language: string, externalUserId: string): Promise<LanguageRuntime> {

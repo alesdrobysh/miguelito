@@ -145,6 +145,7 @@ const USER_SCOPED_TABLES = [
   "conversation_state",
   "chat_history",
   "proficiency_evidence",
+  "llm_usage",
 ];
 
 function hasTable(db: Database, table: string): boolean {
