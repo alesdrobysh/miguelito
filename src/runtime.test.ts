@@ -109,6 +109,10 @@ describe("runtime manager", () => {
       "import",
       "drill",
       "scenario",
+      "today",
+      "mistakes",
+      "progress",
+      "next",
     ]);
     for (const item of TELEGRAM_COMMANDS) {
       expect(item.command).toMatch(/^[a-z0-9_]{1,32}$/);
@@ -229,15 +233,49 @@ describe("runtime manager", () => {
     manager.close();
   });
 
-  it("does not expose hidden dashboards or CRM-style commands to learners", async () => {
+  it("keeps hidden CRM-style commands redirected while exposing chat-native progress rituals", async () => {
     const config = loadConfig(env({ DATA_DIR: tmpDir }));
     const provider = new FakeProvider();
     const manager = await createRuntimeManager(config, { provider });
 
-    for (const command of ["/learning", "/progress", "/vocabulary", "/proficiency", "/vocab_candidates"]) {
+    for (const command of ["/learning", "/vocabulary", "/proficiency", "/vocab_candidates"]) {
       const reply = await manager.handleMessage("spanish", 777, "telegram-user", command);
       expect(reply).toBe("Escríbeme normalmente; yo recordaré lo útil y lo traeré de vuelta en la conversación.");
     }
+
+    const progress = await manager.handleMessage("spanish", 777, "telegram-user", "/progress");
+    expect(progress).toContain("Progreso rápido");
+    expect(progress).not.toContain("dashboard");
+    expect(progress).not.toContain("CRM");
+
+    expect(provider.chatCalls).toHaveLength(0);
+    manager.close();
+  });
+
+  it("turns real errors and learning memory into /mistakes /today and /next actions", async () => {
+    const config = loadConfig(env({ DATA_DIR: tmpDir }));
+    const provider = new FakeProvider();
+    const manager = await createRuntimeManager(config, { provider });
+    const db = manager.runtime("spanish").db;
+    await db.logError("yo soy cansado", "estoy cansado", "ser_estar", "state now uses estar");
+    await db.logError("voy en Madrid", "voy a Madrid", "prepositions", "movement destination");
+    await db.addLearningItem({ type: "phrase", title: "me apetece", explanation_l1: "I feel like", source_type: "conversation", priority: 0.95 });
+
+    const mistakes = await manager.handleMessage("spanish", 777, "telegram-user", "/mistakes");
+    expect(mistakes).toContain("Errores para repetir mejor");
+    expect(mistakes).toContain("yo soy cansado");
+    expect(mistakes).toContain("estoy cansado");
+    expect(mistakes).toContain("Intenta de nuevo");
+
+    const today = await manager.handleMessage("spanish", 777, "telegram-user", "/today");
+    expect(today).toContain("Misión de hoy");
+    expect(today).toMatch(/estoy cansado|me apetece/);
+    expect(today).toContain("Responde aquí mismo");
+
+    const next = await manager.handleMessage("spanish", 777, "telegram-user", "/next");
+    expect(next).toContain("Siguiente paso");
+    expect(next).toMatch(/\/drill|\/scenario/);
+    expect(next).toContain("me apetece");
 
     expect(provider.chatCalls).toHaveLength(0);
     manager.close();

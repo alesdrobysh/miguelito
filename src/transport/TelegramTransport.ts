@@ -10,6 +10,10 @@ export const TELEGRAM_COMMANDS = [
   { command: "import", description: "Импортировать фразы/Anki TSV" },
   { command: "drill", description: "Короткая тренировка" },
   { command: "scenario", description: "Короткий сценарий" },
+  { command: "today", description: "Миссия дня" },
+  { command: "mistakes", description: "Повторить ошибки" },
+  { command: "progress", description: "Короткий прогресс" },
+  { command: "next", description: "Следующий шаг" },
 ] as const;
 
 const MENU_COMMANDS = TELEGRAM_COMMANDS.map((c) => c.command) as string[];

@@ -348,6 +348,17 @@ function formatScenarioEnd(scenario: { title: string }): string {
   ].join("\n");
 }
 
+function formatErrorPractice(error: { user_text: string; correct_form: string; note?: string | null }, n: number): string {
+  const why = error.note?.trim() ? ` (${error.note.trim()})` : "";
+  return `${n}. Fue: “${error.user_text}”\n   Mejor: “${error.correct_form}”${why}\n   Intenta de nuevo en una frase propia.`;
+}
+
+function topErrorCategory(errors: Array<{ category: string }>): string | null {
+  const counts = new Map<string, number>();
+  for (const error of errors) counts.set(error.category, (counts.get(error.category) ?? 0) + 1);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] ?? null;
+}
+
 function isScenarioEndText(text: string): boolean {
   const normalized = normalizePracticeText(text);
   // ponytail: deterministic closers only; upgrade to evaluator-based roleplay completion if nuanced endings matter.
@@ -543,8 +554,78 @@ export class RuntimeManager {
     if (commandToken === "/import") return this.handleImportCommand(db, text);
     if (commandToken === "/drill") return this.handleDrillCommand(db, text);
     if (commandToken === "/scenario") return this.handleScenarioCommand(db, text);
+    if (commandToken === "/mistakes") return this.handleMistakesCommand(db);
+    if (commandToken === "/today" || commandToken === "/hoy") return this.handleTodayCommand(db);
+    if (commandToken === "/progress" || commandToken === "/progreso") return this.handleProgressCommand(db);
+    if (commandToken === "/next") return this.handleNextCommand(db);
     if (text.startsWith("/")) return formatCommandRedirect(lang);
     return undefined;
+  }
+
+  private async handleMistakesCommand(db: BuddyDb): Promise<string> {
+    const errors = await db.listErrors("all", 5);
+    if (errors.length === 0) {
+      return "Todavía no tengo errores claros para repasar. Escribe normalmente y convertiré tus tropiezos reales en práctica.";
+    }
+    return [
+      "Errores para repetir mejor:",
+      ...errors.slice(0, 3).map(formatErrorPractice),
+      "",
+      "Elige una y respóndeme con la versión corregida en una frase nueva.",
+    ].join("\n");
+  }
+
+  private async handleTodayCommand(db: BuddyDb): Promise<string> {
+    const [error] = await db.listErrors("all", 1);
+    if (error) {
+      return [
+        "Misión de hoy: repetir mejor una corrección real.",
+        `Antes: “${error.user_text}”`,
+        `Ahora usa: “${error.correct_form}”`,
+        "Responde aquí mismo con una frase propia.",
+      ].join("\n");
+    }
+    const due = await db.listDueLearningItems(1);
+    const item = due[0] ?? (await db.listLearningItems("active", 1))[0];
+    if (item) {
+      return [
+        "Misión de hoy: una frase útil, sin modo curso.",
+        drillLine(item, 1).replace(/^1\.\s*/, ""),
+        "Responde aquí mismo.",
+      ].join("\n");
+    }
+    return "Misión de hoy: haz /scenario y elige una escena corta. Cinco respuestas valen más que mirar una lista.";
+  }
+
+  private async handleProgressCommand(db: BuddyDb): Promise<string> {
+    const [active, due, errors] = await Promise.all([
+      db.listLearningItems("active", 1000),
+      db.listDueLearningItems(1000),
+      db.listErrors("all", 1000),
+    ]);
+    const practiced = active.filter((i) => i.evidence_count > 0).length;
+    const stable = active.filter((i) => i.stability === "stable" || i.status === "stable").length;
+    const rusty = due.slice(0, 3).map((i) => i.title);
+    const weak = topErrorCategory(errors);
+    return [
+      "Progreso rápido:",
+      `• Material activo: ${active.length}; practicado: ${practiced}; estable: ${stable}.`,
+      `• Para volver pronto: ${due.length}${rusty.length ? ` (${rusty.join(", ")})` : ""}.`,
+      `• Errores guardados: ${errors.length}${weak ? `; foco probable: ${weak}` : ""}.`,
+      "Siguiente acción: /today para una misión mínima o /drill para entrenar una frase.",
+    ].join("\n");
+  }
+
+  private async handleNextCommand(db: BuddyDb): Promise<string> {
+    const due = await db.listDueLearningItems(3);
+    const active = due.length > 0 ? due : await db.listLearningItems("active", 3);
+    const examples = active.map((i) => i.title).slice(0, 3);
+    return [
+      "Siguiente paso:",
+      examples.length ? `• Haz /drill — ahora conviene tocar: ${examples.join(", ")}.` : "• Haz /scenario — si no hay material guardado, una escena corta crea contexto.",
+      "• Si tienes poca energía: /today.",
+      "• Si quieres conversación guiada: /scenario.",
+    ].join("\n");
   }
 
   private async handleScenarioCommand(db: BuddyDb, text: string): Promise<string> {

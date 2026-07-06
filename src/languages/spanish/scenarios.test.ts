@@ -5,7 +5,15 @@ describe("SpanishScenarios", () => {
   it("keeps the scenario catalog tiny, bounded, and learner-facing", () => {
     const ids = new Set<string>();
 
-    expect(SpanishScenarios).toHaveLength(5);
+    expect(SpanishScenarios).toHaveLength(10);
+    expect(SpanishScenarios.map((s) => s.id)).toEqual(expect.arrayContaining([
+      "pedir_comida",
+      "aeropuerto",
+      "entrevista_trabajo",
+      "small_talk",
+      "debate_suave",
+      "foto_descripcion",
+    ]));
     for (const scenario of SpanishScenarios) {
       expect(scenario.id).toMatch(/^[a-z0-9_]+$/);
       expect(ids.has(scenario.id)).toBe(false);
