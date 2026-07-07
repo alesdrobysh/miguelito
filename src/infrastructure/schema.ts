@@ -200,7 +200,7 @@ CREATE INDEX IF NOT EXISTS idx_proficiency_evidence_language_skill ON proficienc
 
 CREATE TABLE IF NOT EXISTS llm_usage (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id),
+    user_id INTEGER NOT NULL DEFAULT 1,
     language TEXT NOT NULL DEFAULT '',
     provider TEXT NOT NULL,
     model TEXT NOT NULL,

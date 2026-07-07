@@ -102,7 +102,6 @@ export function startLanguageScheduler(config: Config, rt: LanguageRuntime, tran
 export function createTelegramTransport(config: Config, language: string, token: string): TelegramTransport {
   return new TelegramTransport({
     telegramToken: token,
-    allowedUsers: config.allowedUsers,
     language,
     botLabel: `${language}-telegram`,
   });

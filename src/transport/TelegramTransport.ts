@@ -35,20 +35,17 @@ export function telegramDisplayTextForText(text: string): string {
 
 interface TelegramTransportConfig {
   telegramToken: string;
-  allowedUsers: Set<string>;
   language?: string;
   botLabel?: string;
 }
 
 export class TelegramTransport implements Transport {
   private bot: Bot;
-  private allowedUsers: Set<string>;
   private handler: MessageHandler | null = null;
   private logFields: { language?: string; botLabel?: string };
 
   constructor(config: TelegramTransportConfig) {
     this.bot = new Bot(config.telegramToken);
-    this.allowedUsers = config.allowedUsers;
     this.logFields = { language: config.language, botLabel: config.botLabel };
     this._registerHandlers();
   }
@@ -74,18 +71,7 @@ export class TelegramTransport implements Transport {
     await this.bot.start(opts as any);
   }
 
-  private _isAllowed(ctx: Context): boolean {
-    if (this.allowedUsers.size === 0) return true;
-    const userId = ctx.from?.id?.toString();
-    if (!userId) return false;
-    return this.allowedUsers.has(userId);
-  }
-
   private async _dispatch(ctx: Context, text: string): Promise<void> {
-    if (!this._isAllowed(ctx)) {
-      log.warn({ ...this.logFields, userId: ctx.from?.id?.toString()?.slice(0, 6) }, 'unauthorized user attempt');
-      return;
-    }
     if (!this.handler) return;
 
     const chatId = ctx.chat!.id;
@@ -125,10 +111,6 @@ export class TelegramTransport implements Transport {
     }
 
     this.bot.on("message:text", async (ctx) => {
-      if (!this._isAllowed(ctx)) {
-        log.warn({ ...this.logFields, userId: ctx.from?.id?.toString()?.slice(0, 6) }, 'unauthorized user attempt');
-        return;
-      }
       const text = ctx.message?.text;
       if (!text) return;
       await this._dispatch(ctx, text).catch(async (e) => {
@@ -138,10 +120,6 @@ export class TelegramTransport implements Transport {
     });
 
     this.bot.on("callback_query:data", async (ctx) => {
-      if (!this._isAllowed(ctx)) {
-        log.warn({ ...this.logFields, userId: ctx.from?.id?.toString()?.slice(0, 6) }, 'unauthorized user attempt');
-        return;
-      }
       const data = ctx.callbackQuery.data;
       await ctx.answerCallbackQuery().catch(() => undefined);
       if (data.startsWith("/scenario ")) await this._dispatch(ctx, data).catch(this._logError(ctx));

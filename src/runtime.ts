@@ -396,7 +396,7 @@ export class RuntimeManager {
       : purpose === "chat" ? this.config.chatModel : this.config.evaluatorModel;
     const inner = purpose === "chat" ? this.provider : this.evaluatorProvider;
     return new CostTrackingProvider(inner, (usage) => db.recordLlmUsage(usage), {
-      userId: db.userId,
+      userId: 1,
       language: db.languageId,
       provider: this.config.provider,
       model,

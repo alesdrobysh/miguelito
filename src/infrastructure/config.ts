@@ -18,7 +18,6 @@ export interface Config {
   ollamaApiKey: string;
   dbPath: string;
   dataDir: string;
-  allowedUsers: Set<string>;
   morningCron: string;
   eveningCron: string;
   timezone: string;
@@ -53,9 +52,6 @@ export function loadConfig(
   const isTestEnv = env.ENV === "test";
   const dataDir = env.DATA_DIR ?? path.resolve(process.cwd(), isTestEnv ? "data-test" : "data");
   const dbPath = env.DB_PATH ?? path.join(dataDir, "buddy.db");
-  const allowedUsers = new Set(
-    (env.ALLOWED_USERS ?? "").split(",").filter(Boolean)
-  );
   const morningCron = env.MORNING_CRON ?? "0 9 * * *";
   const eveningCron = env.EVENING_CRON ?? "30 19 * * *";
   const timezone = env.TIMEZONE ?? "Europe/Warsaw";
@@ -92,7 +88,6 @@ export function loadConfig(
     ollamaApiKey,
     dbPath,
     dataDir,
-    allowedUsers,
     morningCron,
     eveningCron,
     timezone,

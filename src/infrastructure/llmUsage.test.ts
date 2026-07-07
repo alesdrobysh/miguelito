@@ -5,14 +5,13 @@ describe("BuddyDb LLM usage tracking", () => {
   let handle: TestDbHandle | undefined;
   afterEach(() => handle?.cleanup());
 
-  it("stores usage rows and aggregates them by user, day, purpose, and model", async () => {
+  it("stores usage rows and aggregates them by day, purpose, and model", async () => {
     handle = await createTestDb();
     const db = handle.db;
-    const user2 = await db.ensureExternalUser("telegram", "alice");
-    const scoped = db.withUserId(user2).withLanguage("spanish", [], []);
+    const scoped = db.withLanguage("spanish", [], []);
 
     await scoped.recordLlmUsage({
-      userId: user2,
+      userId: 1,
       language: "spanish",
       provider: "openrouter",
       model: "chat-model",
@@ -24,7 +23,7 @@ describe("BuddyDb LLM usage tracking", () => {
       latencyMs: 1200,
     });
     await scoped.recordLlmUsage({
-      userId: user2,
+      userId: 1,
       language: "spanish",
       provider: "openrouter",
       model: "eval-model",
@@ -37,16 +36,16 @@ describe("BuddyDb LLM usage tracking", () => {
     });
 
     const rows = db.db.exec(`
-      SELECT users.external_user_id, date(llm_usage.created_at), purpose, model,
+      SELECT date(llm_usage.created_at), purpose, model,
              ROUND(SUM(cost_usd), 6), SUM(total_tokens), COUNT(*)
-      FROM llm_usage JOIN users ON users.id = llm_usage.user_id
-      GROUP BY users.external_user_id, date(llm_usage.created_at), purpose, model
+      FROM llm_usage
+      GROUP BY date(llm_usage.created_at), purpose, model
       ORDER BY purpose
     `)[0]?.values ?? [];
 
     expect(rows).toEqual([
-      ["alice", expect.any(String), "chat", "chat-model", 0.002, 150, 1],
-      ["alice", expect.any(String), "evaluator", "eval-model", 0.0003, 30, 1],
+      [expect.any(String), "chat", "chat-model", 0.002, 150, 1],
+      [expect.any(String), "evaluator", "eval-model", 0.0003, 30, 1],
     ]);
   });
 });

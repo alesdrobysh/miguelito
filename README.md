@@ -5,7 +5,7 @@ Miguelito is a Telegram-first Spanish tutor: conversation → useful material ex
 ## What works now
 
 - Spanish Telegram bot in one Node process.
-- Multi-user Telegram isolation in the shared SQL.js DB.
+
 - `/import` for pasted phrases and Anki TSV exports (`front<TAB>back`).
 - `/drill` for short opt-in practice from imported or conversation-native items.
 - `/scenario` for short roleplay scenarios.
@@ -35,6 +35,4 @@ npm run report:costs -- 7
 npm run report:learning
 ```
 
-## Landing page
 
-A minimal static landing page lives in `docs/index.html` for GitHub Pages or any static host.

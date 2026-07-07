@@ -20,7 +20,6 @@ function makeConfig(timezone = "UTC"): Config {
     ollamaApiKey: "",
     dbPath: "",
     dataDir: "",
-    allowedUsers: new Set(),
     morningCron: "",
     eveningCron: "",
     telegramChatId: "",
